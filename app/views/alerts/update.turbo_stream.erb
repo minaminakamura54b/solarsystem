@@ -1,0 +1,13 @@
+<%= turbo_stream.replace "alert_#{@alert.id}" do %>
+  <div id="alert_<%= @alert.id %>" class="card p-4 flex items-start gap-4 opacity-60">
+    <div class="shrink-0 mt-0.5">
+      <span class="badge <%= @alert.severity_color_class %>"><%= @alert.severity_label %></span>
+    </div>
+    <div class="flex-1 min-w-0">
+      <p class="font-medium text-gray-900 text-sm"><%= @alert.title %></p>
+      <p class="text-sm text-gray-600 mt-1"><%= @alert.message %></p>
+      <p class="text-xs text-gray-400 mt-2"><%= @alert.created_at.strftime("%Y/%m/%d %H:%M") %></p>
+    </div>
+    <span class="text-xs text-gray-400">既読</span>
+  </div>
+<% end %>

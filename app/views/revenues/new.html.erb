@@ -1,0 +1,44 @@
+<% content_for :title, "収益入力" %>
+
+<div class="page-header">
+  <h2 class="page-title">💰 収益を入力</h2>
+  <%= link_to "← 一覧に戻る", revenues_path, class: "btn btn-secondary" %>
+</div>
+
+<div class="p-6 max-w-lg">
+  <div class="card p-6">
+    <%= form_with model: @revenue, url: revenues_path do |f| %>
+      <% if @revenue.errors.any? %>
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <% @revenue.errors.full_messages.each do |msg| %>
+            <p class="text-red-700 text-sm"><%= msg %></p>
+          <% end %>
+        </div>
+      <% end %>
+      <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="form-label">年</label>
+            <%= f.number_field :year, class: "form-input", value: params[:year] || Date.today.year %>
+          </div>
+          <div>
+            <label class="form-label">月</label>
+            <%= f.select :month, options_for_select((1..12).map { |m| ["#{m}月", m] }, params[:month] || Date.today.month), {}, class: "form-select" %>
+          </div>
+        </div>
+        <div>
+          <label class="form-label">売電収益（円）</label>
+          <%= f.number_field :amount_yen, class: "form-input", step: 1, min: 0 %>
+        </div>
+        <div>
+          <label class="form-label">発電量（kWh）</label>
+          <%= f.number_field :kwh, class: "form-input", step: 0.1, min: 0 %>
+        </div>
+        <div class="flex justify-end gap-3 pt-2">
+          <%= link_to "キャンセル", revenues_path, class: "btn btn-secondary" %>
+          <%= f.submit "保存", class: "btn btn-primary" %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</div>

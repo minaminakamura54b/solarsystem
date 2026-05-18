@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= content_for(:title) || "Solarsystem" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="Solarsystem">
+    <meta name="mobile-web-app-capable" content="yes">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+
+    <%= yield :head %>
+
+    <%# Enable PWA manifest for installable apps (make sure to enable in config/routes.rb too!) %>
+    <%#= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
+
+    <link rel="icon" href="/icon.png" type="image/png">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icon.png">
+
+    <%# Includes all stylesheet files in app/assets/stylesheets %>
+    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
+  </head>
+
+  <body class="bg-gray-50 text-gray-900 min-h-screen">
+    <div class="flex h-screen overflow-hidden">
+      <%# サイドバー %>
+      <aside class="w-64 bg-slate-900 text-white flex flex-col shrink-0">
+        <div class="p-4 border-b border-slate-700">
+          <h1 class="text-lg font-bold flex items-center gap-2">
+            <span class="text-yellow-400">☀</span> SolarManager
+          </h1>
+        </div>
+
+        <%# 発電所切り替え %>
+        <div class="p-3 border-b border-slate-700">
+          <%= form_with url: switch_site_path, method: :get, data: { turbo: false } do |f| %>
+            <label class="text-xs text-slate-400 mb-1 block">発電所</label>
+            <%= f.select :site_id,
+              options_for_select(@sites.map { |s| [s.name, s.id] }, current_site&.id),
+              {},
+              class: "w-full bg-slate-700 text-white text-sm rounded px-2 py-1.5 border border-slate-600",
+              onchange: "this.form.submit()" %>
+          <% end %>
+        </div>
+
+        <%# ナビゲーション %>
+        <nav class="flex-1 p-3 space-y-1">
+          <%= link_to dashboard_path, class: "sidebar-link #{current_page?(dashboard_path) ? 'active' : ''}" do %>
+            <span>📊</span> ダッシュボード
+          <% end %>
+          <%= link_to inspections_path, class: "sidebar-link #{controller_name == 'inspections' ? 'active' : ''}" do %>
+            <span>🔍</span> 点検・AI解析
+          <% end %>
+          <%= link_to revenues_path, class: "sidebar-link #{controller_name == 'revenues' ? 'active' : ''}" do %>
+            <span>💰</span> 売電収益
+          <% end %>
+          <%= link_to alerts_path, class: "sidebar-link #{controller_name == 'alerts' ? 'active' : ''}" do %>
+            <span>🔔</span> アラート
+            <% if current_site&.unread_alerts_count.to_i > 0 %>
+              <span class="ml-auto badge-count"><%= current_site.unread_alerts_count %></span>
+            <% end %>
+          <% end %>
+          <%= link_to sites_path, class: "sidebar-link #{controller_name == 'sites' ? 'active' : ''}" do %>
+            <span>⚙</span> 発電所管理
+          <% end %>
+        </nav>
+
+        <div class="p-3 border-t border-slate-700 text-xs text-slate-400">
+          <% if current_site %>
+            <div><%= current_site.name %></div>
+            <div><%= current_site.location %></div>
+            <div><%= current_site.panel_count %>枚 / <%= current_site.capacity_kw %>kW</div>
+          <% end %>
+        </div>
+      </aside>
+
+      <%# メインコンテンツ %>
+      <main class="flex-1 overflow-y-auto">
+        <% if notice %>
+          <div id="notice" class="bg-green-50 border-l-4 border-green-400 text-green-800 px-6 py-3 text-sm" data-controller="flash">
+            <%= notice %>
+          </div>
+        <% end %>
+        <% if alert %>
+          <div id="alert" class="bg-red-50 border-l-4 border-red-400 text-red-800 px-6 py-3 text-sm">
+            <%= alert %>
+          </div>
+        <% end %>
+        <%= yield %>
+      </main>
+    </div>
+  </body>
+</html>

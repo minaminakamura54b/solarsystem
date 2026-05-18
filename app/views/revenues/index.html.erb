@@ -1,0 +1,82 @@
+<% content_for :title, "売電収益 - #{current_site&.name}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">💰 売電収益管理</h2>
+    <p class="text-sm text-gray-500 mt-1"><%= current_site&.name %></p>
+  </div>
+  <div class="flex gap-3 items-center">
+    <%= form_with url: revenues_path, method: :get, data: { turbo: false } do |f| %>
+      <%= f.select :year, options_for_select(@years.map { |y| [y, y] }, @year),
+          {}, class: "form-select w-24 py-1.5" %>
+      <%= f.submit "表示", class: "btn btn-secondary btn-sm" %>
+    <% end %>
+    <%= link_to new_revenue_path, class: "btn btn-primary" do %>
+      ＋ 収益を追加
+    <% end %>
+  </div>
+</div>
+
+<div class="p-6 space-y-6">
+
+  <%# 年間サマリー %>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="card p-4">
+      <p class="text-xs text-gray-500"><%= @year %>年 売電収益合計</p>
+      <p class="text-2xl font-bold text-gray-900"><%= number_with_delimiter(@annual_total_yen.to_i) %><span class="text-sm font-normal text-gray-500">円</span></p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs text-gray-500"><%= @year %>年 発電量合計</p>
+      <p class="text-2xl font-bold text-gray-900"><%= number_with_precision(@annual_total_kwh, precision: 1) %><span class="text-sm font-normal text-gray-500">kWh</span></p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs text-gray-500">平均単価</p>
+      <% avg_price = @annual_total_kwh > 0 ? (@annual_total_yen / @annual_total_kwh).round(1) : 0 %>
+      <p class="text-2xl font-bold text-gray-900"><%= avg_price %><span class="text-sm font-normal text-gray-500">円/kWh</span></p>
+    </div>
+  </div>
+
+  <%# 月別グラフ %>
+  <div class="card p-4">
+    <h3 class="font-semibold text-gray-700 mb-3"><%= @year %>年 月別売電収益</h3>
+    <%= bar_chart @monthly_chart_data,
+        suffix: "円",
+        colors: ["#2563eb"],
+        height: "220px",
+        dataset: { borderRadius: 4 } %>
+  </div>
+
+  <%# 月別テーブル %>
+  <div class="card">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>月</th>
+          <th class="text-right">売電収益（円）</th>
+          <th class="text-right">発電量（kWh）</th>
+          <th class="text-right">単価（円/kWh）</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% (1..12).each do |m| %>
+          <% rev = @revenues.find { |r| r.month == m } %>
+          <tr>
+            <td class="font-medium"><%= "#{@year}年#{m}月" %></td>
+            <td class="text-right"><%= rev ? number_with_delimiter(rev.amount_yen.to_i) : "-" %></td>
+            <td class="text-right"><%= rev ? number_with_precision(rev.kwh, precision: 1) : "-" %></td>
+            <td class="text-right"><%= rev ? rev.unit_price : "-" %></td>
+            <td class="text-right">
+              <% if rev %>
+                <%= link_to "編集", edit_revenue_path(rev), class: "btn btn-sm btn-secondary" %>
+              <% else %>
+                <%= link_to "入力", new_revenue_path(year: @year, month: m), class: "btn btn-sm btn-secondary text-gray-400" %>
+              <% end %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+
+</div>

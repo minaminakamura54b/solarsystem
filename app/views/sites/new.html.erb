@@ -1,0 +1,12 @@
+<% content_for :title, "発電所を追加" %>
+
+<div class="page-header">
+  <h2 class="page-title">⚙ 発電所を追加</h2>
+  <%= link_to "← 一覧に戻る", sites_path, class: "btn btn-secondary" %>
+</div>
+
+<div class="p-6 max-w-lg">
+  <div class="card p-6">
+    <%= render "form", site: @site, url: sites_path %>
+  </div>
+</div>

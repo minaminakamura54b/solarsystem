@@ -1,0 +1,158 @@
+<% content_for :title, "ダッシュボード - #{current_site&.name}" %>
+
+<% unless current_site %>
+  <div class="p-8 text-center">
+    <p class="text-gray-500 mb-4">発電所が登録されていません</p>
+    <%= link_to "発電所を追加する", new_site_path, class: "btn btn-primary" %>
+  </div>
+<% else %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">📊 ダッシュボード</h2>
+    <p class="text-sm text-gray-500 mt-1"><%= current_site.name %> - <%= current_site.location %></p>
+  </div>
+  <%= link_to new_inspection_path, class: "btn btn-primary" do %>
+    ＋ 新規点検・AI解析
+  <% end %>
+</div>
+
+<div class="p-6 space-y-6">
+
+  <%# KPIカード %>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="card p-4">
+      <p class="text-xs text-gray-500">総パネル数</p>
+      <p class="text-2xl font-bold text-gray-900"><%= current_site.panel_count %><span class="text-sm font-normal text-gray-500">枚</span></p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs text-gray-500">異常パネル</p>
+      <p class="text-2xl font-bold <%= (@panel_status_summary.except("normal").values.sum > 0) ? "text-red-600" : "text-green-600" %>">
+        <%= @panel_status_summary.except("normal").values.sum %>
+        <span class="text-sm font-normal text-gray-500">枚</span>
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs text-gray-500">未読アラート</p>
+      <p class="text-2xl font-bold <%= (current_site.unread_alerts_count > 0) ? "text-red-600" : "text-gray-900" %>">
+        <%= current_site.unread_alerts_count %>
+        <span class="text-sm font-normal text-gray-500">件</span>
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="text-xs text-gray-500">設備容量</p>
+      <p class="text-2xl font-bold text-gray-900"><%= current_site.capacity_kw %><span class="text-sm font-normal text-gray-500">kW</span></p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <%# パネル状態マップ %>
+    <div class="card p-4">
+      <h3 class="font-semibold text-gray-700 mb-3">パネル状態マップ</h3>
+      <%# 凡例 %>
+      <div class="flex gap-4 mb-3 text-xs">
+        <span><span class="panel-cell normal inline-block w-3 h-3 rounded-sm"></span> 正常 (<%= @panel_status_summary["normal"].to_i %>)</span>
+        <span><span class="panel-cell warning inline-block w-3 h-3 rounded-sm"></span> 注意 (<%= @panel_status_summary["warning"].to_i %>)</span>
+        <span><span class="panel-cell error inline-block w-3 h-3 rounded-sm"></span> 異常 (<%= @panel_status_summary["error"].to_i %>)</span>
+        <span><span class="panel-cell stopped inline-block w-3 h-3 rounded-sm"></span> 停止 (<%= @panel_status_summary["stopped"].to_i %>)</span>
+      </div>
+      <div class="panel-map" id="panel-map">
+        <% @panels.each do |panel| %>
+          <div class="panel-cell <%= panel.status %>"
+               title="<%= panel.number %> - <%= panel.status_label %>"
+               data-panel-id="<%= panel.id %>">
+          </div>
+        <% end %>
+      </div>
+    </div>
+
+    <%# 月別収益グラフ %>
+    <div class="card p-4">
+      <h3 class="font-semibold text-gray-700 mb-3">月別売電収益（直近6ヶ月）</h3>
+      <%= bar_chart @revenue_chart_data,
+          suffix: "円",
+          colors: ["#3b82f6"],
+          height: "200px",
+          dataset: { borderRadius: 4 } %>
+    </div>
+
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <%# 発電量グラフ %>
+    <div class="card p-4">
+      <h3 class="font-semibold text-gray-700 mb-3">月別発電量（kWh）</h3>
+      <%= bar_chart @kwh_chart_data,
+          suffix: "kWh",
+          colors: ["#f59e0b"],
+          height: "180px",
+          dataset: { borderRadius: 4 } %>
+    </div>
+
+    <%# 直近のアラート %>
+    <div class="card p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-gray-700">未読アラート</h3>
+        <%= link_to "すべて見る", alerts_path, class: "text-xs text-blue-600" %>
+      </div>
+      <% if @recent_alerts.any? %>
+        <div class="space-y-2">
+          <% @recent_alerts.each do |al| %>
+            <div class="flex items-start gap-3 p-2 rounded-lg bg-gray-50">
+              <span class="badge <%= al.severity_color_class %> mt-0.5"><%= al.severity_label %></span>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium truncate"><%= al.title %></p>
+                <p class="text-xs text-gray-500"><%= al.created_at.strftime("%m/%d %H:%M") %></p>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="text-sm text-gray-500 py-4 text-center">未読のアラートはありません</p>
+      <% end %>
+    </div>
+
+  </div>
+
+  <%# 直近の点検 %>
+  <div class="card p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-semibold text-gray-700">直近の点検履歴</h3>
+      <%= link_to "すべて見る", inspections_path, class: "text-xs text-blue-600" %>
+    </div>
+    <% if @recent_inspections.any? %>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>点検日時</th>
+            <th>解析状況</th>
+            <th>重要度</th>
+            <th>異常数</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @recent_inspections.each do |ins| %>
+            <tr>
+              <td><%= ins.conducted_at.strftime("%Y/%m/%d %H:%M") %></td>
+              <td>
+                <span class="status-dot <%= ins.analysis_status %>"></span>
+                <%= { "pending" => "待機中", "analyzing" => "解析中", "completed" => "完了", "failed" => "失敗" }[ins.analysis_status] %>
+              </td>
+              <td><span class="badge <%= ins.severity_color_class %>"><%= ins.severity_label %></span></td>
+              <td><%= ins.anomaly_count %></td>
+              <td><%= link_to "詳細", inspection_path(ins), class: "text-xs text-blue-600" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% else %>
+      <p class="text-sm text-gray-500 py-4 text-center">まだ点検記録がありません</p>
+    <% end %>
+  </div>
+
+</div>
+
+<% end %>

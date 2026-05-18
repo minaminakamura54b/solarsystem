@@ -1,0 +1,68 @@
+<% content_for :title, "新規点検 - AI解析" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🔍 新規点検・AI解析</h2>
+    <p class="text-sm text-gray-500 mt-1"><%= current_site&.name %></p>
+  </div>
+  <%= link_to "← 一覧に戻る", inspections_path, class: "btn btn-secondary" %>
+</div>
+
+<div class="p-6 max-w-2xl">
+  <div class="card p-6">
+    <%= form_with model: @inspection, url: inspections_path, data: { controller: "upload-form" } do |f| %>
+      <% if @inspection.errors.any? %>
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <% @inspection.errors.full_messages.each do |msg| %>
+            <p class="text-red-700 text-sm"><%= msg %></p>
+          <% end %>
+        </div>
+      <% end %>
+
+      <div class="space-y-4">
+        <div>
+          <label class="form-label">点検日時</label>
+          <%= f.datetime_local_field :conducted_at,
+              value: @inspection.conducted_at&.strftime("%Y-%m-%dT%H:%M") || Time.current.strftime("%Y-%m-%dT%H:%M"),
+              class: "form-input" %>
+        </div>
+
+        <div>
+          <label class="form-label">ドローン撮影画像</label>
+          <div class="dropzone"
+               id="dropzone"
+               data-upload-form-target="dropzone"
+               data-action="dragover->upload-form#dragover dragleave->upload-form#dragleave drop->upload-form#drop">
+            <div id="dropzone-content">
+              <div class="text-4xl mb-2">📷</div>
+              <p class="text-gray-600 font-medium">画像をドラッグ＆ドロップ</p>
+              <p class="text-gray-400 text-sm mt-1">または</p>
+              <label class="btn btn-secondary mt-2 cursor-pointer">
+                ファイルを選択
+                <%= f.file_field :image, accept: "image/*",
+                    class: "hidden",
+                    data: { upload_form_target: "fileInput", action: "change->upload-form#fileSelected" } %>
+              </label>
+              <p class="text-xs text-gray-400 mt-2">JPEG, PNG, WebP 対応（最大50MB）</p>
+            </div>
+            <div id="preview-area" class="hidden">
+              <img id="preview-image" class="max-h-64 mx-auto rounded-lg" alt="プレビュー">
+              <p id="preview-name" class="text-sm text-gray-600 mt-2"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-blue-50 rounded-lg p-4 text-sm text-blue-700">
+          <strong>AI解析について：</strong>
+          画像をアップロードすると Claude AIが自動でパネルの異常（ホットスポット、クラック、汚染など）を検出し、点検レポートを生成します。
+        </div>
+
+        <div class="flex justify-end gap-3">
+          <%= link_to "キャンセル", inspections_path, class: "btn btn-secondary" %>
+          <%= f.submit "アップロードして解析開始", class: "btn btn-primary",
+              data: { upload_form_target: "submitBtn" } %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</div>

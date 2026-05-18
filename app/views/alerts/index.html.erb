@@ -1,0 +1,56 @@
+<% content_for :title, "アラート - #{current_site&.name}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🔔 アラート・通知</h2>
+    <p class="text-sm text-gray-500 mt-1">未読: <%= @unread_count %>件</p>
+  </div>
+  <% if @unread_count > 0 %>
+    <%= button_to "すべて既読にする", mark_all_read_alerts_path, method: :post, class: "btn btn-secondary" %>
+  <% end %>
+</div>
+
+<div class="p-6">
+  <% if @alerts.any? %>
+    <div class="space-y-3" id="alerts-list">
+      <% @alerts.each do |al| %>
+        <div id="alert_<%= al.id %>" class="card p-4 flex items-start gap-4 <%= al.read? ? 'opacity-60' : '' %>">
+          <div class="shrink-0 mt-0.5">
+            <span class="badge <%= al.severity_color_class %>"><%= al.severity_label %></span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <p class="font-medium text-gray-900 text-sm"><%= al.title %></p>
+              <% unless al.read? %>
+                <span class="w-2 h-2 bg-blue-500 rounded-full inline-block"></span>
+              <% end %>
+            </div>
+            <p class="text-sm text-gray-600 mt-1"><%= al.message %></p>
+            <div class="flex items-center gap-4 mt-2 text-xs text-gray-400">
+              <span><%= al.created_at.strftime("%Y/%m/%d %H:%M") %></span>
+              <% if al.inspection %>
+                <%= link_to "点検詳細を見る", inspection_path(al.inspection), class: "text-blue-500 hover:underline" %>
+              <% end %>
+            </div>
+          </div>
+          <div class="shrink-0">
+            <% unless al.read? %>
+              <%= button_to "既読",
+                  alert_path(al),
+                  method: :patch,
+                  class: "btn btn-sm btn-secondary",
+                  data: { turbo_stream: true } %>
+            <% else %>
+              <span class="text-xs text-gray-400">既読</span>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="card p-8 text-center">
+      <p class="text-2xl mb-2">✅</p>
+      <p class="text-gray-500">アラートはありません</p>
+    </div>
+  <% end %>
+</div>

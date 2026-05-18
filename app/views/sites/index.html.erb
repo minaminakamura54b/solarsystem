@@ -1,0 +1,45 @@
+<% content_for :title, "発電所管理" %>
+
+<div class="page-header">
+  <h2 class="page-title">⚙ 発電所管理</h2>
+  <%= link_to new_site_path, class: "btn btn-primary" do %>
+    ＋ 発電所を追加
+  <% end %>
+</div>
+
+<div class="p-6">
+  <% if @sites.any? %>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <% @sites.each do |site| %>
+        <div class="card p-5">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <h3 class="font-semibold text-gray-900"><%= site.name %></h3>
+              <p class="text-sm text-gray-500"><%= site.location %></p>
+            </div>
+            <span class="badge <%= site.status_active? ? 'badge-success' : 'badge-gray' %>">
+              <%= { "active" => "稼働中", "inactive" => "停止", "maintenance" => "点検中" }[site.status] %>
+            </span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-4">
+            <div>パネル数: <span class="font-medium"><%= site.panel_count %>枚</span></div>
+            <div>容量: <span class="font-medium"><%= site.capacity_kw %>kW</span></div>
+          </div>
+          <div class="flex gap-2">
+            <%= link_to "ダッシュボード", dashboard_path(site_id: site.id), class: "btn btn-primary btn-sm" %>
+            <%= link_to "編集", edit_site_path(site), class: "btn btn-secondary btn-sm" %>
+            <%= button_to "削除", site_path(site), method: :delete,
+                class: "btn btn-danger btn-sm",
+                data: { turbo_confirm: "#{site.name}を削除しますか？" } %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="card p-8 text-center">
+      <p class="text-3xl mb-3">☀</p>
+      <p class="text-gray-500 mb-4">発電所が登録されていません</p>
+      <%= link_to "最初の発電所を追加する", new_site_path, class: "btn btn-primary" %>
+    </div>
+  <% end %>
+</div>

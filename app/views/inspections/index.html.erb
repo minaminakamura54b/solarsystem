@@ -1,0 +1,68 @@
+<% content_for :title, "点検履歴 - #{current_site&.name}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🔍 点検・AI解析</h2>
+    <p class="text-sm text-gray-500 mt-1"><%= current_site&.name %></p>
+  </div>
+  <%= link_to new_inspection_path, class: "btn btn-primary" do %>
+    ＋ 新規点検
+  <% end %>
+</div>
+
+<div class="p-6">
+  <% if @inspections.any? %>
+    <div class="card">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>点検日時</th>
+            <th>画像</th>
+            <th>解析状況</th>
+            <th>重要度</th>
+            <th>異常件数</th>
+            <th>概要</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @inspections.each do |ins| %>
+            <tr id="inspection_<%= ins.id %>">
+              <td><%= ins.conducted_at.strftime("%Y/%m/%d %H:%M") %></td>
+              <td>
+                <% if ins.image.attached? %>
+                  <%= image_tag ins.image, class: "w-12 h-12 rounded object-cover" %>
+                <% else %>
+                  <span class="text-gray-400 text-xs">なし</span>
+                <% end %>
+              </td>
+              <td>
+                <span class="status-dot <%= ins.analysis_status %>"></span>
+                <%= { "pending" => "待機中", "analyzing" => "解析中...", "completed" => "完了", "failed" => "失敗" }[ins.analysis_status] %>
+              </td>
+              <td>
+                <% if ins.completed? %>
+                  <span class="badge <%= ins.severity_color_class %>"><%= ins.severity_label %></span>
+                <% else %>
+                  <span class="text-gray-400">-</span>
+                <% end %>
+              </td>
+              <td><%= ins.completed? ? ins.anomaly_count : "-" %></td>
+              <td class="text-gray-600 text-sm truncate max-w-xs"><%= ins.result&.truncate(60) %></td>
+              <td class="flex gap-2">
+                <%= link_to "詳細", inspection_path(ins), class: "btn btn-sm btn-secondary" %>
+                <%= button_to "削除", inspection_path(ins), method: :delete, class: "btn btn-sm btn-danger",
+                    data: { turbo_confirm: "この点検記録を削除しますか？" } %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="card p-8 text-center">
+      <p class="text-gray-500 mb-4">まだ点検記録がありません</p>
+      <%= link_to "最初の点検を追加する", new_inspection_path, class: "btn btn-primary" %>
+    </div>
+  <% end %>
+</div>
