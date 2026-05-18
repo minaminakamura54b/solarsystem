@@ -72,9 +72,16 @@
       <h3 class="font-semibold text-gray-700 mb-3">月別売電収益（直近6ヶ月）</h3>
       <%= bar_chart @revenue_chart_data,
           suffix: "円",
-          colors: ["#3b82f6"],
+          colors: ["#1D9E75"],
           height: "200px",
-          dataset: { borderRadius: 4 } %>
+          dataset: { borderRadius: 4 },
+          library: {
+            scales: {
+              x: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#888780" } },
+              y: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#888780" } }
+            },
+            plugins: { legend: { display: false } }
+          } %>
     </div>
 
   </div>
@@ -86,9 +93,16 @@
       <h3 class="font-semibold text-gray-700 mb-3">月別発電量（kWh）</h3>
       <%= bar_chart @kwh_chart_data,
           suffix: "kWh",
-          colors: ["#f59e0b"],
+          colors: ["#EF9F27"],
           height: "180px",
-          dataset: { borderRadius: 4 } %>
+          dataset: { borderRadius: 4 },
+          library: {
+            scales: {
+              x: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#888780" } },
+              y: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#888780" } }
+            },
+            plugins: { legend: { display: false } }
+          } %>
     </div>
 
     <%# 直近のアラート %>

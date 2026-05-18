@@ -29,7 +29,7 @@ class ClaudePanelAnalyzer
 
   def initialize(inspection)
     @inspection = inspection
-    @client = Anthropic::Client.new(api_key: ENV.fetch("ANTHROPIC_API_KEY"))
+    @client = Anthropic::Client.new(access_token: ENV.fetch("ANTHROPIC_API_KEY"))
   end
 
   def analyze
@@ -39,31 +39,33 @@ class ClaudePanelAnalyzer
     return error_result("画像の読み込みに失敗しました") unless image_data
 
     response = @client.messages(
-      model: MODEL,
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: image_content_type,
-                data: image_data
+      parameters: {
+        model: MODEL,
+        max_tokens: 1024,
+        system: SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: image_content_type,
+                  data: image_data
+                }
+              },
+              {
+                type: "text",
+                text: "この太陽光パネル画像を解析して、異常があれば報告してください。"
               }
-            },
-            {
-              type: "text",
-              text: "この太陽光パネル画像を解析して、異常があれば報告してください。"
-            }
-          ]
-        }
-      ]
+            ]
+          }
+        ]
+      }
     )
 
-    parse_response(response.content.first.text)
+    parse_response(response.dig("content", 0, "text"))
   rescue Anthropic::Error => e
     error_result("Claude API エラー: #{e.message}")
   rescue => e
@@ -84,7 +86,11 @@ class ClaudePanelAnalyzer
   end
 
   def parse_response(text)
-    json_text = text.match(/\{.*\}/m)&.to_s
+    # コードブロック記法を除去
+    cleaned = text.gsub(/```json\s*/i, "").gsub(/```/, "").strip
+
+    # JSON部分を抽出（[\s\S]でマルチライン対応）
+    json_text = cleaned.match(/\{[\s\S]*\}/)&.to_s
     return error_result("JSON形式の応答が得られませんでした") unless json_text
 
     result = JSON.parse(json_text)
@@ -96,7 +102,8 @@ class ClaudePanelAnalyzer
       recommendation: result["recommendation"] || "",
       raw_text: text
     }
-  rescue JSON::ParserError
+  rescue JSON::ParserError => e
+    Rails.logger.error("ClaudePanelAnalyzer JSON parse error: #{e.message}")
     { severity: "normal", anomaly_count: 0, anomalies: [], summary: text, recommendation: "", raw_text: text }
   end
 

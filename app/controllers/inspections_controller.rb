@@ -7,6 +7,26 @@ class InspectionsController < ApplicationController
   end
 
   def show
+    # result フィールドに生JSONが入っている場合はパースして補正
+    if @inspection.completed? && @inspection.result.to_s.strip.start_with?('{')
+      begin
+        parsed = JSON.parse(@inspection.result)
+        if @inspection.anomalies.blank?
+          @inspection.anomalies  = parsed["anomalies"] || []
+          @inspection.anomaly_count = parsed["anomaly_count"].to_i
+          @inspection.severity  = parsed["severity"] || "normal"
+          @inspection.save!
+        end
+        @display_summary        = parsed["summary"]
+        @display_recommendation = parsed["recommendation"]
+      rescue JSON::ParserError
+        @display_summary = nil
+      end
+    else
+      @display_summary        = @inspection.result
+      @display_recommendation = recommendation_from_report(@inspection.report)
+    end
+
     respond_to do |format|
       format.html
       format.json do
@@ -55,5 +75,13 @@ class InspectionsController < ApplicationController
 
   def inspection_params
     params.require(:inspection).permit(:image, :conducted_at)
+  end
+
+  def recommendation_from_report(report)
+    return nil if report.blank? || report.strip.start_with?('{')
+    lines = report.split("\n")
+    idx = lines.index { |l| l.include?("推奨アクション") }
+    return nil unless idx
+    lines[idx + 1..].reject(&:blank?).join("\n").strip.presence
   end
 end

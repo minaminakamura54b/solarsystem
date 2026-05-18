@@ -1,5 +1,5 @@
 Rails.application.routes.draw do
-  root "dashboard#show"
+  root "pages#home"
 
   get  "dashboard",   to: "dashboard#show", as: :dashboard
   get  "switch_site", to: "dashboard#show", as: :switch_site

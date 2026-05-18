@@ -52,6 +52,9 @@ Rails.application.configure do
   # Append comments with runtime information tags to SQL queries in logs.
   config.active_record.query_log_tags_enabled = true
 
+  # 開発環境はジョブをインライン実行（workerプロセス不要）
+  config.active_job.queue_adapter = :inline
+
   # Highlight code that enqueued background job in logs.
   config.active_job.verbose_enqueue_logs = true
 

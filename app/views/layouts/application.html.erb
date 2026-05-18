@@ -1,52 +1,46 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
   <head>
-    <title><%= content_for(:title) || "Solarsystem" %></title>
+    <title><%= content_for(:title) || "SolarSight AI" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="application-name" content="Solarsystem">
-    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="SolarSight AI">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
-
     <%= yield :head %>
-
-    <%# Enable PWA manifest for installable apps (make sure to enable in config/routes.rb too!) %>
-    <%#= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
-
     <link rel="icon" href="/icon.png" type="image/png">
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="/icon.png">
-
-    <%# Includes all stylesheet files in app/assets/stylesheets %>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
     <%= javascript_importmap_tags %>
   </head>
 
-  <body class="bg-gray-50 text-gray-900 min-h-screen">
+  <body>
     <div class="flex h-screen overflow-hidden">
-      <%# サイドバー %>
-      <aside class="w-64 bg-slate-900 text-white flex flex-col shrink-0">
-        <div class="p-4 border-b border-slate-700">
-          <h1 class="text-lg font-bold flex items-center gap-2">
-            <span class="text-yellow-400">☀</span> SolarManager
-          </h1>
+
+      <%# ── Sidebar ───────────────────────────────────────── %>
+      <aside style="width:15rem; background:var(--sidebar-bg); display:flex; flex-direction:column; flex-shrink:0; border-right:1px solid rgba(255,255,255,0.06);">
+
+        <%# Logo %>
+        <div style="padding:1.25rem 1rem; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; gap:0.5rem;">
+          <span style="width:28px; height:28px; border-radius:7px; background:var(--green-glow); border:1px solid rgba(29,158,117,0.4); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0;">☀</span>
+          <span style="font-size:0.9rem; font-weight:700; color:var(--white); letter-spacing:-0.01em;">SolarSight AI</span>
         </div>
 
         <%# 発電所切り替え %>
-        <div class="p-3 border-b border-slate-700">
+        <div style="padding:0.75rem; border-bottom:1px solid rgba(255,255,255,0.06);">
           <%= form_with url: switch_site_path, method: :get, data: { turbo: false } do |f| %>
-            <label class="text-xs text-slate-400 mb-1 block">発電所</label>
+            <label style="font-size:0.65rem; color:var(--gray-400); letter-spacing:0.08em; text-transform:uppercase; display:block; margin-bottom:0.4rem;">発電所</label>
             <%= f.select :site_id,
               options_for_select(@sites.map { |s| [s.name, s.id] }, current_site&.id),
               {},
-              class: "w-full bg-slate-700 text-white text-sm rounded px-2 py-1.5 border border-slate-600",
+              class: "sidebar-select",
               onchange: "this.form.submit()" %>
           <% end %>
         </div>
 
-        <%# ナビゲーション %>
-        <nav class="flex-1 p-3 space-y-1">
+        <%# Navigation %>
+        <nav style="flex:1; padding:0.5rem; display:flex; flex-direction:column; gap:2px;">
           <%= link_to dashboard_path, class: "sidebar-link #{current_page?(dashboard_path) ? 'active' : ''}" do %>
             <span>📊</span> ダッシュボード
           <% end %>
@@ -54,7 +48,7 @@
             <span>🔍</span> 点検・AI解析
           <% end %>
           <%= link_to revenues_path, class: "sidebar-link #{controller_name == 'revenues' ? 'active' : ''}" do %>
-            <span>💰</span> 売電収益
+            <span>💴</span> 売電収益
           <% end %>
           <%= link_to alerts_path, class: "sidebar-link #{controller_name == 'alerts' ? 'active' : ''}" do %>
             <span>🔔</span> アラート
@@ -67,29 +61,27 @@
           <% end %>
         </nav>
 
-        <div class="p-3 border-t border-slate-700 text-xs text-slate-400">
-          <% if current_site %>
-            <div><%= current_site.name %></div>
-            <div><%= current_site.location %></div>
-            <div><%= current_site.panel_count %>枚 / <%= current_site.capacity_kw %>kW</div>
-          <% end %>
-        </div>
-      </aside>
-
-      <%# メインコンテンツ %>
-      <main class="flex-1 overflow-y-auto">
-        <% if notice %>
-          <div id="notice" class="bg-green-50 border-l-4 border-green-400 text-green-800 px-6 py-3 text-sm" data-controller="flash">
-            <%= notice %>
+        <%# Site info footer %>
+        <% if current_site %>
+          <div style="padding:0.75rem 1rem; border-top:1px solid rgba(255,255,255,0.06);">
+            <p style="font-size:0.75rem; font-weight:500; color:var(--gray-200); margin-bottom:2px;"><%= current_site.name %></p>
+            <p style="font-size:0.7rem; color:var(--gray-400);"><%= current_site.location %></p>
+            <p style="font-size:0.7rem; color:var(--gray-400);"><%= current_site.panel_count %>枚 / <%= current_site.capacity_kw %>kW</p>
           </div>
         <% end %>
+      </aside>
+
+      <%# ── Main content ────────────────────────────────────── %>
+      <main class="flex-1 overflow-y-auto">
+        <% if notice %>
+          <div class="flash-notice" data-controller="flash"><%= notice %></div>
+        <% end %>
         <% if alert %>
-          <div id="alert" class="bg-red-50 border-l-4 border-red-400 text-red-800 px-6 py-3 text-sm">
-            <%= alert %>
-          </div>
+          <div class="flash-alert"><%= alert %></div>
         <% end %>
         <%= yield %>
       </main>
+
     </div>
   </body>
 </html>
