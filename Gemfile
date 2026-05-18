@@ -10,7 +10,7 @@ gem "stimulus-rails"
 gem "jbuilder"
 
 # Claude API (Anthropic Ruby SDK)
-gem "anthropic", "~> 0.3"
+gem "anthropic", "~> 1.41"
 
 # Charts
 gem "chartkick"
