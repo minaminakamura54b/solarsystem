@@ -1,6 +1,6 @@
 module ApplicationHelper
   def extract_recommendation(report)
-    return nil if report.blank? || report.strip.start_with?('{')
+    return nil if report.blank? || report.strip.start_with?("{")
 
     lines = report.split("\n")
     idx = lines.index { |l| l.include?("推奨アクション") }

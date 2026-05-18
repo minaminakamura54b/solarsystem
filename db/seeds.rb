@@ -15,7 +15,7 @@ sites_data.each do |attrs|
   if site.panels.empty?
     cols = Math.sqrt(site.panel_count).ceil
     panels = site.panel_count.times.map do |i|
-      statuses = (["normal"] * 40) + (["warning"] * 5) + (["error"] * 3)
+      statuses = ([ "normal" ] * 40) + ([ "warning" ] * 5) + ([ "error" ] * 3)
       {
         site_id: site.id,
         number: format("P%03d", i + 1),

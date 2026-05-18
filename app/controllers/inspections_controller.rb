@@ -8,7 +8,7 @@ class InspectionsController < ApplicationController
 
   def show
     # result フィールドに生JSONが入っている場合はパースして補正
-    if @inspection.completed? && @inspection.result.to_s.strip.start_with?('{')
+    if @inspection.completed? && @inspection.result.to_s.strip.start_with?("{")
       begin
         parsed = JSON.parse(@inspection.result)
         if @inspection.anomalies.blank?
@@ -78,7 +78,7 @@ class InspectionsController < ApplicationController
   end
 
   def recommendation_from_report(report)
-    return nil if report.blank? || report.strip.start_with?('{')
+    return nil if report.blank? || report.strip.start_with?("{")
     lines = report.split("\n")
     idx = lines.index { |l| l.include?("推奨アクション") }
     return nil unless idx
