@@ -1,0 +1,37 @@
+pending:
+  site: south
+  conducted_at: <%= 1.hour.ago.to_fs(:db) %>
+  analysis_status: pending
+  severity: normal
+
+analyzing:
+  site: south
+  conducted_at: <%= 2.hours.ago.to_fs(:db) %>
+  analysis_status: analyzing
+  severity: normal
+
+completed_normal:
+  site: south
+  conducted_at: <%= 1.day.ago.to_fs(:db) %>
+  analysis_status: completed
+  severity: normal
+  anomaly_count: 0
+  anomalies: <%= [].to_json %>
+  result: 異常は見つかりませんでした。
+  report: "## AI解析レポート\n\n### 推奨アクション\n定期点検を継続してください。"
+
+completed_warning:
+  site: south
+  conducted_at: <%= 2.days.ago.to_fs(:db) %>
+  analysis_status: completed
+  severity: warning
+  anomaly_count: 1
+  anomalies: <%= [{ "type" => "ホットスポット", "location" => "左上", "description" => "局所的な高温", "severity" => "warning" }].to_json %>
+  result: ホットスポットの疑いがあります。
+
+failed:
+  site: south
+  conducted_at: <%= 3.days.ago.to_fs(:db) %>
+  analysis_status: failed
+  severity: normal
+  result: 解析中にエラーが発生しました

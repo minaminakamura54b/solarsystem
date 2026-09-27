@@ -1,0 +1,6 @@
+unread_warning:
+  site: south
+  inspection: completed_warning
+  title: 点検で1件の異常を検出
+  message: ホットスポットの疑いがあります。
+  severity: warning

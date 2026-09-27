@@ -27,9 +27,15 @@ class ClaudePanelAnalyzer
     }
   PROMPT
 
-  def initialize(inspection)
+  class << self
+    # テストで偽クライアントに差し替えるためのフック。本番では常に nil のまま使う
+    attr_accessor :default_client
+  end
+
+  def initialize(inspection, client: nil)
     @inspection = inspection
-    @client = Anthropic::Client.new(access_token: ENV.fetch("ANTHROPIC_API_KEY"))
+    @client = client || self.class.default_client ||
+      Anthropic::Client.new(access_token: ENV.fetch("ANTHROPIC_API_KEY"))
   end
 
   def analyze
