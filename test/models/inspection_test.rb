@@ -12,11 +12,13 @@ class InspectionTest < ActiveSupport::TestCase
     assert_not inspection.valid?
   end
 
-  test "analysis_status は定義済みの値のみ" do
+  test "analysis_status は定義済みの値のみ（needs_review を含む）" do
     inspection = inspections(:pending)
     inspection.analysis_status = "needs_review"
+    assert inspection.valid?
 
-    assert_not inspection.valid?, "needs_review はまだ定義されていない（Phase 2 で追加）"
+    inspection.analysis_status = "excluded"
+    assert_not inspection.valid?, "excluded は画像だけのステータス"
   end
 
   test "失敗・未解析なら severity は nil（判定なし）でよい" do
@@ -50,11 +52,13 @@ class InspectionTest < ActiveSupport::TestCase
     inspection = sites(:south).inspections.build(conducted_at: Time.current)
 
     assert_not inspection.save
-    assert_includes inspection.errors[:base], "画像を選択してください"
+    assert_includes inspection.errors[:base], "サーモ画像を1枚以上選択してください"
   end
 
-  test "画像付きなら作成できる" do
-    inspection = attach_panel_image(sites(:south).inspections.build(conducted_at: Time.current))
+  test "サーモ画像付きなら作成できる" do
+    inspection = sites(:south).inspections.build(conducted_at: Time.current)
+    image = inspection.inspection_images.build(sequence: 1, thermal_filename: "panel.png")
+    image.thermal.attach(io: file_fixture("panel.png").open, filename: "panel.png", content_type: "image/png")
 
     assert inspection.save
   end

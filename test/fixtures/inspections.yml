@@ -14,7 +14,7 @@ completed_normal:
   analysis_status: completed
   severity: normal
   anomaly_count: 0
-  anomalies: <%= [].to_json %>
+  legacy_anomalies: <%= [].to_json %>
   result: 異常は見つかりませんでした。
   report: "## AI解析レポート\n\n### 推奨アクション\n定期点検を継続してください。"
 
@@ -24,7 +24,7 @@ completed_warning:
   analysis_status: completed
   severity: warning
   anomaly_count: 1
-  anomalies: <%= [{ "type" => "ホットスポット", "location" => "左上", "description" => "局所的な高温", "severity" => "warning" }].to_json %>
+  legacy_anomalies: <%= [{ "type" => "ホットスポット", "location" => "左上", "description" => "局所的な高温", "severity" => "warning" }].to_json %>
   result: ホットスポットの疑いがあります。
 
 failed:
