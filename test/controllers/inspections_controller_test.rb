@@ -80,7 +80,7 @@ class InspectionsControllerTest < ActionDispatch::IntegrationTest
   test "詳細表示では DB に書き込まない（result に古い JSON があっても）" do
     inspection = inspections(:completed_normal)
     inspection.update_columns(
-      anomalies: [],
+      legacy_anomalies: [],
       result: { "severity" => "critical", "anomaly_count" => 3, "anomalies" => [ { "type" => "旧データの異常" } ], "summary" => "旧データの概要" }.to_json,
       updated_at: 1.day.ago
     )
@@ -96,7 +96,7 @@ class InspectionsControllerTest < ActionDispatch::IntegrationTest
 
   test "詳細表示で severity の無い古い JSON があっても normal で上書きしない" do
     inspection = inspections(:completed_warning)
-    inspection.update_columns(anomalies: [], result: { "anomaly_count" => 1, "summary" => "s" }.to_json)
+    inspection.update_columns(legacy_anomalies: [], result: { "anomaly_count" => 1, "summary" => "s" }.to_json)
 
     get inspection_path(inspection, site_id: @site.id)
 
@@ -104,29 +104,15 @@ class InspectionsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".badge", text: "注意"
   end
 
-  test "画像付きで作成すると解析ジョブを登録して詳細へ移動する" do
-    assert_difference -> { @site.inspections.count }, 1 do
-      assert_enqueued_with(job: AnalyzePanelImageJob) do
-        post inspections_path(site_id: @site.id), params: {
-          inspection: { image: fixture_file_upload("panel.png", "image/png"), conducted_at: Time.current }
-        }
-      end
-    end
-
-    inspection = @site.inspections.order(:created_at).last
-    assert inspection.image.attached?
-    assert_redirected_to inspection_path(inspection)
-  end
-
-  test "画像なしでは点検を作成せず、解析ジョブも登録しない" do
+  test "画像なしでは点検を作成せず、ジョブも登録しない" do
     assert_no_difference -> { Inspection.count } do
-      assert_no_enqueued_jobs(only: AnalyzePanelImageJob) do
+      assert_no_enqueued_jobs do
         post inspections_path(site_id: @site.id), params: { inspection: { conducted_at: Time.current } }
       end
     end
 
     assert_response :unprocessable_entity
-    assert_match "画像を選択してください", response.body
+    assert_match "サーモ画像を1枚以上選択してください", response.body
   end
 
   test "削除する" do

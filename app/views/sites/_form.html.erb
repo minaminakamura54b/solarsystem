@@ -1,4 +1,4 @@
-<%= form_with model: site, url: url, method: defined?(method) ? method : :post do |f| %>
+<%= form_with model: site, url: url, method: local_assigns.fetch(:method, :post) do |f| %>
   <% if site.errors.any? %>
     <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
       <% site.errors.full_messages.each do |msg| %>
@@ -20,13 +20,43 @@
       <div>
         <label class="form-label">パネル枚数</label>
         <%= f.number_field :panel_count, class: "form-input", min: 1, max: 200, value: site.panel_count || 20 %>
-        <p class="text-xs text-gray-400 mt-1">登録時にパネルを自動生成します</p>
+        <p class="text-xs text-gray-400 mt-1">登録時にパネルを仮配置（格子状）で自動生成します。実際の配置ではありません</p>
       </div>
       <div>
         <label class="form-label">設備容量（kW）</label>
         <%= f.number_field :capacity_kw, class: "form-input", step: 0.1, min: 0 %>
       </div>
     </div>
+    <fieldset class="border rounded-lg p-4" style="border-color:var(--card-border);">
+      <legend class="form-label px-1">モジュール仕様</legend>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="form-label">型番</label>
+          <%= f.text_field :module_model, class: "form-input", placeholder: "例：XX-400M" %>
+        </div>
+        <div>
+          <label class="form-label">定格出力（W）</label>
+          <%= f.number_field :module_rated_w, class: "form-input", min: 1, step: 1 %>
+        </div>
+        <div>
+          <label class="form-label">セル構成</label>
+          <%= f.select :cell_layout, [ [ "未設定", "" ], [ "フルセル", "full_cell" ], [ "ハーフカット", "half_cut" ], [ "その他", "other" ] ], {}, class: "form-select" %>
+        </div>
+        <div>
+          <label class="form-label">サブストリング数（バイパスダイオード数）</label>
+          <%= f.number_field :substring_count, class: "form-input", min: 1, step: 1 %>
+        </div>
+      </div>
+      <div class="mt-4">
+        <label class="form-label">バイパス作動時の発熱パターン（JSON・任意）</label>
+        <%= f.text_area :bypass_pattern_json, class: "form-textarea", rows: 3, value: site.bypass_pattern_json,
+            placeholder: '例：{"layout": "full_cell", "bands": 3, "band_axis": "short_side", "band_area_ratio": 0.333, "tolerance": 0.12}' %>
+        <p class="text-xs text-gray-400 mt-1">
+          未設定のモジュールでは、帯状の発熱を「サブストリングのバイパス」と判定せず「部分的な発熱」とします。
+          ハーフカットなどは実際の発熱形状を確認してから設定してください。
+        </p>
+      </div>
+    </fieldset>
     <div>
       <label class="form-label">ステータス</label>
       <%= f.select :status,

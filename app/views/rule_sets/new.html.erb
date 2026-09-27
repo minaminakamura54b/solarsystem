@@ -1,0 +1,74 @@
+<% content_for :title, "ルールセットの作成" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">📏 新しいルールセット</h2>
+    <p class="text-sm text-gray-500 mt-1">
+      <% if @source %>「<%= @source.version %>」を複製しています。<% end %>
+      保存後は編集できません。作成しただけでは有効にならず、一覧で「有効にする」を押すと切り替わります
+    </p>
+  </div>
+  <%= link_to "← 一覧に戻る", rule_sets_path, class: "btn btn-secondary" %>
+</div>
+
+<div class="p-6">
+  <%= form_with model: @rule_set, url: rule_sets_path do |f| %>
+    <% if @rule_set.errors.any? %>
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+        <% (@rule_set.errors.full_messages + @rule_set.severity_rules.flat_map { |r| r.errors.full_messages }).uniq.each do |msg| %>
+          <p class="text-red-700 text-sm"><%= msg %></p>
+        <% end %>
+      </div>
+    <% end %>
+
+    <div class="card p-4 mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="form-label">バージョン名（一意）</label>
+        <%= f.text_field :version, class: "form-input", required: true, placeholder: "例：2026-10-v2" %>
+      </div>
+      <div>
+        <label class="form-label">メモ（変更理由・合意先など）</label>
+        <%= f.text_area :note, class: "form-textarea", rows: 2 %>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>異常の種類</th>
+            <th>ΔT の算出方法</th>
+            <th colspan="3" style="text-align:center;">正規化ΔT（℃） mild / warning / critical</th>
+            <th colspan="3" style="text-align:center;">生ΔT（℃） mild / warning / critical</th>
+          </tr>
+        </thead>
+        <tbody>
+          <%= f.fields_for :severity_rules do |rf| %>
+            <tr>
+              <td>
+                <%= anomaly_type_label(rf.object.anomaly_type) %>
+                <%= rf.hidden_field :anomaly_type %>
+              </td>
+              <td><%= rf.select :measure, SeverityRule::MEASURES.map { |m| [ measure_label(m), m ] }, {}, class: "form-select" %></td>
+              <% %i[normalized_mild normalized_warning normalized_critical raw_mild raw_warning raw_critical].each do |attr| %>
+                <td><%= rf.number_field attr, class: "form-input", step: 0.1, min: 0.1, style: "width:5rem;" %></td>
+              <% end %>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card p-4 mb-4">
+      <label class="form-label">検出パラメータ（JSON）</label>
+      <%= f.text_area :detection_params_json, class: "form-textarea", rows: 8, style: "font-family:monospace; font-size:0.8rem;",
+          value: params.dig(:rule_set, :detection_params_json) || JSON.pretty_generate(@rule_set.detection_params) %>
+      <p class="text-xs text-gray-400 mt-1">必要な項目: <%= RuleSet::DETECTION_PARAM_KEYS.join(", ") %></p>
+    </div>
+
+    <div class="flex justify-end gap-3">
+      <%= link_to "キャンセル", rule_sets_path, class: "btn btn-secondary" %>
+      <%= f.submit "作成する（まだ有効にしない）", class: "btn btn-primary" %>
+    </div>
+  <% end %>
+</div>

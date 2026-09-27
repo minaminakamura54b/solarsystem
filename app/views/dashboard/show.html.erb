@@ -50,6 +50,9 @@
     <%# パネル状態マップ %>
     <div class="card p-4">
       <h3 class="font-semibold text-gray-700 mb-3">パネル状態マップ</h3>
+      <% if current_site.panels_placeholder_layout? %>
+        <p class="text-xs mb-3" style="color:#ef9f27;">仮配置です。パネルの位置は実際の配置ではありません（発電所の登録時に格子状に自動生成したもの）。</p>
+      <% end %>
       <%# 凡例 %>
       <div class="flex gap-4 mb-3 text-xs">
         <span><span class="panel-cell normal inline-block w-3 h-3 rounded-sm"></span> 正常 (<%= @panel_status_summary["normal"].to_i %>)</span>
@@ -153,7 +156,7 @@
               <td><%= ins.conducted_at.strftime("%Y/%m/%d %H:%M") %></td>
               <td>
                 <span class="status-dot <%= ins.analysis_status %>"></span>
-                <%= { "pending" => "待機中", "analyzing" => "解析中", "completed" => "完了", "failed" => "失敗" }[ins.analysis_status] %>
+                <%= inspection_status_label(ins) %>
               </td>
               <td>
                 <% if ins.completed? %>

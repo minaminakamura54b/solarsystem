@@ -1,0 +1,21 @@
+<table class="table">
+  <thead>
+    <tr>
+      <th>異常の種類</th>
+      <th>ΔT の算出方法</th>
+      <th colspan="3" style="text-align:center;">正規化ΔT（POA 日射量あり）<br><span class="text-xs">mild / warning / critical</span></th>
+      <th colspan="3" style="text-align:center;">生ΔT（GHI・日射量不明）<br><span class="text-xs">mild / warning / critical</span></th>
+    </tr>
+  </thead>
+  <tbody>
+    <% rules.each do |rule| %>
+      <tr>
+        <td><%= anomaly_type_label(rule.anomaly_type) %><div class="text-xs text-gray-400"><%= rule.anomaly_type %></div></td>
+        <td class="text-sm"><%= measure_label(rule.measure) %></td>
+        <% %w[normalized_mild normalized_warning normalized_critical raw_mild raw_warning raw_critical].each do |attr| %>
+          <td style="text-align:center;"><%= rule.public_send(attr)&.to_f %>℃</td>
+        <% end %>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
