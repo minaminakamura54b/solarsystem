@@ -2,13 +2,11 @@ pending:
   site: south
   conducted_at: <%= 1.hour.ago.to_fs(:db) %>
   analysis_status: pending
-  severity: normal
 
 analyzing:
   site: south
   conducted_at: <%= 2.hours.ago.to_fs(:db) %>
   analysis_status: analyzing
-  severity: normal
 
 completed_normal:
   site: south
@@ -33,5 +31,5 @@ failed:
   site: south
   conducted_at: <%= 3.days.ago.to_fs(:db) %>
   analysis_status: failed
-  severity: normal
   result: 解析中にエラーが発生しました
+  error_message: "Claude API エラー: overloaded"
