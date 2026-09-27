@@ -23,6 +23,7 @@
           </div>
           <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-4">
             <div>パネル数: <span class="font-medium"><%= site.panel_count %>枚</span></div>
+            <div>モジュール: <span class="font-medium"><%= [ site.module_model, (site.module_rated_w && "#{site.module_rated_w}W"), { "full_cell" => "フルセル", "half_cut" => "ハーフカット", "other" => "その他" }[site.cell_layout] ].compact.join(" / ").presence || "未設定" %></span></div>
             <div>容量: <span class="font-medium"><%= site.capacity_kw %>kW</span></div>
           </div>
           <div class="flex gap-2">

@@ -59,6 +59,9 @@
           <%= link_to sites_path, class: "sidebar-link #{controller_name == 'sites' ? 'active' : ''}" do %>
             <span>⚙</span> 発電所管理
           <% end %>
+          <%= link_to rule_sets_path, class: "sidebar-link #{controller_name == 'rule_sets' ? 'active' : ''}" do %>
+            <span>📏</span> 判定基準（閾値）
+          <% end %>
         </nav>
 
         <%# Site info footer %>

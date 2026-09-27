@@ -1,0 +1,51 @@
+<% content_for :title, "判定基準（閾値）" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">📏 判定基準（閾値）</h2>
+    <p class="text-sm text-gray-500 mt-1">重大度の閾値と検出パラメータの組（ルールセット）。作成済みのルールセットは編集できません</p>
+  </div>
+  <% if @rule_sets.any? %>
+    <%= link_to "＋ 複製して新しいバージョンを作成", new_rule_set_path, class: "btn btn-primary" %>
+  <% end %>
+</div>
+
+<div class="p-6">
+  <% if @rule_sets.any? %>
+    <div class="card">
+      <table class="table">
+        <thead>
+          <tr><th>バージョン</th><th>状態</th><th>メモ</th><th>作成日時</th><th></th></tr>
+        </thead>
+        <tbody>
+          <% @rule_sets.each do |rule_set| %>
+            <tr id="rule_set_<%= rule_set.id %>">
+              <td><%= link_to rule_set.version, rule_set_path(rule_set) %></td>
+              <td>
+                <% if rule_set.active? %>
+                  <span class="badge badge-success">有効</span>
+                <% else %>
+                  <span class="badge badge-gray">無効</span>
+                <% end %>
+              </td>
+              <td class="text-sm text-gray-500"><%= rule_set.note&.truncate(60) %></td>
+              <td class="text-sm"><%= rule_set.created_at.strftime("%Y/%m/%d %H:%M") %></td>
+              <td class="flex gap-2">
+                <%= link_to "詳細", rule_set_path(rule_set), class: "btn btn-sm btn-secondary" %>
+                <%= link_to "複製", new_rule_set_path(from: rule_set.id), class: "btn btn-sm btn-secondary" %>
+                <% unless rule_set.active? %>
+                  <%= button_to "有効にする", activate_rule_set_path(rule_set), method: :patch, class: "btn btn-sm btn-primary",
+                      data: { turbo_confirm: "「#{rule_set.version}」を有効にしますか？現在有効なルールセットは無効になります。確定済みの異常の判定は変わりません" } %>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="card p-8 text-center text-gray-500">
+      ルールセットがありません。<code>bin/rails db:seed</code> で初期値を投入してください。
+    </div>
+  <% end %>
+</div>

@@ -1,0 +1,187 @@
+<%# 新方式の点検（複数画像のセッション）の表示 %>
+<% counts = @inspection.image_status_counts %>
+<div class="p-6 space-y-6"
+     <% if @inspection.in_progress? %>
+       data-controller="auto-refresh"
+       data-auto-refresh-url-value="<%= inspection_path(@inspection, format: :json) %>"
+       data-auto-refresh-interval-value="3000"
+     <% end %>>
+
+  <%# ── サマリー ─────────────────────────────── %>
+  <div class="card p-4">
+    <div style="display:flex; flex-wrap:wrap; gap:1.5rem; align-items:center;">
+      <div>
+        <p style="font-size:0.65rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em;">状況</p>
+        <p style="font-weight:600; font-size:1rem;"><%= inspection_status_label(@inspection) %></p>
+      </div>
+      <div>
+        <p style="font-size:0.65rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em;">画像</p>
+        <p style="font-size:0.9rem;">
+          全 <%= @images.size %> 枚
+          <% counts.except("pending").each do |status, n| %>
+            ／ <%= { "analyzing" => "解析中", "completed" => "解析完了", "needs_review" => "要確認", "failed" => "失敗", "excluded" => "除外" }[status] %> <%= n %>
+          <% end %>
+          <% waiting = @inspection.images_waiting_for_analyzer %>
+          <% checking = @images.count(&:quality_pending?) %>
+          <% if checking > 0 %>／ 品質チェック中 <%= checking %><% end %>
+          <% if waiting > 0 %>／ 解析待ち <%= waiting %><% end %>
+        </p>
+      </div>
+      <div>
+        <p style="font-size:0.65rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em;">重要度</p>
+        <p style="font-size:0.9rem; color:var(--gray-400);">判定なし（解析エンジンの接続後に、確定した異常から判定します）</p>
+      </div>
+    </div>
+    <% if @inspection.weather_note.present? %>
+      <p style="font-size:0.8rem; color:var(--gray-400); margin-top:0.75rem;">天候メモ: <%= @inspection.weather_note %></p>
+    <% end %>
+    <% if @inspection.in_progress? %>
+      <p style="font-size:0.8rem; color:#5DCAA5; margin-top:0.75rem;"><span class="animate-spin">⚙</span> メタデータの読み取りと品質チェックを行っています...</p>
+    <% end %>
+  </div>
+
+  <%# ── 気象データ ─────────────────────────────── %>
+  <div class="card p-4" id="weather">
+    <p style="font-size:0.65rem; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.75rem;">気象データ</p>
+    <p class="text-xs text-gray-400 mb-3">
+      時刻付きで入力すると、各画像の撮影時刻に合わせて補間して割り当てます（前後 <%= ImageQualityConfig.current.weather_max_gap_minutes %> 分以内の値のみ使用）。
+      時刻は <%= @capture_time_zone.name %> の現地時刻として扱います。日射量はモジュール面（POA）か水平面（GHI）かを必ず選んでください。
+    </p>
+
+    <% readings = @inspection.weather_readings.select(&:persisted?) %>
+    <% if readings.any? %>
+      <table class="table mb-4">
+        <thead>
+          <tr><th>時刻</th><th>日射量</th><th>種類</th><th>風速</th><th>気温</th><th>湿度</th><th></th></tr>
+        </thead>
+        <tbody>
+          <% readings.each do |r| %>
+            <tr>
+              <td><%= r.observed_at.in_time_zone(@capture_time_zone).strftime("%Y/%m/%d %H:%M") %></td>
+              <td><%= r.irradiance_w_m2 ? "#{r.irradiance_w_m2.to_f.round} W/m²" : "-" %></td>
+              <td><%= { "poa" => "POA", "ghi" => "GHI", "unknown" => "不明" }.fetch(r.irradiance_type.to_s, "-") %></td>
+              <td><%= r.wind_speed_m_s ? "#{r.wind_speed_m_s.to_f} m/s" : "-" %></td>
+              <td><%= r.air_temp_c ? "#{r.air_temp_c.to_f} ℃" : "-" %></td>
+              <td><%= r.humidity ? "#{r.humidity.to_f} %" : "-" %></td>
+              <td>
+                <%= button_to "削除", inspection_weather_reading_path(@inspection, r), method: :delete,
+                    class: "btn btn-sm btn-danger", data: { turbo_confirm: "この気象データを削除しますか？" } %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+
+    <%= form_with model: @new_reading, url: inspection_weather_readings_path(@inspection), class: "grid grid-cols-2 md:grid-cols-4 gap-3 items-end" do |f| %>
+      <div>
+        <label class="form-label">時刻</label>
+        <%= f.datetime_local_field :observed_at, class: "form-input", required: true,
+            value: @inspection.conducted_at.in_time_zone(@capture_time_zone).strftime("%Y-%m-%dT%H:%M") %>
+      </div>
+      <div>
+        <label class="form-label">日射量（W/m²）</label>
+        <%= f.number_field :irradiance_w_m2, class: "form-input", step: 1, min: 0 %>
+      </div>
+      <div>
+        <label class="form-label">日射量の種類</label>
+        <%= f.select :irradiance_type, [ [ "選択してください", "" ], [ "POA（モジュール面）", "poa" ], [ "GHI（水平面）", "ghi" ], [ "不明", "unknown" ] ], {}, class: "form-select" %>
+      </div>
+      <div>
+        <label class="form-label">風速（m/s）</label>
+        <%= f.number_field :wind_speed_m_s, class: "form-input", step: 0.1, min: 0 %>
+      </div>
+      <div>
+        <label class="form-label">気温（℃）</label>
+        <%= f.number_field :air_temp_c, class: "form-input", step: 0.1 %>
+      </div>
+      <div>
+        <label class="form-label">湿度（%）</label>
+        <%= f.number_field :humidity, class: "form-input", step: 1, min: 0, max: 100 %>
+      </div>
+      <div>
+        <%= f.submit "気象データを追加", class: "btn btn-primary" %>
+      </div>
+    <% end %>
+  </div>
+
+  <%# ── 画像ごとの状況 ─────────────────────────────── %>
+  <div class="card">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>サーモ画像</th>
+          <th>撮影</th>
+          <th>温度データ</th>
+          <th>日射量</th>
+          <th>状況</th>
+          <th>RGB</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @images.each do |image| %>
+          <tr id="image_<%= image.id %>">
+            <td><%= image.sequence %></td>
+            <td>
+              <div style="font-size:0.8rem;"><%= image.thermal_filename %></div>
+              <div class="text-xs text-gray-400">
+                <%= image.camera_model || "カメラ不明" %>
+                <% if image.width %> / <%= image.width %>×<%= image.height %><% end %>
+              </div>
+            </td>
+            <td class="text-xs">
+              <%= image.captured_at ? image.captured_at.in_time_zone(@capture_time_zone).strftime("%m/%d %H:%M:%S") : "-" %>
+              <div class="text-gray-400"><%= image.gps_lat && image.gps_lng ? "GPS あり" : "GPS なし" %></div>
+            </td>
+            <td class="text-xs"><%= image.quality_pending? ? "-" : radiometric_label(image) %></td>
+            <td class="text-xs"><%= irradiance_label(image) %></td>
+            <td>
+              <span class="badge <%= image_status_badge_class(image) %>"><%= image_status_label(image) %></span>
+              <% if image.needs_review? || image.failed? %>
+                <p class="text-xs mt-1" style="color:#ef9f27;"><%= image_review_message(image) %></p>
+              <% end %>
+              <% if image.excluded? %>
+                <p class="text-xs mt-1 text-gray-400">除外の理由: <%= image.exclusion_note %></p>
+              <% end %>
+
+              <% if image.quality_report.present? %>
+                <details class="mt-1">
+                  <summary class="text-xs text-gray-400" style="cursor:pointer;">品質チェックの詳細</summary>
+                  <ul class="text-xs mt-1 space-y-1">
+                    <% image.quality_report["checks"].each do |check| %>
+                      <li><%= quality_check_icon(check["result"]) %> <%= check["message"] %></li>
+                    <% end %>
+                  </ul>
+                  <p class="text-xs text-gray-400 mt-1">判定基準: <%= image.quality_report["config_version"] %></p>
+                </details>
+              <% end %>
+
+              <% if image.needs_review? || image.failed? %>
+                <%= form_with model: image, url: exclude_inspection_inspection_image_path(@inspection, image), method: :patch, class: "mt-2 flex gap-2" do |f| %>
+                  <%= f.text_field :exclusion_note, class: "form-input", placeholder: "除外の理由（必須）", required: true, style: "font-size:0.75rem; padding:0.25rem 0.5rem;" %>
+                  <%= f.submit "除外する", class: "btn btn-sm btn-secondary" %>
+                <% end %>
+              <% elsif image.excluded? %>
+                <%= button_to "除外を取り消す", unexclude_inspection_inspection_image_path(@inspection, image), method: :patch, class: "btn btn-sm btn-secondary mt-2" %>
+              <% end %>
+            </td>
+            <td class="text-xs">
+              <% if image.rgb.attached? %>
+                <div><%= image.rgb.filename %></div>
+                <%= button_to "外す", rgb_inspection_inspection_image_path(@inspection, image), method: :delete,
+                    class: "btn btn-sm btn-secondary mt-1", data: { turbo_confirm: "RGB 画像を外しますか？" } %>
+              <% else %>
+                <span class="text-gray-400">なし</span>
+              <% end %>
+              <%= form_with model: image, url: inspection_inspection_image_path(@inspection, image), method: :patch, class: "mt-1" do |f| %>
+                <%= f.file_field :rgb, accept: "image/*", class: "text-xs", required: true %>
+                <%= f.submit image.rgb.attached? ? "差し替え" : "添付", class: "btn btn-sm btn-secondary mt-1" %>
+              <% end %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>

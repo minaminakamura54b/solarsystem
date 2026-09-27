@@ -20,7 +20,9 @@ export default class extends Controller {
         headers: { "Accept": "application/json" }
       })
       const data = await response.json()
-      if (!IN_PROGRESS_STATUSES.includes(data.analysis_status)) {
+      // in_progress があればそれを使う（複数画像の点検は、品質チェック待ちの画像があるかで決まる）
+      const inProgress = "in_progress" in data ? data.in_progress : IN_PROGRESS_STATUSES.includes(data.analysis_status)
+      if (!inProgress) {
         clearInterval(this.timer)
         window.location.reload()
       }

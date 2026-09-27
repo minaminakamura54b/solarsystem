@@ -1,0 +1,28 @@
+# 画像の品質チェックとメタデータ読み取りの設定（docs/IMPROVEMENT_PLAN.md Phase 2）。
+# 値を変えたら version を上げる。品質チェックの結果（quality_report）に version を記録する。
+shared:
+  version: "2026-09-v1"
+
+  # EXIF の撮影時刻（DateTimeOriginal）はタイムゾーンを持たないため、このタイムゾーンの現地時刻として解釈する。
+  # 気象データの入力時刻も同じタイムゾーンで解釈する
+  capture_time_zone: "Asia/Tokyo"
+
+  min_width: 640
+  min_height: 512
+
+  # 日射量（POA = モジュール面）がこの値未満なら要確認（low_irradiance）
+  min_poa_irradiance_w_m2: 600
+
+  # 気象データの補間: 撮影時刻から前後この分数以内の観測値だけを使う
+  weather_max_gap_minutes: 30
+
+  # 温度データ（放射温度）の有無のメタデータによる仮判定。
+  # exiftool が読み取ったタグ名にこのいずれかがあれば「温度データあり」と仮判定する。
+  # 最終判定は Phase 3 の解析エンジン（DJI Thermal SDK）で行う。Phase S で実画像を見て見直すこと
+  radiometric_tags:
+    - ThermalData          # DJI R-JPEG（APP3）
+    - ThermalCalibration   # DJI R-JPEG
+    - Emissivity           # DJI 熱画像パラメータ（APP4）
+    - ObjectDistance       # DJI 熱画像パラメータ（APP4）
+    - RawThermalImage      # FLIR
+    - RawThermalImageType  # FLIR

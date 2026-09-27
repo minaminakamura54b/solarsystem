@@ -480,6 +480,8 @@ Phase 0 より前に、前提が成り立つかを確かめる。
 7. Inspection 詳細を「複数画像のセッション」前提に作り直す（画像ごとのステータス・理由・品質結果）。`needs_review` / `failed` の画像を、理由を入力して `excluded` にする操作と、`excluded` を取り消す操作を付ける。Inspection のステータスはセクション2の優先順で集計する
 8. `rule_sets` / `severity_rules` のシードと管理画面（一覧・既存セットを複製して新セット作成・active 切替。既存セットの編集は不可）
 
+**実施時の決定事項（2026-09-27、ユーザー承認）**: 既知の問題 F（パネルの自動生成）は「仮配置」として残し `panels.layout_source` で区別する。根拠のない既存パネルの status は normal に戻す。新しい点検では旧方式の Claude 判定を動かさない（品質チェックまでで Phase 4 を待つ）。温度データの有無はメタデータで仮判定し、最終判定は Phase 3。撮影時刻・気象データの時刻は `config/image_quality.yml` の `capture_time_zone` で解釈する（アプリ全体のタイムゾーンは UTC のまま。docs/ARCHITECTURE.md の既知の問題 K）。
+
 受け入れ確認: 温度データのない JPEG が `needs_review (no_radiometric)` になり、理由が画面に出る。その画像を `excluded` にすると Inspection のステータスから外れる。ルールセットに不整合な閾値を入れると保存できない。active なセットは常に1つだけ。
 
 ### Phase 3: 解析エンジン（3〜5日）
@@ -677,6 +679,7 @@ docs/IMPROVEMENT_PLAN.md の Phase 6 を読んでください。
 - 本番環境への操作（デプロイ、本番 DB への接続・変更）
 - 新しい gem・外部サービス・有料 API の追加
 - 秘密情報や認証情報が必要になった
+- ユーザーの指示と違う方法・より広い範囲で実装しようとしている（指示の意図を満たすと判断しても、着手前に確認する）
 
 ## 禁止
 - force push、履歴の書き換え（rebase・reset による公開済みコミットの変更）

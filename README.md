@@ -10,9 +10,10 @@
 
 | 機能 | 内容 |
 |---|---|
-| 発電所管理 | 発電所（Site）の登録・編集。所在地、容量（kW）、パネル枚数 |
-| パネルマップ | パネルの配置と状態（正常・注意・異常・停止）を表示 |
-| 点検 | 画像をアップロードすると AI 解析を実行し、重大度・異常一覧・レポートを表示 |
+| 発電所管理 | 発電所（Site）の登録・編集。所在地、容量（kW）、パネル枚数、モジュール仕様 |
+| パネルマップ | パネルの配置と状態を表示（現在は登録時に自動生成した**仮配置**） |
+| 点検 | サーモ画像（R-JPEG）と RGB 画像をまとめてアップロード。画像ごとにメタデータを読み取り、品質チェックを行う。気象データを入力すると撮影時刻に合わせて割り当てる |
+| 判定基準 | 重大度の閾値をバージョン管理（ルールセット）。作成後は編集できず、複製して新しいバージョンを作る |
 | アラート | 異常検出時にアラートを作成。既読管理 |
 | 売電実績 | 月別の発電量（kWh）と売電額を記録し、グラフ表示 |
 | ダッシュボード | 発電所ごとの状況をまとめて表示。画面上で発電所を切り替える |
@@ -21,18 +22,19 @@
 
 ## ワークフロー
 
-### 現在の解析フロー
+### 現在の点検フロー（Phase 2 時点）
 
 ```
-点検画面で画像を1枚アップロード
-  → Inspection を作成し AnalyzePanelImageJob を登録
-  → ClaudePanelAnalyzer が画像を Claude（vision）へ送信
-  → 返答の JSON を保存（重大度・異常一覧・レポート）
-  → 異常があればアラートを作成
-  → 解析中の画面は3秒ごとに自動更新
+点検画面でサーモ画像と RGB 画像をまとめてアップロード
+  → ファイル名の _T / _V でペアにして、画像ごとに登録
+  → 画像ごとにメタデータ（撮影時刻・カメラ・位置・温度データの有無）を読み取り、品質チェック
+       不合格（温度データなし・低解像度・日射量不足など）→ 要確認（理由を表示）。「正常」にはしない
+       合格 → 解析待ち（解析エンジンは Phase 4 で接続）
+  → 気象データを入力すると、撮影時刻に合わせて各画像に割り当て、品質チェックをやり直す
+  → 要確認の画像は、理由を入力して除外できる
 ```
 
-現行方式には既知の問題があります（解析失敗が「正常」として保存される、異常がパネルに正しく紐付かない など）。一覧は [docs/IMPROVEMENT_PLAN.md のセクション0](docs/IMPROVEMENT_PLAN.md) にあり、Phase 1 で修正します。
+旧方式（画像1枚を Claude に判定させる方式）で作った点検は、表示だけできます。新しい点検では Claude の判定は行いません。詳しい流れは [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を参照してください。
 
 ### 移行後の点検ワークフロー
 
@@ -90,30 +92,36 @@
 app/
   controllers/     dashboard, sites, inspections, alerts, revenues, pages
   models/          Site, Panel, Inspection, Alert, Revenue
-  services/        claude_panel_analyzer.rb（現行の AI 解析）
-  jobs/            analyze_panel_image_job.rb（現行の解析ジョブ）
+  services/        メタデータ読み取り（exif_reader / image_metadata_extractor）、品質チェック（image_quality_checker）、
+                   気象データの補間（weather_interpolator）、ペアリング（image_pairing）、旧方式の claude_panel_analyzer
+  jobs/            process_inspection_image_job.rb（画像ごとの品質チェック）、recheck_inspection_quality_job.rb、
+                   analyze_panel_image_job.rb（旧方式）
   javascript/controllers/
                    auto_refresh_controller.js（解析中の自動更新）
                    upload_form_controller.js（アップロードフォーム）
                    flash_controller.js
-config/            ルーティング、環境設定、deploy.yml（Kamal）、ci.rb
+config/            ルーティング、環境設定、image_quality.yml（品質チェックの閾値など）、deploy.yml（Kamal）、ci.rb
 db/                schema.rb、migrate/、seeds.rb（サンプル発電所2件）
 docs/              改善指示書など
 test/              テスト（Claude API は偽クライアントに差し替えて実行）
 analyzer/          Python 解析エンジン（Phase 3 で作成予定）
 ```
 
-### データモデル（現在）
+### データモデル
 
 | テーブル | 主な項目 |
 |---|---|
-| `sites` | 発電所名、所在地、容量（kW）、パネル枚数、状態 |
-| `panels` | 発電所、パネル番号、配置座標（x, y）、状態、最終点検日時 |
-| `inspections` | 発電所、点検日時、解析ステータス、重大度、異常一覧、レポート。画像1枚を添付 |
+| `sites` | 発電所名、所在地、容量（kW）、パネル枚数、状態、モジュール仕様 |
+| `panels` | 発電所、パネル番号、配置座標（x, y）、状態、最終点検日時、配置の種類（仮配置 / 実配置） |
+| `inspections` | 発電所、点検日時、解析ステータス、重大度（未判定は空）、天候メモ。旧方式の結果（`legacy_anomalies` など） |
+| `inspection_images` | 点検内の画像1枚ごと。サーモ画像（原本）・RGB、メタデータ、気象データ、品質チェック結果、ステータス |
+| `weather_readings` | 点検中の気象の観測値（時刻・日射量と種類・風速・気温・湿度） |
+| `rule_sets` / `severity_rules` | 重大度の閾値（ルールセット単位でバージョン管理） |
+| `anomalies` / `anomaly_groups` / `grid_templates` | 解析結果とグリッド（テーブルのみ。使うのは Phase 4 以降） |
 | `alerts` | 発電所、点検、パネル、タイトル、重大度、既読日時 |
 | `revenues` | 発電所、年月、発電量（kWh）、売電額（円） |
 
-移行後に追加するテーブル（`inspection_images`、`anomalies`、`anomaly_groups`、`grid_templates`、`rule_sets`、`severity_rules`）は [docs/IMPROVEMENT_PLAN.md のセクション4](docs/IMPROVEMENT_PLAN.md) を参照してください。
+各テーブルの詳細は [docs/IMPROVEMENT_PLAN.md のセクション4](docs/IMPROVEMENT_PLAN.md) と [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を参照してください。
 
 ---
 
@@ -124,7 +132,8 @@ analyzer/          Python 解析エンジン（Phase 3 で作成予定）
 - Ruby 3.3.10
 - PostgreSQL
 - libvips（画像処理）
-- Anthropic API キー
+- exiftool（画像のメタデータ読み取り。macOS: `brew install exiftool`、Debian/Ubuntu: `apt install libimage-exiftool-perl`）
+- Anthropic API キー（旧方式の点検の再解析にのみ使用）
 
 ### 手順
 
@@ -138,7 +147,7 @@ cp .env.example .env   # ANTHROPIC_API_KEY などを記入
 bin/setup    # gem のインストール、DB の作成・マイグレーション、サーバー起動
 ```
 
-サンプルデータ（発電所2件とパネル）は `bin/rails db:seed` で作成できます。
+`bin/rails db:seed` で、判定基準（閾値）の初期値と、開発用のサンプルデータ（発電所2件とパネル）を作成します。判定基準の初期値は本番でも必要です（`db/seeds/rule_sets.rb`）。
 
 ### 環境変数
 

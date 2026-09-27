@@ -9,7 +9,7 @@
 
 - **1セッション＝1フェーズ。** 指示されたフェーズ以外に手を広げない。
 - **自律して進めてよい範囲・必ず止まって確認する場面・禁止事項は [docs/IMPROVEMENT_PLAN.md の末尾「作業の進め方（自律して進めてよい範囲）」](docs/IMPROVEMENT_PLAN.md) に従う。** フェーズごとにブランチを作り、テスト・rubocop・brakeman と GitHub Actions がすべて通ったら merge commit で main にマージして push してよい。force push・公開済み履歴の書き換え・main への直接コミットは禁止。
-- 「止まって確認する場面」に当たるときは、実装計画を提示して承認を待つ。
+- 「止まって確認する場面」に当たるときは、実装計画を提示して承認を待つ。**ユーザーの指示と違う方法や、指示より広い範囲で実装しようとするときも同じ**（例: 指示された修正に、関連する別の条件まで加える場合）。
 - 指示書と実コードが食い違っていたら、実装せずに報告する。
 - CLAUDE.md・指示書・依頼内容が矛盾したら、指示書の「設計原則」を優先し、矛盾点を報告する。
 - 仕様に迷ったら実装せずに質問する。特に **判定ロジックの追加、閾値の変更、パネルへの自動割り当て** は指示なく行わない。
@@ -45,17 +45,21 @@ bin/ci                    # 上記をまとめて実行（config/ci.rb）
 ## 技術スタックと注意点
 
 - Rails 8.1 / Ruby 3.3.10 / PostgreSQL / Propshaft / importmap / Turbo / Stimulus
+- **exiftool が必要**（画像のメタデータ読み取り。テストでも実際に使う）。gem は使わず `ExifReader` がコマンドを呼ぶ
+- 品質チェックの閾値・温度データの手がかりにするタグ・撮影時刻のタイムゾーンは `config/image_quality.yml`。重大度の閾値は DB のルールセット（初期値は `db/seeds/rule_sets.rb`）
 - ジョブ: 開発は `:inline`（アップロードと同時に同期実行）、本番は `solid_queue`（Puma 内で実行）
 - `anthropic` gem 0.4.1 は**非公式 gem**（`Anthropic::Client.new(access_token:)` 形式）。公式 SDK 1.x は同名だが API が別物。移行は Phase 6 で一度だけ行う予定なので、それまで SDK を変えない。
-- `inspections.analysis_status` は `pending` / `analyzing` / `completed` / `failed`。**`completed` を `analyzed` などに改名しない**（views が `completed?` に依存している）。新しい値は `needs_review` と、画像の `excluded`。
+- `inspections.analysis_status` は `pending` / `analyzing` / `completed` / `needs_review` / `failed`、画像（`inspection_images`）はこれに `excluded` が加わる。**`completed` を `analyzed` などに改名しない**。
+- 点検には新方式（`inspection_images` を持つ）と旧方式（画像1枚・Claude 判定。`Inspection#legacy?`）がある。旧方式は表示だけで、新しく作らない。旧方式の結果は `legacy_anomalies`（読み取り専用）。
 - 本番サーバーは **linux/amd64** 前提（DJI Thermal SDK の制約）。
 - マイグレーションは必ず可逆にする。既存データの移行が必要なら rake タスクを分ける。
 - UI の文言は日本語。既存の画面構成は極力維持する。
 
 ## 主要ファイル
 
-- `app/services/claude_panel_analyzer.rb` — 現行の Claude 画像判定（Phase 6 で `AnomalyExplainer` に置き換え予定）
-- `app/jobs/analyze_panel_image_job.rb` — 現行の解析ジョブ
+- `app/jobs/process_inspection_image_job.rb` — 画像ごとのメタデータ読み取り・気象データ割り当て・品質チェック
+- `app/services/image_quality_checker.rb` ほか — 品質チェック、`ImageMetadataExtractor`、`WeatherInterpolator`、`ImagePairing`
+- `app/services/claude_panel_analyzer.rb` / `app/jobs/analyze_panel_image_job.rb` — 旧方式の Claude 画像判定（新しい点検では使わない。Phase 6 で置き換え予定）
 - `app/controllers/inspections_controller.rb` — 点検の登録・表示（JSON でステータスを返し、自動更新に使う）
 - `app/javascript/controllers/auto_refresh_controller.js` — 解析中画面のポーリング
 - `analyzer/` — Python 解析エンジン（Phase 3 で新規作成予定）

@@ -17,3 +17,39 @@ class SiteTest < ActiveSupport::TestCase
     assert_equal inspections(:pending), sites(:south).latest_inspection
   end
 end
+
+class SiteModuleSpecTest < ActiveSupport::TestCase
+  setup do
+    @site = sites(:south)
+  end
+
+  test "バイパス作動時の発熱パターンを JSON で設定できる" do
+    @site.update!(bypass_pattern_json: '{"layout": "full_cell", "bands": 3}')
+
+    assert_equal({ "layout" => "full_cell", "bands" => 3 }, @site.reload.bypass_pattern)
+  end
+
+  test "不正な JSON は保存できない" do
+    assert_not @site.update(bypass_pattern_json: "{bands: 3")
+    assert @site.errors[:bypass_pattern].any?
+  end
+
+  test "空欄なら未設定（nil）" do
+    @site.update!(bypass_pattern_json: '{"bands": 3}')
+    @site.update!(bypass_pattern_json: "")
+
+    assert_nil @site.reload.bypass_pattern
+  end
+
+  test "セル構成は定義済みの値のみ" do
+    assert_not @site.update(cell_layout: "quarter_cut")
+    assert @site.update(cell_layout: "half_cut")
+  end
+
+  test "パネルがすべて自動生成なら仮配置" do
+    assert @site.panels_placeholder_layout?
+
+    panels(:p001).update!(layout_source: "manual")
+    assert_not @site.panels_placeholder_layout?
+  end
+end

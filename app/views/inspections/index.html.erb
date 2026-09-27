@@ -30,15 +30,18 @@
             <tr id="inspection_<%= ins.id %>">
               <td><%= ins.conducted_at.strftime("%Y/%m/%d %H:%M") %></td>
               <td>
-                <% if ins.image.attached? %>
+                <% if ins.inspection_images.any? %>
+                  <span class="text-sm"><%= ins.inspection_images.size %>枚</span>
+                <% elsif ins.image.attached? %>
                   <%= image_tag ins.image, class: "w-12 h-12 rounded object-cover" %>
+                  <div class="text-xs text-gray-400">旧方式</div>
                 <% else %>
                   <span class="text-gray-400 text-xs">なし</span>
                 <% end %>
               </td>
               <td>
                 <span class="status-dot <%= ins.analysis_status %>"></span>
-                <%= { "pending" => "待機中", "analyzing" => "解析中...", "completed" => "完了", "failed" => "失敗" }[ins.analysis_status] %>
+                <%= inspection_status_label(ins) %>
               </td>
               <td>
                 <% if ins.completed? %>

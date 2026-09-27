@@ -1,0 +1,30 @@
+<% content_for :title, "ルールセット #{@rule_set.version}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">📏 ルールセット <%= @rule_set.version %></h2>
+    <p class="text-sm text-gray-500 mt-1">
+      <%= @rule_set.active? ? "有効" : "無効" %> ／ 作成 <%= @rule_set.created_at.strftime("%Y/%m/%d %H:%M") %> ／ 作成済みのため編集できません
+    </p>
+  </div>
+  <div class="flex gap-2">
+    <%= link_to "← 一覧に戻る", rule_sets_path, class: "btn btn-secondary" %>
+    <%= link_to "複製して新しいバージョンを作成", new_rule_set_path(from: @rule_set.id), class: "btn btn-primary" %>
+  </div>
+</div>
+
+<div class="p-6 space-y-6">
+  <% if @rule_set.note.present? %>
+    <div class="card p-4 text-sm"><%= simple_format @rule_set.note %></div>
+  <% end %>
+
+  <div class="card">
+    <%= render "rules_table", rules: @rule_set.severity_rules %>
+  </div>
+
+  <div class="card p-4">
+    <p class="form-label">検出パラメータ</p>
+    <pre class="text-xs" style="white-space:pre-wrap;"><%= JSON.pretty_generate(@rule_set.detection_params) %></pre>
+    <p class="text-xs text-gray-400 mt-2">mild は検出の最小値です（これ未満の温度差は異常として出力しません）。</p>
+  </div>
+</div>

@@ -30,7 +30,8 @@ class SitesController < ApplicationController
 
   def update
     if @site.update(site_params)
-      redirect_to site_path(@site), notice: "発電所情報を更新しました"
+      # 発電所の詳細画面（sites/show）は未作成のため一覧に戻る
+      redirect_to sites_path, notice: "発電所情報を更新しました"
     else
       render :edit, status: :unprocessable_entity
     end
@@ -49,7 +50,10 @@ class SitesController < ApplicationController
   end
 
   def site_params
-    params.require(:site).permit(:name, :location, :panel_count, :capacity_kw, :status, :description)
+    params.require(:site).permit(
+      :name, :location, :panel_count, :capacity_kw, :status, :description,
+      :module_model, :module_rated_w, :cell_layout, :substring_count, :bypass_pattern_json
+    )
   end
 
   def generate_panels_for(site)
@@ -62,6 +66,7 @@ class SitesController < ApplicationController
         position_x: i % cols,
         position_y: i / cols,
         status: "normal",
+        layout_source: "auto", # 仮配置（実配置ではない）
         created_at: Time.current,
         updated_at: Time.current
       }
