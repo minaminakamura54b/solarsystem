@@ -7,16 +7,13 @@ class InspectionsController < ApplicationController
   end
 
   def show
-    # result フィールドに生JSONが入っている場合はパースして補正
+    # 表示用の値を組み立てるだけで、DB には書き込まない。
+    # 古いデータは result に Claude の生 JSON が入っていることがあるので、そこから概要などを読む
+    @display_anomalies = @inspection.anomalies
     if @inspection.completed? && @inspection.result.to_s.strip.start_with?("{")
       begin
         parsed = JSON.parse(@inspection.result)
-        if @inspection.anomalies.blank?
-          @inspection.anomalies  = parsed["anomalies"] || []
-          @inspection.anomaly_count = parsed["anomaly_count"].to_i
-          @inspection.severity  = parsed["severity"] || "normal"
-          @inspection.save!
-        end
+        @display_anomalies      = parsed["anomalies"] || [] if @display_anomalies.blank?
         @display_summary        = parsed["summary"]
         @display_recommendation = parsed["recommendation"]
       rescue JSON::ParserError

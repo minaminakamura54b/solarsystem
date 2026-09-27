@@ -16,6 +16,17 @@ class PagesSmokeTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "ダッシュボードの直近の点検で、失敗した点検を正常と表示しない" do
+    Alert.delete_all
+    Inspection.where.not(id: inspections(:failed).id).delete_all
+
+    get dashboard_path(site_id: @site.id)
+
+    assert_response :success
+    assert_select "td .badge", count: 0
+    assert_select "td", text: "-"
+  end
+
   test "発電所一覧" do
     get sites_path
     assert_response :success
