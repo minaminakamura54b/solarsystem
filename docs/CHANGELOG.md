@@ -16,7 +16,8 @@
 - `.gitignore`: `.env.example` をコミット対象にし、`analyzer/bin/`（DJI SDK）と `tmp/spike/`（検証用の実画像）を除外対象に追加
 - `.env.example`: `CLAUDE_MODEL` と `DJI_IRP_PATH` を追加
 - `README.md`: 環境変数の手順を `.env.example` のコピーに変更、テストとブランチ運用の説明を追加
-- `docs/IMPROVEMENT_PLAN.md`: Phase 1 に「show の読み取り専用化」「severity の validation を completed のときだけ必須に」「自動更新の JS 側の修正」を追記
+- `docs/IMPROVEMENT_PLAN.md`: Phase 1 に「show の読み取り専用化」「severity の validation を completed のときだけ必須に」「自動更新の JS 側の修正」を追記。既知の問題 D（画像なしの点検作成）と E（ジョブのトランザクション）を Phase 1 に前倒し
+- `Gemfile.lock`: brakeman を 8.0.4 → 8.0.6 に更新（`bin/brakeman` の `--ensure-latest` で終了コード 5 になり CI が失敗していたため）
 
 ### 確認したこと
 - git の全履歴に `.env`・`config/master.key`・API キーらしき文字列のコミットはない（`config/credentials.yml.enc` は暗号化済みのファイルで問題なし）

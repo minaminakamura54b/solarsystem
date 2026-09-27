@@ -90,7 +90,7 @@ class InspectionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to inspection_path(inspection)
   end
 
-  test "現状: 画像なしでも点検を作成して解析ジョブを登録する（指示書に対応項目なし。Phase 2 の複数画像化で見直し）" do
+  test "現状: 画像なしでも点検を作成して解析ジョブを登録する（Phase 1 で作成不可に変更）" do
     assert_enqueued_with(job: AnalyzePanelImageJob) do
       post inspections_path(site_id: @site.id), params: { inspection: { conducted_at: Time.current } }
     end

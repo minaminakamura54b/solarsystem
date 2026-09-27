@@ -86,8 +86,8 @@ Site ─┬─< Panel
 | A | **GET の詳細表示で DB に書き戻す。** `result` が JSON 文字列で `anomalies` が空のとき、JSON を読み直して anomalies / anomaly_count / severity を保存する。JSON に severity が無ければ `normal` で上書きする（warning の点検が normal になりうる） | `InspectionsController#show` | Phase 1（読み取り専用にする） |
 | B | **severity が常に必須。** validation が `normal` / `warning` / `critical` のいずれかを要求するため、Phase 1 で失敗時に `nil` を保存するとエラーになる | `Inspection` | Phase 1（completed のときだけ必須にする） |
 | C | **pending の自動更新は JS 側にも問題がある。** 画面側で pending に自動更新を付けても、JS は「analyzing 以外になったら再読み込み」なので、pending のままだと3秒ごとに再読み込みを繰り返す | `auto_refresh_controller.js` | Phase 1-6 で JS も直す（pending / analyzing の間は再読み込みしない） |
-| D | 画像なしでも点検を作成でき、解析ジョブが登録される（ジョブ側で failed になる） | `InspectionsController#create` | 指示書に対応項目なし。Phase 2 の複数画像化で見直す |
-| E | ジョブの途中で例外が起きると、`update!` 済みの項目とアラート作成・パネル更新の途中状態が混在しうる（トランザクションなし） | `AnalyzePanelImageJob` | Phase 4 のジョブ作り直しで考慮 |
+| D | 画像なしでも点検を作成でき、解析ジョブが登録される（ジョブ側で failed になる） | `InspectionsController#create` | Phase 1-9（前倒し） |
+| E | ジョブの途中で例外が起きると、`update!` 済みの項目とアラート作成・パネル更新の途中状態が混在しうる（トランザクションなし） | `AnalyzePanelImageJob` | Phase 1-10（前倒し） |
 | F | 発電所作成時にパネルを格子状に自動生成しており、位置は実配置と無関係 | `SitesController#generate_panels_for` | Phase 2（`panels` の拡張）で扱いを決める |
 | G | モデル名 `claude-opus-4-7` がコード内に固定 | `ClaudePanelAnalyzer::MODEL` | Phase 6（`CLAUDE_MODEL`） |
 | H | `PagesController` に存在しない `authenticate_user!` の skip が残っている（`raise: false` のため無害） | `PagesController` | Phase 8 の認証導入時に整理 |

@@ -459,10 +459,12 @@ Phase 0 より前に、前提が成り立つかを確かめる。
 6. `pending` でも自動更新する。**画面側**（詳細画面で `pending` にも `auto-refresh` を付ける）と **JS 側**（現状は「`analyzing` 以外になったら再読み込み」なので、`pending` のままだと3秒ごとに再読み込みを繰り返す。`pending` / `analyzing` の間は再読み込みしないように直す。既知の問題 C）の両方を直す
 7. 同一 Inspection に対するアラートの重複作成を防ぐ
 8. **`InspectionsController#show` を読み取り専用にする。** 現状は GET のたびに `result` の JSON を読み直して DB に書き戻し、severity が無ければ `normal` で上書きしている（既知の問題 A）。DB への保存処理と `normal` へのフォールバックを削除し、表示用の値の組み立てだけを残す
-9. （Phase 6 までに今のアプリを実案件で使う場合のみ）送信前に長辺 1568px の派生画像を作って送る。原本は残す
-10. 上記すべてにテストを書く。Phase 0 で「現状: …（Phase 1 で…に変更）」として記録したテストは、期待値を反転させてテスト名も直す
+9. **画像のない点検は作成できないようにする**（既知の問題 D）。`Inspection` に画像必須の validation を追加し、`InspectionsController#create` は画像がなければ保存せずフォームを再表示する。解析ジョブも登録しない
+10. **ジョブの保存処理をトランザクションにまとめる**（既知の問題 E）。結果の保存・パネル更新（`last_inspected_at`）・アラート作成を1つのトランザクションで行い、途中で失敗したら何も残さない。**`failed` にする更新（`analysis_status`・`error_message`）だけはトランザクションの外で確実に行う**（ロールバックに巻き込まれて `analyzing` のまま残らないようにする）
+11. （Phase 6 までに今のアプリを実案件で使う場合のみ）送信前に長辺 1568px の派生画像を作って送る。原本は残す
+12. 上記すべてにテストを書く。Phase 0 で「現状: …（Phase 1 で…に変更）」として記録したテストは、期待値を反転させてテスト名も直す
 
-受け入れ確認: API エラー・壊れた JSON のモックで `failed` になり、`severity` が `NULL`（`normal` ではない）で、パネルの `last_inspected_at` と `status` が変わらない。`pending` の画面が自動更新され、再読み込みを繰り返さない。詳細画面を表示しても DB が変わらない。テスト名に「Phase 1 で」を含む「現状: …」テストが残っていない。
+受け入れ確認: API エラー・壊れた JSON のモックで `failed` になり、`severity` が `NULL`（`normal` ではない）で、パネルの `last_inspected_at` と `status` が変わらない。`pending` の画面が自動更新され、再読み込みを繰り返さない。詳細画面を表示しても DB が変わらない。画像なしでは点検を作成できない。保存処理の途中で例外が起きると結果・パネル・アラートが何も残らず、点検は `failed` になる。テスト名に「Phase 1 で」を含む「現状: …」テストが残っていない。
 
 ### Phase 2: データモデルと品質チェック（2〜3日）
 1. セクション4のマイグレーション（すべて可逆）。`inspections.anomalies` → `legacy_anomalies` へリネーム
@@ -608,9 +610,9 @@ docs/IMPROVEMENT_PLAN.md を読んでください。Phase 0 を実施します�
 ```
 docs/IMPROVEMENT_PLAN.md の設計原則と Phase 1 を読んでください。
 安全修正のみを行います。SDK の移行と tool use 化はしません。
-1〜8 の変更ファイル・マイグレーション・テストを一覧にして提示してください。
+1〜10 の変更ファイル・マイグレーション・テストを一覧にして提示してください。
 特に severity の NOT NULL／デフォルト解除のマイグレーションと validation、error_result、last_inspected_at、
-show の読み取り専用化の扱いを確認してください。docs/ARCHITECTURE.md の既知の問題 A〜C も対象です。
+show の読み取り専用化の扱いを確認してください。docs/ARCHITECTURE.md の既知の問題 A〜E も対象です。
 ```
 
 ### Phase 3
