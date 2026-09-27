@@ -1,5 +1,10 @@
 puts "シードデータを作成中..."
 
+# 判定基準（本番でも必要なデータ）
+load Rails.root.join("db/seeds/rule_sets.rb")
+
+# ここから下は開発用のサンプルデータ
+
 # 発電所を2件作成
 sites_data = [
   { name: "南部第1発電所", location: "山梨県甲府市", panel_count: 48, capacity_kw: 14.4, status: "active" },
@@ -15,13 +20,13 @@ sites_data.each do |attrs|
   if site.panels.empty?
     cols = Math.sqrt(site.panel_count).ceil
     panels = site.panel_count.times.map do |i|
-      statuses = ([ "normal" ] * 40) + ([ "warning" ] * 5) + ([ "error" ] * 3)
       {
         site_id: site.id,
         number: format("P%03d", i + 1),
         position_x: i % cols,
         position_y: i / cols,
-        status: statuses.sample,
+        status: "normal", # 点検結果の根拠がない状態を作らない
+        layout_source: "auto", # 仮配置
         created_at: Time.current,
         updated_at: Time.current
       }
