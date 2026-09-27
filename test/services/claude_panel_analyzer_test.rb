@@ -107,6 +107,63 @@ class ClaudePanelAnalyzerTest < ActiveSupport::TestCase
     assert_nil result[:severity]
   end
 
+  # ── 件数・重大度・異常一覧の食い違い（既知の問題 J） ──────────────────
+
+  test "anomaly_count と異常一覧の件数が食い違えば失敗として扱う" do
+    client = FakeAnthropicClient.replying(claude_json(anomaly_count: 0))
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_equal "異常件数（anomaly_count: 0）と異常一覧の件数（1）が一致しません", result[:error]
+    assert_nil result[:severity]
+  end
+
+  test "anomaly_count が数値でなければ失敗として扱う" do
+    client = FakeAnthropicClient.replying(claude_json(anomaly_count: "たくさん"))
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_match "一致しません", result[:error]
+    assert_nil result[:severity]
+  end
+
+  test "anomaly_count が無ければ異常一覧の件数を使う" do
+    json = JSON.parse(claude_json).except("anomaly_count").to_json
+    client = FakeAnthropicClient.replying(json)
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_nil result[:error]
+    assert_equal 1, result[:anomaly_count]
+  end
+
+  test "重大度が warning・critical なのに異常一覧が空なら失敗として扱う" do
+    client = FakeAnthropicClient.replying(claude_json(severity: "critical", anomalies: []))
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_equal "重大度（critical）と異常一覧の件数（0）が矛盾しています", result[:error]
+    assert_nil result[:severity]
+  end
+
+  test "重大度が normal なのに異常一覧があれば失敗として扱う" do
+    client = FakeAnthropicClient.replying(claude_json(severity: "normal"))
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_equal "重大度（normal）と異常一覧の件数（1）が矛盾しています", result[:error]
+    assert_nil result[:severity]
+  end
+
+  test "異常一覧が配列でなければ失敗として扱う" do
+    client = FakeAnthropicClient.replying({ "severity" => "warning", "anomalies" => "左上に異常" }.to_json)
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_equal "異常一覧（anomalies）の形式が不正です", result[:error]
+    assert_nil result[:severity]
+  end
+
   test "API エラーは失敗として扱い、severity は nil" do
     client = FakeAnthropicClient.raising(Anthropic::Error.new("overloaded"))
 

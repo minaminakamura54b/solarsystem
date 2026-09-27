@@ -107,10 +107,22 @@ class ClaudePanelAnalyzer
       return error_result("重大度（severity）が不正です: #{result["severity"].inspect}", raw_text: text)
     end
 
+    anomalies = result.fetch("anomalies", [])
+    return error_result("異常一覧（anomalies）の形式が不正です", raw_text: text) unless anomalies.is_a?(Array)
+
+    # 件数・重大度・異常一覧が食い違う応答は信頼できないため、どれかを採用せず失敗として扱う
+    # （件数だけを信じると、異常があってもアラートが出ない見逃しになる）
+    if result.key?("anomaly_count") && Integer(result["anomaly_count"], exception: false) != anomalies.size
+      return error_result("異常件数（anomaly_count: #{result["anomaly_count"].inspect}）と異常一覧の件数（#{anomalies.size}）が一致しません", raw_text: text)
+    end
+    if (result["severity"] == "normal") != anomalies.empty?
+      return error_result("重大度（#{result["severity"]}）と異常一覧の件数（#{anomalies.size}）が矛盾しています", raw_text: text)
+    end
+
     {
       severity: result["severity"],
-      anomaly_count: result["anomaly_count"].to_i,
-      anomalies: result["anomalies"] || [],
+      anomaly_count: anomalies.size,
+      anomalies: anomalies,
       summary: result["summary"] || "",
       recommendation: result["recommendation"] || "",
       raw_text: text

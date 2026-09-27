@@ -64,8 +64,8 @@ Site ─┬─< Panel
      → ClaudePanelAnalyzer#analyze
           画像を Base64 化 → Claude（モデル名はコード内に固定、max_tokens 1024）
           → 返答テキストから正規表現で JSON を抜き出して JSON.parse
-          → 失敗（JSON なし・不正・severity の欠落や想定外の値・API エラー・例外・画像なし）は
-            error 付き・severity nil で返す
+          → 失敗（JSON なし・不正・severity の欠落や想定外の値・件数や重大度と異常一覧の食い違い・
+            API エラー・例外・画像なし）は error 付き・severity nil で返す
      → 失敗なら mark_failed: failed・severity NULL・error_message・updated_at を
        update_columns で保存（パネル・アラートは変更しない）
      → 成功なら 1つのトランザクションで
@@ -98,11 +98,11 @@ Site ─┬─< Panel
 | G | モデル名 `claude-opus-4-7` がコード内に固定 | `ClaudePanelAnalyzer::MODEL` | Phase 6（`CLAUDE_MODEL`） |
 | H | `PagesController` に存在しない `authenticate_user!` の skip が残っている（`raise: false` のため無害） | `PagesController` | Phase 8 の認証導入時に整理 |
 | I | **ワーカーが途中で落ちると `analyzing` のまま残る。** ジョブの `rescue` まで到達しないため `failed` にならず、詳細画面の自動更新が止まらない | `AnalyzePanelImageJob` / `auto_refresh_controller.js` | Phase 4（一定時間 `analyzing` のままの点検を `failed` にするタイムアウト処理） |
-| J | Claude の応答に `anomaly_count` が無い、または `anomalies` の件数と食い違う場合、`anomaly_count` をそのまま（無ければ 0）使うため、異常があってもアラートが出ないことがある | `ClaudePanelAnalyzer#parse_response` | 判定ロジックに関わるため未対応。現行方式は Phase 6 で廃止予定。必要なら指示を受けて対応 |
+| J | Claude の応答に `anomaly_count` が無い、または `anomalies` の件数と食い違う場合、`anomaly_count` をそのまま（無ければ 0）使うため、異常があってもアラートが出ないことがある | `ClaudePanelAnalyzer#parse_response` | **Phase 1 で対応済み**（指示を受けて対応）。件数の食い違い・重大度と異常一覧の矛盾・異常一覧の形式不正は失敗扱い。`anomaly_count` が無いときは異常一覧の件数を使う |
 
 ## 6. テスト
 
-- `bin/rails test`: 72件（Phase 1 時点）。services / jobs / controllers / models と主要画面のスモークテスト
+- `bin/rails test`: 79件（Phase 1 時点）。services / jobs / controllers / models と主要画面のスモークテスト
 - Claude API は呼ばない。`ClaudePanelAnalyzer.new(inspection, client:)` またはクラスレベルの `ClaudePanelAnalyzer.default_client` に偽クライアント（`test/support/fake_anthropic_client.rb`）を渡す。ジョブ経由の場合は `with_fake_claude(client) { ... }` を使う。本番では両方とも nil で、従来どおり `ANTHROPIC_API_KEY` からクライアントを作る
 - テスト用画像は合成の 8x8 PNG（`test/fixtures/files/panel.png`）。顧客画像は使わない
 - Active Storage はテストで `:test` サービス（`tmp/storage/`）を使う

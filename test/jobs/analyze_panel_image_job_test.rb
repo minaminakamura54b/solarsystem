@@ -163,6 +163,19 @@ class AnalyzePanelImageJobTest < ActiveSupport::TestCase
     assert_equal "Claude API エラー: overloaded", @inspection.error_message
   end
 
+  test "件数が食い違う応答は failed になり、アラートを作成しない（既知の問題 J）" do
+    with_fake_claude(FakeAnthropicClient.replying(claude_json(severity: "critical", anomaly_count: 0))) do
+      assert_no_difference -> { Alert.count } do
+        AnalyzePanelImageJob.perform_now(@inspection.id)
+      end
+    end
+
+    @inspection.reload
+    assert_equal "failed", @inspection.analysis_status
+    assert_nil @inspection.severity
+    assert_match "一致しません", @inspection.error_message
+  end
+
   test "解析に失敗したらパネル・アラートを一切変更しない" do
     with_fake_claude(FakeAnthropicClient.raising(Anthropic::Error.new("overloaded"))) do
       assert_no_difference -> { Alert.count } do
