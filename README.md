@@ -99,7 +99,7 @@ app/
 config/            ルーティング、環境設定、deploy.yml（Kamal）、ci.rb
 db/                schema.rb、migrate/、seeds.rb（サンプル発電所2件）
 docs/              改善指示書など
-test/              テスト（現在はほぼ未整備。Phase 0 で土台を作る）
+test/              テスト（Claude API は偽クライアントに差し替えて実行）
 analyzer/          Python 解析エンジン（Phase 3 で作成予定）
 ```
 
@@ -133,7 +133,7 @@ git clone <このリポジトリ>
 cd solarsystem
 
 # 環境変数を設定（下表）
-touch .env   # ANTHROPIC_API_KEY などを記入
+cp .env.example .env   # ANTHROPIC_API_KEY などを記入
 
 bin/setup    # gem のインストール、DB の作成・マイグレーション、サーバー起動
 ```
@@ -142,7 +142,7 @@ bin/setup    # gem のインストール、DB の作成・マイグレーショ�
 
 ### 環境変数
 
-`.env` に記入します（`.env` はコミットしません）。
+`.env.example` をコピーした `.env` に記入します（`.env` はコミットしません）。
 
 | 変数 | 必須 | 用途 |
 |---|---|---|
@@ -164,11 +164,15 @@ bin/brakeman --no-pager   # セキュリティ静的解析
 bin/ci                    # Lint・監査・テストをまとめて実行
 ```
 
+テストは Claude API を呼びません（偽クライアントに差し替え）。仕組みと、テスト名「現状: …」の意味は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) の「テスト」を参照してください。
+
 GitHub Actions（`.github/workflows/ci.yml`）でも brakeman、bundler-audit、importmap audit、rubocop、テストを実行します。
 
 ### 開発ルール
 
 - Claude Code で作業するときのルールは [CLAUDE.md](CLAUDE.md) にまとめています。
+- 現在の構成と既知の問題は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、変更履歴は [docs/CHANGELOG.md](docs/CHANGELOG.md) にあります。
+- フェーズごとにブランチ（`phase-0`、`phase-1` …）を切って作業し、確認後に `main` へマージします。
 - 解析失敗やデータ不足を「正常」として保存しないこと、閾値をハードコードしないこと、秘密情報・SDK バイナリ・顧客画像をコミットしないことが特に重要です。
 
 ---

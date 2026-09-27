@@ -1,0 +1,13 @@
+south:
+  name: テスト南発電所
+  location: 山梨県甲府市
+  capacity_kw: 1.2
+  panel_count: 3
+  status: active
+
+east:
+  name: テスト東発電所
+  location: 静岡県富士市
+  capacity_kw: 0.8
+  panel_count: 0
+  status: active

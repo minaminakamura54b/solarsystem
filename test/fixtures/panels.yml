@@ -1,0 +1,21 @@
+# 並び順（position_y, position_x）: p001 → p002 → p003
+p001:
+  site: south
+  number: P001
+  position_x: 0
+  position_y: 0
+  status: normal
+
+p002:
+  site: south
+  number: P002
+  position_x: 1
+  position_y: 0
+  status: normal
+
+p003:
+  site: south
+  number: P003
+  position_x: 0
+  position_y: 1
+  status: normal

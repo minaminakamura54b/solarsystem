@@ -9,6 +9,7 @@
 
 # Ignore all environment files.
 /.env*
+!/.env.example
 
 # Ignore all logfiles and tempfiles.
 /log/*
@@ -33,3 +34,8 @@
 # Ignore key files for decrypting credentials and more.
 /config/*.key
 
+# DJI Thermal SDK のバイナリ（ライセンス上コミットしない）
+/analyzer/bin/
+
+# 検証用の実画像（顧客データを含むためコミットしない）
+/tmp/spike/
