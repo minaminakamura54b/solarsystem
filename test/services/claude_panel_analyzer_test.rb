@@ -1,8 +1,7 @@
 require "test_helper"
 
-# 現行の ClaudePanelAnalyzer の挙動を記録するテスト。
-# 「Phase 1 で変更」と書いたテストは、危険な現状の挙動をそのまま記録したもので、
-# Phase 1 で期待値を反転させる（docs/IMPROVEMENT_PLAN.md の Phase 1 を参照）。
+# ClaudePanelAnalyzer のテスト。
+# 失敗（壊れた応答・API エラーなど）は必ず error 付き・severity nil で返し、normal にしないことを確認する。
 class ClaudePanelAnalyzerTest < ActiveSupport::TestCase
   setup do
     @inspection = attach_panel_image(inspections(:pending))
@@ -50,72 +49,146 @@ class ClaudePanelAnalyzerTest < ActiveSupport::TestCase
     assert_nil ClaudePanelAnalyzer.default_client
   end
 
-  test "現状: 壊れた JSON は error なしの normal・異常0件になる（Phase 1 で failed に変更）" do
+  test "壊れた JSON は失敗として扱い、severity は nil（判定なし）" do
     # { と } はあるが JSON として不正 → JSON::ParserError の経路
     client = FakeAnthropicClient.replying('{"severity": "critical", "anomalies": [ }')
 
     result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
 
-    assert_nil result[:error], "現状はエラー扱いにならない"
-    assert_equal "normal", result[:severity]
-    assert_equal 0, result[:anomaly_count]
+    assert_equal "応答の JSON を解析できませんでした", result[:error]
+    assert_nil result[:severity]
+    assert_equal '{"severity": "critical", "anomalies": [ }', result[:raw_text]
   end
 
-  test "現状: 途中で切れた応答は error 付きだが severity は normal（Phase 1 で severity を nil に変更）" do
+  test "途中で切れた応答は失敗として扱い、severity は nil" do
     # max_tokens で打ち切られた想定。閉じ括弧がないため正規表現に一致しない
     client = FakeAnthropicClient.replying('{"severity": "critical", "anomalies": [')
 
     result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
 
     assert_equal "JSON形式の応答が得られませんでした", result[:error]
-    assert_equal "normal", result[:severity]
+    assert_nil result[:severity]
   end
 
-  test "現状: JSON を含まない応答は error 付きだが severity は normal（Phase 1 で severity を nil に変更）" do
+  test "JSON を含まない応答は失敗として扱い、severity は nil" do
     client = FakeAnthropicClient.replying("画像を解析できませんでした。")
 
     result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
 
     assert_equal "JSON形式の応答が得られませんでした", result[:error]
-    assert_equal "normal", result[:severity]
+    assert_nil result[:severity]
   end
 
-  test "現状: severity が欠けた JSON は normal で補われる（Phase 1 で failed に変更）" do
+  test "severity が欠けた JSON は normal で補わず失敗として扱う" do
     json = { "anomaly_count" => 2, "anomalies" => [ {}, {} ], "summary" => "x" }.to_json
     client = FakeAnthropicClient.replying(json)
 
     result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
 
-    assert_nil result[:error]
-    assert_equal "normal", result[:severity]
-    assert_equal 2, result[:anomaly_count]
+    assert_equal "重大度（severity）が不正です: nil", result[:error]
+    assert_nil result[:severity]
   end
 
-  test "現状: API エラーは error 付きだが severity は normal（Phase 1 で severity を nil に変更）" do
+  test "severity が想定外の値なら失敗として扱う" do
+    client = FakeAnthropicClient.replying(claude_json(severity: "high"))
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_equal '重大度（severity）が不正です: "high"', result[:error]
+    assert_nil result[:severity]
+  end
+
+  test "JSON がオブジェクトでなければ失敗として扱う" do
+    client = FakeAnthropicClient.replying('前置き [1, 2] {"x": } 後書き')
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert result[:error]
+    assert_nil result[:severity]
+  end
+
+  # ── 件数・重大度・異常一覧の食い違い（既知の問題 J） ──────────────────
+
+  test "anomaly_count と異常一覧の件数が食い違えば失敗として扱う" do
+    client = FakeAnthropicClient.replying(claude_json(anomaly_count: 0))
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_equal "異常件数（anomaly_count: 0）と異常一覧の件数（1）が一致しません", result[:error]
+    assert_nil result[:severity]
+  end
+
+  test "anomaly_count が数値でなければ失敗として扱う" do
+    client = FakeAnthropicClient.replying(claude_json(anomaly_count: "たくさん"))
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_match "一致しません", result[:error]
+    assert_nil result[:severity]
+  end
+
+  test "anomaly_count が無ければ異常一覧の件数を使う" do
+    json = JSON.parse(claude_json).except("anomaly_count").to_json
+    client = FakeAnthropicClient.replying(json)
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_nil result[:error]
+    assert_equal 1, result[:anomaly_count]
+  end
+
+  test "重大度が warning・critical なのに異常一覧が空なら失敗として扱う" do
+    client = FakeAnthropicClient.replying(claude_json(severity: "critical", anomalies: []))
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_equal "重大度（critical）と異常一覧の件数（0）が矛盾しています", result[:error]
+    assert_nil result[:severity]
+  end
+
+  test "重大度が normal なのに異常一覧があれば失敗として扱う" do
+    client = FakeAnthropicClient.replying(claude_json(severity: "normal"))
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_equal "重大度（normal）と異常一覧の件数（1）が矛盾しています", result[:error]
+    assert_nil result[:severity]
+  end
+
+  test "異常一覧が配列でなければ失敗として扱う" do
+    client = FakeAnthropicClient.replying({ "severity" => "warning", "anomalies" => "左上に異常" }.to_json)
+
+    result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
+
+    assert_equal "異常一覧（anomalies）の形式が不正です", result[:error]
+    assert_nil result[:severity]
+  end
+
+  test "API エラーは失敗として扱い、severity は nil" do
     client = FakeAnthropicClient.raising(Anthropic::Error.new("overloaded"))
 
     result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
 
     assert_equal "Claude API エラー: overloaded", result[:error]
-    assert_equal "normal", result[:severity]
+    assert_nil result[:severity]
   end
 
-  test "現状: 想定外の例外も error 付きだが severity は normal（Phase 1 で severity を nil に変更）" do
+  test "想定外の例外も失敗として扱い、severity は nil" do
     client = FakeAnthropicClient.raising(RuntimeError.new("timeout"))
 
     result = ClaudePanelAnalyzer.new(@inspection, client: client).analyze
 
     assert_equal "解析エラー: timeout", result[:error]
-    assert_equal "normal", result[:severity]
+    assert_nil result[:severity]
   end
 
-  test "現状: 画像なしは API を呼ばず error 付きの normal（Phase 1 で severity を nil に変更）" do
+  test "画像なしは API を呼ばずに失敗として扱い、severity は nil" do
     client = FakeAnthropicClient.replying(claude_json)
 
     result = ClaudePanelAnalyzer.new(inspections(:analyzing), client: client).analyze
 
     assert_equal "画像が添付されていません", result[:error]
-    assert_equal "normal", result[:severity]
+    assert_nil result[:severity]
     assert_empty client.requests
   end
 end

@@ -100,20 +100,40 @@ class ClaudePanelAnalyzer
     return error_result("JSON形式の応答が得られませんでした") unless json_text
 
     result = JSON.parse(json_text)
+    return error_result("JSON の形式が想定と異なります", raw_text: text) unless result.is_a?(Hash)
+
+    # severity が欠けている・想定外の値のときは normal で補わず、失敗として扱う
+    unless Inspection::SEVERITIES.include?(result["severity"])
+      return error_result("重大度（severity）が不正です: #{result["severity"].inspect}", raw_text: text)
+    end
+
+    anomalies = result.fetch("anomalies", [])
+    return error_result("異常一覧（anomalies）の形式が不正です", raw_text: text) unless anomalies.is_a?(Array)
+
+    # 件数・重大度・異常一覧が食い違う応答は信頼できないため、どれかを採用せず失敗として扱う
+    # （件数だけを信じると、異常があってもアラートが出ない見逃しになる）
+    if result.key?("anomaly_count") && Integer(result["anomaly_count"], exception: false) != anomalies.size
+      return error_result("異常件数（anomaly_count: #{result["anomaly_count"].inspect}）と異常一覧の件数（#{anomalies.size}）が一致しません", raw_text: text)
+    end
+    if (result["severity"] == "normal") != anomalies.empty?
+      return error_result("重大度（#{result["severity"]}）と異常一覧の件数（#{anomalies.size}）が矛盾しています", raw_text: text)
+    end
+
     {
-      severity: result["severity"] || "normal",
-      anomaly_count: result["anomaly_count"].to_i,
-      anomalies: result["anomalies"] || [],
+      severity: result["severity"],
+      anomaly_count: anomalies.size,
+      anomalies: anomalies,
       summary: result["summary"] || "",
       recommendation: result["recommendation"] || "",
       raw_text: text
     }
   rescue JSON::ParserError => e
     Rails.logger.error("ClaudePanelAnalyzer JSON parse error: #{e.message}")
-    { severity: "normal", anomaly_count: 0, anomalies: [], summary: text, recommendation: "", raw_text: text }
+    error_result("応答の JSON を解析できませんでした", raw_text: text)
   end
 
-  def error_result(message)
-    { severity: "normal", anomaly_count: 0, anomalies: [], summary: message, recommendation: "", error: message }
+  # 失敗は severity を nil（判定なし）で返す。normal にはしない
+  def error_result(message, raw_text: nil)
+    { severity: nil, anomaly_count: 0, anomalies: [], summary: message, recommendation: "", error: message, raw_text: raw_text }
   end
 end
