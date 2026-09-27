@@ -18,7 +18,7 @@ class AnalyzePanelImageJob < ApplicationJob
         analysis_status: "completed",
         severity: result[:severity],
         anomaly_count: result[:anomaly_count],
-        anomalies: result[:anomalies],
+        legacy_anomalies: result[:anomalies],
         result: result[:summary],
         report: build_report(result)
       )

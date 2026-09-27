@@ -13,5 +13,6 @@ module ActiveSupport
     fixtures :all
 
     include ClaudeTestHelper
+    include Phase2TestHelper
   end
 end
