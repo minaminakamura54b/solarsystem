@@ -42,11 +42,6 @@ class Site < ApplicationRecord
     super(value.presence)
   end
 
-  # パネルがすべて自動生成の仮配置か
-  def panels_placeholder_layout?
-    panels.exists? && !panels.where.not(layout_source: "auto").exists?
-  end
-
   def panel_status_summary
     panels.group(:status).count
   end

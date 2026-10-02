@@ -33,9 +33,28 @@ class SitesControllerTest < ActionDispatch::IntegrationTest
     assert site.panels.all? { |p| p.layout_source == "auto" && p.status == "normal" }
   end
 
-  test "ダッシュボードに仮配置であることを表示する" do
+  test "ダッシュボードに仮配置であることを表示し、各パネルのツールチップにも出す" do
     get dashboard_path(site_id: @site.id)
 
     assert_match "仮配置です", response.body
+    assert_select "#panel-map .panel-cell[title$='（仮配置）']", count: 3
+  end
+
+  test "一部だけ実配置のときは、仮配置のパネルの枚数を注記する" do
+    panels(:p001).update!(layout_source: "manual")
+
+    get dashboard_path(site_id: @site.id)
+
+    assert_match "仮配置のパネルが 2 枚含まれています", response.body
+    assert_no_match "仮配置です。", response.body
+    assert_select "#panel-map .panel-cell[title$='（仮配置）']", count: 2
+  end
+
+  test "すべて実配置なら仮配置の注記は出さない" do
+    @site.panels.update_all(layout_source: "manual")
+
+    get dashboard_path(site_id: @site.id)
+
+    assert_no_match "仮配置", response.body
   end
 end

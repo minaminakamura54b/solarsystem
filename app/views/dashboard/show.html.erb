@@ -50,8 +50,11 @@
     <%# パネル状態マップ %>
     <div class="card p-4">
       <h3 class="font-semibold text-gray-700 mb-3">パネル状態マップ</h3>
-      <% if current_site.panels_placeholder_layout? %>
+      <% placeholder_count = @panels.count(&:placeholder_layout?) %>
+      <% if placeholder_count.positive? && placeholder_count == @panels.size %>
         <p class="text-xs mb-3" style="color:#ef9f27;">仮配置です。パネルの位置は実際の配置ではありません（発電所の登録時に格子状に自動生成したもの）。</p>
+      <% elsif placeholder_count.positive? %>
+        <p class="text-xs mb-3" style="color:#ef9f27;">仮配置のパネルが <%= placeholder_count %> 枚含まれています（位置は実際の配置ではありません）。</p>
       <% end %>
       <%# 凡例 %>
       <div class="flex gap-4 mb-3 text-xs">
@@ -63,7 +66,7 @@
       <div class="panel-map" id="panel-map">
         <% @panels.each do |panel| %>
           <div class="panel-cell <%= panel.status %>"
-               title="<%= panel.number %> - <%= panel.status_label %>"
+               title="<%= panel.number %> - <%= panel.status_label %><%= "（仮配置）" if panel.placeholder_layout? %>"
                data-panel-id="<%= panel.id %>">
           </div>
         <% end %>

@@ -84,7 +84,7 @@
 - キャッシュ・WebSocket: Solid Cache / Solid Cable（本番）
 - AI: Anthropic Claude（現在は非公式の `anthropic` gem 0.4.1。Phase 6 で公式 SDK へ移行予定）
 - デプロイ: Kamal（Docker、linux/amd64）
-- 予定: Python 3.11+ の解析エンジン（numpy / OpenCV / pydantic）、DJI Thermal SDK、exiftool
+- 解析エンジン: Python 3.12・uv（numpy / OpenCV / pydantic）。`analyzer/`。DJI Thermal SDK の呼び出しは Phase S 後に実装
 
 ### ディレクトリ
 
@@ -104,7 +104,7 @@ config/            ルーティング、環境設定、image_quality.yml（品�
 db/                schema.rb、migrate/、seeds.rb（サンプル発電所2件）
 docs/              改善指示書など
 test/              テスト（Claude API は偽クライアントに差し替えて実行）
-analyzer/          Python 解析エンジン（Phase 3 で作成予定）
+analyzer/          Python 解析エンジン（使い方は analyzer/README.md。Rails からの呼び出しは Phase 4）
 ```
 
 ### データモデル
@@ -171,6 +171,7 @@ bin/rails test            # テスト
 bin/rubocop               # Lint
 bin/brakeman --no-pager   # セキュリティ静的解析
 bin/ci                    # Lint・監査・テストをまとめて実行
+cd analyzer && uv sync && uv run pytest   # 解析エンジンのテスト（uv が必要）
 ```
 
 テストは Claude API を呼びません（偽クライアントに差し替え）。仕組みと、テスト名「現状: …」の意味は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) の「テスト」を参照してください。

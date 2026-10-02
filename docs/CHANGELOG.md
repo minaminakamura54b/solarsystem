@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## 2026-10-03 — Phase 3: 解析エンジン（ブランチ `phase-3`）
+
+### 追加
+- **`analyzer/`（Python 3.12・uv。ユーザー承認）**: `python -m analyzer analyze` / `propose-grid`
+  - contract（pydantic、schema_version 2.0）、grid（射影変換）、exclusions（画像端）、features、baseline（MAD の下限つき）、detection（パネル内の高温領域・mild の換算）、patterns（hotspot / multi_hotspot / substring_bypass / module_wide / partial_module / panel_row_group）、panel_segmenter（グリッドの提案）、quality（温度レンジ・ブレの記録）
+  - `dji_reader.py` は「JPEG でない」「SDK が無い」で終了コード 2 までを実装。SDK のオプション名・出力形式・測定パラメータの渡し方は Phase S の後に実装する TODO（推測で実装しない。SDK があっても終了コード 1）
+  - `tiff_reader.py` は未対応（終了コード 2）。テスト・開発用に `.npy` の温度行列を読める
+  - 合成の温度行列によるテスト 50 件（指示書 5.8 の全ケース、CLI の終了コード）。顧客の実画像は使わない
+  - Dockerfile（linux/amd64、python:3.12-slim、uv）。SDK はイメージに含めない
+- CI に `analyzer-test` ジョブ（astral-sh/setup-uv v10.2.0（コミット SHA で固定）、`uv run --frozen pytest`）
+- `AGENTS.md`（ユーザー承認: 規律は CLAUDE.md と指示書に従う・アプリ内の「Claude」は Claude API のこと）
+
+### 変更
+- ダッシュボードのパネル状態マップで、各パネルのツールチップに「（仮配置）」を付け、一部だけ仮配置のときは枚数を注記（既知の問題 F の表示の確認。ユーザー承認）
+
+### 決定事項（2026-10-03 ユーザー確認済み）
+- bypass_pattern の band_axis は「その辺を bands 等分した帯」と解釈し、一致条件は与えられた値（band_area_ratio・tolerance）だけで作る
+- グレア疑いは面積条件（パネルの 0.3% 未満）だけで付ける。「セル境界と無関係」は TODO
+- どのパターンにも当てはまらない高温領域はすべて partial_module（解析エンジンは other を出さない）
+
+### 記録した既知の問題
+- O: パネルの 50〜80% が温まったケースを検出できない（仕様のすき間。補う判定はユーザーの確認待ち）
+
+### 確認したこと
+- pytest 50 件成功・xfail 1 件（既知の問題 O）、Rails のテスト 179 件、rubocop、brakeman
+- Docker イメージ（linux/amd64）を作り、コンテナ内で合成データの解析・グリッドの提案・JPEG でないファイル（終了コード 2）が動く
+
 ## 2026-09-27 — Phase 2: データモデルと品質チェック（ブランチ `phase-2`）
 
 ### 追加

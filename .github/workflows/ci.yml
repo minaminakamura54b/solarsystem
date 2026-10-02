@@ -146,3 +146,18 @@ jobs:
           name: screenshots
           path: ${{ github.workspace }}/tmp/screenshots
           if-no-files-found: ignore
+
+  analyzer-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: analyzer
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0（v8 以降はメジャー版だけのタグが無いため SHA で固定）
+
+      - name: Run pytest (Python 3.12, uv.lock の依存関係)
+        run: uv run --frozen pytest

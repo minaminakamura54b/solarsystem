@@ -493,6 +493,8 @@ Phase 0 より前に、前提が成り立つかを確かめる。
 5. `panel_segmenter.py` と `propose-grid` サブコマンド（精度が低くてもよい。提案できなければ終了コード 3）
 6. `analyzer/README.md` と Dockerfile
 
+**実施時の決定事項（2026-10-03、ユーザー承認）**: Python 3.12 + uv（pyproject.toml・uv.lock）。Phase S 未実施のため `dji_reader.py` は「JPEG でない・SDK が無い → 終了コード 2」までとし、SDK 依存部分は TODO。bypass_pattern の band_axis は「その辺を bands 等分した帯」。グレア疑いは面積条件だけ。どれにも当てはまらない高温領域は partial_module（解析エンジンは other を出さない）。パネルの 50〜80% が温まったケースは仕様どおりでは検出できない（docs/ARCHITECTURE.md の既知の問題 O）。
+
 受け入れ確認: `pytest` が通る。合成データの全ケースが期待どおり分類・除外される。モジュール全体 +2℃ が検出される。温度がほぼ均一な正常画像で誤検出がない。連続群で正常パネルが不足する画像は終了コード 4 になる。
 
 ### Phase 4: グリッド入力 UI と Rails 接続（3〜4日）

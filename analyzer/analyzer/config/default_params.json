@@ -1,0 +1,20 @@
+{
+  "_comment": "ルールセット（Rails の rule_sets.detection_params）に含まれない解析パラメータ。値を変えたら analyzer_version の見直しを検討すること",
+  "hotspot_max_area_ratio": 0.10,
+  "hotspot_max_aspect": 3.0,
+  "module_wide_min_area_ratio": 0.80,
+  "glare_max_area_ratio": 0.003,
+  "edge_margin_px": 1,
+  "edge_min_inside_ratio": 0.70,
+  "segmenter_min_panels": 4,
+  "segmenter_min_area_ratio": 0.0005,
+  "segmenter_min_rectangularity": 0.80,
+  "segmenter_size_tolerance": 0.5,
+  "dji_thermal_params": {
+    "_comment": "DJI Thermal SDK に渡す測定パラメータ。値と渡し方は Phase S で決める（TODO）",
+    "emissivity": null,
+    "reflected_temperature_c": null,
+    "humidity_percent": null,
+    "distance_m": null
+  }
+}
