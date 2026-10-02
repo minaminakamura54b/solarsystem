@@ -9,7 +9,7 @@
   - `tiff_reader.py` は未対応（終了コード 2）。テスト・開発用に `.npy` の温度行列を読める
   - 合成の温度行列によるテスト 50 件（指示書 5.8 の全ケース、CLI の終了コード）。顧客の実画像は使わない
   - Dockerfile（linux/amd64、python:3.12-slim、uv）。SDK はイメージに含めない
-- CI に `analyzer-test` ジョブ（astral-sh/setup-uv@v10、`uv run --frozen pytest`）
+- CI に `analyzer-test` ジョブ（astral-sh/setup-uv v10.2.0（コミット SHA で固定）、`uv run --frozen pytest`）
 - `AGENTS.md`（ユーザー承認: 規律は CLAUDE.md と指示書に従う・アプリ内の「Claude」は Claude API のこと）
 
 ### 変更
