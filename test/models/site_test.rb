@@ -46,10 +46,10 @@ class SiteModuleSpecTest < ActiveSupport::TestCase
     assert @site.update(cell_layout: "half_cut")
   end
 
-  test "パネルがすべて自動生成なら仮配置" do
-    assert @site.panels_placeholder_layout?
+  test "自動生成（auto）のパネルは仮配置" do
+    assert panels(:p001).placeholder_layout?
 
     panels(:p001).update!(layout_source: "manual")
-    assert_not @site.panels_placeholder_layout?
+    assert_not panels(:p001).placeholder_layout?
   end
 end

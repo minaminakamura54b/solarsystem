@@ -11,6 +11,11 @@ class Panel < ApplicationRecord
   scope :abnormal, -> { where.not(status: "normal") }
   scope :by_position, -> { order(:position_y, :position_x) }
 
+  # 発電所の登録時に自動生成した仮配置（実際の配置ではない）
+  def placeholder_layout?
+    layout_source == "auto"
+  end
+
   def status_color
     case status
     when "normal"  then "#22c55e"
