@@ -39,3 +39,8 @@
 
 # 検証用の実画像（顧客データを含むためコミットしない）
 /tmp/spike/
+
+# 解析エンジン（Python）
+/analyzer/.venv/
+/analyzer/.pytest_cache/
+__pycache__/

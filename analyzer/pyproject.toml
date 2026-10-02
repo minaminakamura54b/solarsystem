@@ -1,0 +1,23 @@
+[project]
+name = "solarsystem-analyzer"
+version = "0.1.0"
+description = "サーモ画像（放射温度データ）からパネルごとの温度と発熱パターンを求める解析エンジン（docs/IMPROVEMENT_PLAN.md セクション5）"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "numpy>=2.0",
+  "opencv-python-headless>=4.10",
+  "pydantic>=2.7",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+]
+
+[tool.uv]
+# アプリケーションとして使う（パッケージとしてビルド・配布しない）
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
