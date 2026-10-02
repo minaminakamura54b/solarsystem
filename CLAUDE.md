@@ -38,6 +38,7 @@ bin/rails test            # テスト
 bin/rubocop               # Lint（rubocop-rails-omakase）
 bin/brakeman --no-pager   # セキュリティ静的解析
 bin/ci                    # 上記をまとめて実行（config/ci.rb）
+cd analyzer && uv run pytest   # 解析エンジン（Python 3.12・uv）のテスト
 ```
 
 各タスクの完了時に `bin/rails test`、`bin/rubocop`、`bin/brakeman`（Python を変更したら `pytest` も）を実行し、結果を報告する。
@@ -62,5 +63,5 @@ bin/ci                    # 上記をまとめて実行（config/ci.rb）
 - `app/services/claude_panel_analyzer.rb` / `app/jobs/analyze_panel_image_job.rb` — 旧方式の Claude 画像判定（新しい点検では使わない。Phase 6 で置き換え予定）
 - `app/controllers/inspections_controller.rb` — 点検の登録・表示（JSON でステータスを返し、自動更新に使う）
 - `app/javascript/controllers/auto_refresh_controller.js` — 解析中画面のポーリング
-- `analyzer/` — Python 解析エンジン（Phase 3 で新規作成予定）
+- `analyzer/` — Python 解析エンジン（Python 3.12・uv。仕様と使い方は analyzer/README.md。Rails からの呼び出しは Phase 4）
 - `docs/IMPROVEMENT_PLAN.md` — 改善指示書（仕様の正本）
