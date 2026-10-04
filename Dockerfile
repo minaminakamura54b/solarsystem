@@ -8,7 +8,7 @@
 # For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
 
 # Make sure RUBY_VERSION matches the Ruby version in .ruby-version
-ARG RUBY_VERSION=3.2.9
+ARG RUBY_VERSION=3.3.10
 FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 
 # Rails app lives here
@@ -34,6 +34,16 @@ FROM base AS build
 RUN apt-get update -qq && \
     apt-get install --no-install-recommends -y build-essential git libvips libyaml-dev pkg-config && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
+
+# 解析エンジン（analyzer/、Python 3.12）の依存関係。uv が Python 3.12 を /opt/python に入れ、
+# /rails/analyzer/.venv に仮想環境を作る（本番は config/analyzer.yml の command でこの Python を直接使う）
+COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /usr/local/bin/uv
+ENV UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_PYTHON_PREFERENCE=only-managed \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1
+COPY analyzer/pyproject.toml analyzer/uv.lock analyzer/.python-version ./analyzer/
+RUN cd analyzer && uv sync --frozen --no-dev
 
 # Install application gems
 COPY vendor/* ./vendor/
@@ -68,6 +78,10 @@ USER 1000:1000
 # Copy built artifacts: gems, application
 COPY --chown=rails:rails --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
 COPY --chown=rails:rails --from=build /rails /rails
+# 解析エンジンの Python（仮想環境 /rails/analyzer/.venv が参照する）
+COPY --chown=rails:rails --from=build /opt/python /opt/python
+# DJI Thermal SDK はイメージに含めない。実行時に /rails/analyzer/bin にマウントし、
+# DJI_IRP_PATH で dji_irp のパスを渡す（config/deploy.yml。手順は Phase S で確定する）
 
 # Entrypoint prepares the database.
 ENTRYPOINT ["/rails/bin/docker-entrypoint"]
