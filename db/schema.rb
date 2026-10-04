@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_27_114210) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_04_145231) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -52,6 +52,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_27_114210) do
     t.datetime "read_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "anomaly_id"
+    t.bigint "anomaly_group_id"
+    t.index ["anomaly_group_id"], name: "index_alerts_on_anomaly_group_id"
+    t.index ["anomaly_id"], name: "index_alerts_on_anomaly_id"
     t.index ["created_at"], name: "index_alerts_on_created_at"
     t.index ["inspection_id"], name: "index_alerts_on_inspection_id"
     t.index ["panel_id"], name: "index_alerts_on_panel_id"
@@ -101,6 +105,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_27_114210) do
     t.text "loss_basis"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "detection"
+    t.integer "active_bands"
     t.index ["anomaly_group_id"], name: "index_anomalies_on_anomaly_group_id"
     t.index ["inspection_id"], name: "index_anomalies_on_inspection_id"
     t.index ["inspection_image_id"], name: "index_anomalies_on_inspection_image_id"
@@ -301,6 +307,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_27_114210) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "alerts", "anomalies"
+  add_foreign_key "alerts", "anomaly_groups"
   add_foreign_key "alerts", "inspections"
   add_foreign_key "alerts", "panels"
   add_foreign_key "alerts", "sites"
