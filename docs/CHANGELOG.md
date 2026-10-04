@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## 2026-10-05 — Phase 4: グリッド入力 UI と Rails・解析エンジンの接続（ブランチ `phase-4`）
+
+### 追加
+- **グリッド入力画面**（Stimulus + canvas）: 4隅のクリック、行数・列数・向き、1画像に複数のグリッド、角のドラッグ、グリッドの提案の読み込み（保存するまで解析に使わない）、← / → で前後の画像（未保存なら移動しない）
+- **グリッドテンプレート**: 保存と一括適用（撮影条件の許容差は `config/analyzer.yml`。グリッド未指定の画像だけに適用）
+- **ThermalAnalyzerClient**: `Open3.popen3` で解析エンジンを実行。タイムアウト（既定 120 秒）でプロセスグループごと終了、出力を schema_version 2.1 の約束で検証、一時ファイルを削除
+- **AnalyzeInspectionImageJob / AnalysisResultImporter**: 解析 → 異常・群を保存（locked は残す）。終了コードでステータスを決める
+- **SeverityRuleEngine**: 正規化ΔT / 生ΔT と閾値で重大度。判定時のルールセットと閾値のコピーを保存。未確定だけの再判定（点検の詳細画面のボタン）。mild を下げたときは再解析が必要と表示
+- **GridProposalJob**: 品質チェック合格の画像に propose-grid を実行
+- **ConfirmedAnomalyAlert**: 確定した critical の異常・群にだけアラートを1件（Phase 5 のレビュー操作から呼ぶ）
+- **StaleAnalysisJob**（本番は5分ごと）: 長時間 analyzing・品質チェック待ちの画像を failed に。自動更新の JS にも上限時間（既知の問題 I）
+- **開発用の合成点検** `bin/rails dev:synthetic_inspection` と `analyzer/scripts/make_dev_scenes.py`（ユーザー承認）。.npy は開発・テスト環境だけ登録できる。表示用のプレビュー画像を添付できる
+- 点検の詳細に、画像ごとの解析結果（基準温度・候補）、グリッドの指定・再解析のボタン、候補の件数（群は1件）
+- Dockerfile に解析エンジン（uv・Python 3.12・依存関係）を組み込み、`config/deploy.yml` に DJI SDK のマウント方法をコメントで記載（Phase S で確定）
+- CI の test ジョブに uv を追加（Rails のテストから本物の解析エンジンを呼ぶため）
+
+### 変更
+- 品質チェックに合格した画像は、グリッドが無ければ `needs_review（grid_required）`、あれば解析ジョブを登録する
+- **点検は解析が終わってもレビュー完了まで `needs_review（review_pending）`**。候補0件でも同じ（ユーザー承認）
+- 気象データを変更したら、合格した画像を再解析する
+- Dockerfile の `RUBY_VERSION` を 3.2.9 → 3.3.10（`.ruby-version` と食い違っていた。既知の問題 P）
+
+### 受け入れ確認
+- 合成データ（.npy）で確認済み: グリッドを指定して解析・パネルごとの温度と候補・テンプレートの一括適用・1画像に2つのグリッド・新しいルールセットでも確定済みの severity は変わらない・時間切れで failed（timeout）かつ子プロセスが残らない・analyzing のまま残った画像が定期ジョブで failed になる
+- **実画像（R-JPEG）での確認は未実施**（Phase S の後。DJI SDK の呼び出しが TODO のため）
+
+### 確認したこと
+- 本番用の Rails イメージ（linux/amd64）をビルドし、コンテナ内（ユーザー rails）で本番の設定のコマンドで解析エンジンが動く（Ruby 3.3.10・exiftool・Python 3.12）
+- 開発環境で合成点検を登録し、本物の解析エンジンでグリッドの提案・解析・テンプレートの一括適用が動く
+
 ## 2026-10-04 — Phase 3b: 解析エンジンの判定の追加（ブランチ `phase-3b`）
 
 ### 変更（ユーザー承認）
