@@ -94,6 +94,12 @@ jobs:
         with:
           bundler-cache: true
 
+      - name: Set up uv（Rails のテストから解析エンジンを呼ぶため）
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Install analyzer dependencies
+        run: cd analyzer && uv sync --frozen
+
       - name: Run tests
         env:
           RAILS_ENV: test
