@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-10-04 — Phase 3b: 解析エンジンの判定の追加（ブランチ `phase-3b`）
+
+### 変更（ユーザー承認）
+- **基準温度からの判定を追加**（既知の問題 O への対応）: パネル平均の ΔT が module_wide の mild 以上なら、「基準温度 + module_wide の mild を超える画素」で領域を取り直し、module_wide / substring_bypass / partial_module を判定する。局所的な判定は従来どおり残し、両方に当てはまれば別々に出力する（module_wide ＋ その中のホットスポットも含む。指示書 5.6 の「module_wide ならパネル内の判定をしない」を改訂）。基準温度からの判定で異常が出たパネルでは、局所的な判定の substring_bypass / partial_module は二重計上になるため出さない
+- **substring_bypass に作動した帯の本数（`active_bands`）を出力**。連続した k 本の帯・離れた複数の帯（合計）に対応
+- 出力に `detection`（local / baseline）を追加。schema_version を 2.1 に
+- **高温領域の最小画素数 `min_region_pixels`** を設定値に追加（既定 1。実画像を見てから調整）
+- band_axis の解釈を「実画像で確認するまでの仮の解釈」として指示書と analyzer/README.md に明記
+
+### テスト
+- xfail だった「パネルの 2/3 が温まった場合」を通常のテストにした（substring_bypass・帯 2 本）
+- 追加: 2/3 の帯の中のホットスポット（別々に出力）、離れた 2 本の帯、構成未登録の 2/3 の発熱（partial_module）、帯でない大きな発熱、ΔT が小さい帯は局所的な判定で見つかる、module_wide ＋ ホットスポット、最小画素数
+- pytest 60 件成功
+
 ## 2026-10-03 — Phase 3: 解析エンジン（ブランチ `phase-3`）
 
 ### 追加
