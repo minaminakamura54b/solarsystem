@@ -49,6 +49,15 @@ class RuleSet < ApplicationRecord
     severity_rules.find { |r| r.anomaly_type == anomaly_type }
   end
 
+  # 解析エンジンに --rules で渡す JSON（analyzer/analyzer/contract.py の RulesInput）
+  def to_analyzer_rules
+    {
+      "version" => version,
+      "detection_params" => detection_params,
+      "severity_rules" => severity_rules.map { |rule| rule.snapshot.except("version") }
+    }
+  end
+
   private
 
   def all_anomaly_types_present

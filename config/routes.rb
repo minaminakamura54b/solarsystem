@@ -6,12 +6,19 @@ Rails.application.routes.draw do
 
   resources :sites
   resources :inspections, only: %i[index show new create destroy] do
+    member { post :rejudge }
     resources :inspection_images, only: %i[update], path: "images" do
       member do
         patch :exclude
         patch :unexclude
         delete :rgb, action: :remove_rgb
+        get :grid
+        patch :grids
+        post :reanalyze
       end
+    end
+    resources :grid_templates, only: %i[create] do
+      member { post :apply }
     end
     resources :weather_readings, only: %i[create destroy]
   end

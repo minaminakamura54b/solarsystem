@@ -44,6 +44,8 @@ env:
     # Run the Solid Queue Supervisor inside the web server's Puma process to do jobs.
     # When you start using multiple servers, you should split out job processing to a dedicated machine.
     SOLID_QUEUE_IN_PUMA: true
+    # DJI Thermal SDK の dji_irp のパス（SDK はイメージに含めず、下の volumes でマウントする。Phase S で確定）
+    # DJI_IRP_PATH: /rails/analyzer/bin/dji_irp
 
     # Set number of processes dedicated to Solid Queue (default: 1)
     # JOB_CONCURRENCY: 3
@@ -70,6 +72,8 @@ aliases:
 # Recommended to change this to a mounted volume path that is backed up off server.
 volumes:
   - "solarsystem_storage:/rails/storage"
+  # DJI Thermal SDK（ライセンス上イメージに含めない。サーバー上に置いたものを読み取り専用でマウントする。Phase S で確定）
+  # - "/opt/dji_thermal_sdk:/rails/analyzer/bin:ro"
 
 # Bridge fingerprinted assets, like JS and CSS, between versions to avoid
 # hitting 404 on in-flight requests. Combines all files from new and old

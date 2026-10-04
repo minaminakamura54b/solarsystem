@@ -12,7 +12,9 @@ module ActiveSupport
     # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
     fixtures :all
 
+    include ActiveJob::TestHelper
     include ClaudeTestHelper
     include Phase2TestHelper
+    include AnalyzerTestHelper
   end
 end

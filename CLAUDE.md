@@ -39,7 +39,11 @@ bin/rubocop               # Lint（rubocop-rails-omakase）
 bin/brakeman --no-pager   # セキュリティ静的解析
 bin/ci                    # 上記をまとめて実行（config/ci.rb）
 cd analyzer && uv run pytest   # 解析エンジン（Python 3.12・uv）のテスト
+bin/rails test:system     # グリッド入力画面の JS（ヘッドレス Chrome）
+bin/rails dev:synthetic_inspection   # 開発用: 合成シーン（.npy）の点検を登録する
 ```
+
+`bin/rails test` は本物の解析エンジンも呼ぶ（`cd analyzer && uv sync` が必要）。
 
 各タスクの完了時に `bin/rails test`、`bin/rubocop`、`bin/brakeman`（Python を変更したら `pytest` も）を実行し、結果を報告する。
 
@@ -63,5 +67,8 @@ cd analyzer && uv run pytest   # 解析エンジン（Python 3.12・uv）のテ�
 - `app/services/claude_panel_analyzer.rb` / `app/jobs/analyze_panel_image_job.rb` — 旧方式の Claude 画像判定（新しい点検では使わない。Phase 6 で置き換え予定）
 - `app/controllers/inspections_controller.rb` — 点検の登録・表示（JSON でステータスを返し、自動更新に使う）
 - `app/javascript/controllers/auto_refresh_controller.js` — 解析中画面のポーリング
-- `analyzer/` — Python 解析エンジン（Python 3.12・uv。仕様と使い方は analyzer/README.md。Rails からの呼び出しは Phase 4）
+- `analyzer/` — Python 解析エンジン（Python 3.12・uv。仕様と使い方は analyzer/README.md）
+- `app/services/thermal_analyzer_client.rb` — 解析エンジンの呼び出し（タイムアウト・出力の検証）。設定は `config/analyzer.yml`
+- `app/jobs/analyze_inspection_image_job.rb` / `app/services/analysis_result_importer.rb` / `app/services/severity_rule_engine.rb` — 解析・異常の保存・重大度
+- `app/javascript/controllers/grid_editor_controller.js` — グリッド入力画面（canvas）
 - `docs/IMPROVEMENT_PLAN.md` — 改善指示書（仕様の正本）

@@ -68,14 +68,14 @@ class InspectionSessionsTest < ActionDispatch::IntegrationTest
     assert_equal true, response.parsed_body["in_progress"]
   end
 
-  test "品質チェックが終わって解析エンジン待ちなら自動更新しない" do
+  test "品質チェックが終わって解析待ちなら自動更新しない" do
     inspection = create_session_inspection
     inspection.inspection_images.first.update_columns(quality_report: { "status" => "ok", "checks" => [] })
 
     get inspection_path(inspection, site_id: @site.id)
 
     assert_select "[data-controller='auto-refresh']", count: 0
-    assert_match "解析待ち（解析エンジン未接続）", response.body
+    assert_select ".badge", text: "解析待ち"
   end
 
   test "要確認の画像を理由付きで除外し、取り消せる" do

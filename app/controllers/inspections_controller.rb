@@ -1,6 +1,6 @@
 class InspectionsController < ApplicationController
   before_action :require_site
-  before_action :find_inspection, only: %i[show destroy]
+  before_action :find_inspection, only: %i[show destroy rejudge]
 
   def index
     @inspections = current_site.inspections.recent.includes(:site, :inspection_images, image_attachment: :blob)
@@ -59,6 +59,20 @@ class InspectionsController < ApplicationController
   rescue ActiveSupport::MessageVerifier::InvalidSignature
     @inspection.errors.add(:base, "アップロードされたファイルを確認できませんでした。もう一度選択してください")
     render :new, status: :unprocessable_entity
+  end
+
+  # 未確定の異常・群を、現在有効な判定基準で判定し直す（明示的な操作のときだけ）。
+  # mild を下げても新しい候補は増えない（解析エンジンは mild 未満を出力しない）。増やすには画像の再解析が必要
+  def rejudge
+    rule_set = RuleSet.active_set
+    if rule_set.nil?
+      redirect_to inspection_path(@inspection), alert: "有効な判定基準（ルールセット）がありません"
+    else
+      count = SeverityRuleEngine.new(rule_set).rejudge!(@inspection)
+      redirect_to inspection_path(@inspection),
+        notice: "未確定の異常・群 #{count} 件を判定基準「#{rule_set.version}」で判定し直しました。確定済みのものは変わりません。" \
+                "mild を下げた場合、新しい候補を出すには画像の再解析が必要です"
+    end
   end
 
   def destroy

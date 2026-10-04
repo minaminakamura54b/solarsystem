@@ -1,0 +1,116 @@
+<% content_for :title, "グリッドの指定 - 画像 #{@image.sequence}" %>
+<% width, height = @image.pixel_size %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">▦ グリッドの指定</h2>
+    <p class="text-sm text-gray-500 mt-1">
+      画像 <%= @image.sequence %> / <%= @inspection.inspection_images.size %>（<%= @image.thermal_filename %>）
+      ／ <%= image_status_label(@image) %>
+      <% if @image.altitude_m || @image.gimbal_pitch %>
+        ／ 高度 <%= @image.altitude_m&.to_f || "-" %> m・ピッチ <%= @image.gimbal_pitch&.to_f || "-" %>°・ヨー <%= @image.gimbal_yaw&.to_f || "-" %>°
+      <% end %>
+    </p>
+  </div>
+  <div class="flex gap-2">
+    <%= link_to "← 前の画像", grid_inspection_inspection_image_path(@inspection, @previous_image), class: "btn btn-secondary", id: "grid-prev-link" if @previous_image %>
+    <%= link_to "次の画像 →", grid_inspection_inspection_image_path(@inspection, @next_image), class: "btn btn-secondary", id: "grid-next-link" if @next_image %>
+    <%= link_to "点検に戻る", inspection_path(@inspection, anchor: "image_#{@image.id}"), class: "btn btn-secondary" %>
+  </div>
+</div>
+
+<div class="p-6"
+     data-controller="grid-editor"
+     data-grid-editor-grids-value="<%= @image.panel_grids.to_json %>"
+     data-grid-editor-proposal-value="<%= (@image.grid_proposal || {}).to_json %>"
+     data-grid-editor-width-value="<%= width || 640 %>"
+     data-grid-editor-height-value="<%= height || 512 %>">
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <%# ── 画像とグリッド ── %>
+    <div class="lg:col-span-2 card p-3">
+      <p class="text-xs text-gray-400 mb-2" data-grid-editor-target="hint">
+        「グリッドを追加」を押してから、パネル配列の <strong>左上 → 右上 → 右下 → 左下</strong> の順に4隅をクリックします。
+        選んだグリッドの角はドラッグで動かせます。キーボード: ← / → で前後の画像（未保存の変更があるときは移動しません）、Esc で追加をやめる。
+      </p>
+      <div style="position:relative; display:inline-block; max-width:100%;">
+        <% if @image.displayable? %>
+          <%= image_tag url_for(@image.display_image), data: { grid_editor_target: "image", action: "load->grid-editor#resize" },
+                style: "display:block; max-width:100%; height:auto;", alt: "サーモ画像" %>
+        <% else %>
+          <div data-grid-editor-target="image" style="width:<%= width || 640 %>px; max-width:100%; aspect-ratio:<%= width || 640 %>/<%= height || 512 %>; background:#222;"></div>
+        <% end %>
+        <canvas data-grid-editor-target="canvas" style="position:absolute; left:0; top:0; cursor:crosshair;"
+                data-action="mousedown->grid-editor#pointerDown mousemove->grid-editor#pointerMove mouseup->grid-editor#pointerUp mouseleave->grid-editor#pointerUp"></canvas>
+      </div>
+      <p class="text-xs mt-2" style="color:#ef9f27;" data-grid-editor-target="message"></p>
+    </div>
+
+    <%# ── 操作 ── %>
+    <div class="space-y-4">
+      <div class="card p-4 space-y-3">
+        <p class="form-label">グリッドを追加</p>
+        <div class="grid grid-cols-3 gap-2">
+          <div><label class="text-xs">行数</label><input type="number" min="1" value="4" class="form-input" data-grid-editor-target="newRows"></div>
+          <div><label class="text-xs">列数</label><input type="number" min="1" value="6" class="form-input" data-grid-editor-target="newCols"></div>
+          <div>
+            <label class="text-xs">向き</label>
+            <select class="form-select" data-grid-editor-target="newOrientation">
+              <option value="landscape">横長</option>
+              <option value="portrait">縦長</option>
+            </select>
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary w-full" data-action="grid-editor#startAdding" data-grid-editor-target="addButton">グリッドを追加（4隅をクリック）</button>
+        <% if @image.grid_proposal.present? %>
+          <button type="button" class="btn btn-secondary w-full" data-action="grid-editor#loadProposal">
+            自動抽出の提案を読み込む（<%= @image.grid_proposal["rows"] %>行 × <%= @image.grid_proposal["cols"] %>列）
+          </button>
+          <p class="text-xs text-gray-400">提案は保存するまで解析に使いません。位置を確認してから保存してください。</p>
+        <% end %>
+        <% if @templates.any? %>
+          <div class="flex gap-2">
+            <select class="form-select" data-grid-editor-target="templateSelect">
+              <% @templates.each do |t| %>
+                <option value="<%= { rows: t.rows, cols: t.cols, corners: t.corners, panel_orientation: t.panel_orientation, grid_template_id: t.id }.to_json %>"><%= t.name %>（<%= t.rows %>×<%= t.cols %>）</option>
+              <% end %>
+            </select>
+            <button type="button" class="btn btn-secondary" data-action="grid-editor#addTemplate">追加</button>
+          </div>
+        <% end %>
+      </div>
+
+      <div class="card p-4">
+        <p class="form-label">この画像のグリッド</p>
+        <div data-grid-editor-target="list" class="space-y-2 text-sm"></div>
+        <%= form_with url: grids_inspection_inspection_image_path(@inspection, @image), method: :patch, class: "mt-3", data: { action: "submit->grid-editor#beforeSave" } do |f| %>
+          <%= hidden_field_tag :panel_grids, @image.panel_grids.to_json, data: { grid_editor_target: "output" } %>
+          <%= f.submit "保存して解析", class: "btn btn-primary w-full" %>
+        <% end %>
+        <% unless @image.ready_for_analysis? %>
+          <p class="text-xs mt-2" style="color:#ef9f27;">この画像は品質チェックに合格していないため、保存しても解析しません。</p>
+        <% end %>
+      </div>
+
+      <div class="card p-4 space-y-2">
+        <p class="form-label">テンプレート</p>
+        <%= form_with url: inspection_grid_templates_path(@inspection), class: "flex gap-2", data: { action: "submit->grid-editor#beforeTemplateSave" } do %>
+          <%= hidden_field_tag :source_image_id, @image.id %>
+          <%= hidden_field_tag :grid, "", data: { grid_editor_target: "templateGrid" } %>
+          <%= text_field_tag :name, nil, class: "form-input", placeholder: "テンプレート名" %>
+          <%= submit_tag "選択中のグリッドを保存", class: "btn btn-secondary" %>
+        <% end %>
+        <% @templates.each do |t| %>
+          <div class="flex items-center justify-between text-xs">
+            <span><%= t.name %>（<%= t.rows %>×<%= t.cols %>、高度 <%= t.altitude_m&.to_f || "-" %> m）</span>
+            <%= button_to "一括適用", apply_inspection_grid_template_path(@inspection, t), class: "btn btn-sm btn-secondary" %>
+          </div>
+        <% end %>
+        <p class="text-xs text-gray-400">
+          一括適用は、グリッドがまだ無く、高度・ジンバル角が元の画像と近い画像（許容差: 高度 ±<%= AnalyzerConfig.current.template_match["altitude_m"] %> m、
+          ピッチ ±<%= AnalyzerConfig.current.template_match["gimbal_pitch_deg"] %>°、ヨー ±<%= AnalyzerConfig.current.template_match["gimbal_yaw_deg"] %>°）だけに適用します。
+        </p>
+      </div>
+    </div>
+  </div>
+</div>

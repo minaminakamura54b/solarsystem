@@ -38,6 +38,11 @@ class Site < ApplicationRecord
     @bypass_pattern_json_error = "の JSON を読めません: #{e.message}"
   end
 
+  # 解析エンジンに --module で渡すモジュール構成（analyzer/analyzer/contract.py の ModuleSpec）
+  def analyzer_module_spec
+    { "cell_layout" => cell_layout, "substring_count" => substring_count, "bypass_pattern" => bypass_pattern }
+  end
+
   def cell_layout=(value)
     super(value.presence)
   end

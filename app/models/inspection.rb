@@ -77,18 +77,39 @@ class Inspection < ApplicationRecord
     "completed"
   end
 
+  # 画像のステータスから点検全体のステータスを保存する。
+  # すべての画像の解析が終わっても、人のレビューが終わるまでは completed にせず needs_review（review_pending）にする。
+  # 候補が0件でも同じ（見逃しの手動追加があるため、人が画像を確認するまで「正常」にしない。2026-10-04 ユーザー承認）。
+  # completed と重要度（確定済みの異常の最大重大度）は、Phase 5 の「レビュー完了」の操作で付ける
   def refresh_status!
+    inspection_images.reload
     status = aggregated_status
-    # completed にするときは確定済みの異常から severity を付ける必要がある（Phase 4 で実装）。
-    # Phase 2 では画像が completed になる経路がないため、ここでは completed にしない
-    return if status == analysis_status || status == "completed"
+    reason =
+      case status
+      when "completed" then "review_pending"
+      when "needs_review" then "images_need_review"
+      end
+    status = "needs_review" if status == "completed"
+    return if status == analysis_status && reason == review_reason
 
-    update_columns(analysis_status: status, updated_at: Time.current)
+    update_columns(analysis_status: status, review_reason: reason, updated_at: Time.current)
   end
 
-  # 品質チェックに合格し、解析エンジン（Phase 4 で接続）を待っている画像の数
+  # 品質チェックに合格し、グリッドの指定か解析を待っている画像の数
   def images_waiting_for_analyzer
     inspection_images.count { |i| i.pending? && !i.quality_pending? }
+  end
+
+  # 未確定の異常の候補の件数（群の構成パネルは群を1件として数える。docs/IMPROVEMENT_PLAN.md 4.4）
+  def candidate_count
+    anomalies.candidates.countable.count + anomaly_groups.where(review_status: "pending").count
+  end
+
+  # 候補の種類別・重大度別の件数（群の構成パネルは除き、群を1件として数える）
+  def candidate_summary
+    anomaly_counts = anomalies.candidates.countable.group(:anomaly_type, :severity).count
+    group_counts = anomaly_groups.where(review_status: "pending").group(:group_type, :severity).count
+    anomaly_counts.merge(group_counts) { |_, a, b| a + b }
   end
 
   def image_status_counts

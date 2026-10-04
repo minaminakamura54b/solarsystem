@@ -1,0 +1,28 @@
+# 解析エンジン（analyzer/）の呼び出し設定（docs/IMPROVEMENT_PLAN.md Phase 4）
+shared:
+  # 解析エンジンを起動するコマンド（配列）。この後ろにサブコマンドと引数が付く。working_dir で実行する
+  command: ["uv", "run", "--frozen", "python", "-m", "analyzer"]
+  working_dir: "analyzer" # Rails.root からの相対パス、または絶対パス
+  # 解析エンジンの1回の実行の上限。超えたらプロセスグループごと終了させ failed（timeout）にする
+  timeout_seconds: 120
+  # 出力 JSON の schema_version（解析エンジンと合わせる）
+  schema_version: "2.1"
+  # この分数を超えて analyzing（または品質チェック待ち）のまま残った画像を、定期ジョブで failed にする
+  stale_after_minutes: 10
+  # グリッドテンプレートを一括適用するときの、撮影条件の許容差（テンプレート作成時の画像との差）
+  template_match:
+    altitude_m: 2.0
+    gimbal_pitch_deg: 3.0
+    gimbal_yaw_deg: 5.0
+  # 開発・テスト用: .npy（合成の温度行列）をサーモ画像として登録できるか。本番では false
+  allow_npy_thermal: false
+
+development:
+  allow_npy_thermal: true
+
+test:
+  allow_npy_thermal: true
+
+production:
+  # Docker イメージ内の解析エンジンの仮想環境の Python を直接使う（Dockerfile 参照）
+  command: ["/rails/analyzer/.venv/bin/python", "-m", "analyzer"]

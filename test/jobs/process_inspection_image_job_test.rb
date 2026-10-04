@@ -19,21 +19,36 @@ class ProcessInspectionImageJobTest < ActiveSupport::TestCase
     assert_nil @inspection.severity, "正常にはしない"
   end
 
-  test "温度データがあり、POA 日射量が十分なら品質 ok で解析エンジン待ち（pending）" do
+  test "品質 ok でグリッドが無ければ needs_review（grid_required）にし、グリッドの提案を作る" do
     @inspection.weather_readings.create!(observed_at: jst("2026-09-20 10:10"), irradiance_w_m2: 750, irradiance_type: "poa")
 
-    with_fake_exif(tags: dji_thermal_tags) do
-      ProcessInspectionImageJob.perform_now(@image.id)
+    assert_enqueued_with(job: GridProposalJob, args: [ @image.id ]) do
+      with_fake_exif(tags: dji_thermal_tags) do
+        ProcessInspectionImageJob.perform_now(@image.id)
+      end
     end
 
     @image.reload
-    assert_equal "pending", @image.analysis_status
+    assert_equal "needs_review", @image.analysis_status
+    assert_equal "grid_required", @image.review_reason
     assert_equal "ok", @image.quality_status
     assert_equal true, @image.is_radiometric
     assert_equal 750, @image.irradiance_w_m2
     assert_equal "poa", @image.irradiance_type
     assert_equal BigDecimal("-90.0"), @image.gimbal_pitch
     assert_not @inspection.reload.in_progress?
+  end
+
+  test "品質 ok でグリッドがあれば解析ジョブを登録する" do
+    @image.update_columns(panel_grids: [ { "rows" => 2, "cols" => 3, "corners" => [ [ 0.1, 0.1 ], [ 0.5, 0.1 ], [ 0.5, 0.4 ], [ 0.1, 0.4 ] ] } ])
+
+    assert_enqueued_with(job: AnalyzeInspectionImageJob, args: [ @image.id ]) do
+      with_fake_exif(tags: dji_thermal_tags) do
+        ProcessInspectionImageJob.perform_now(@image.id)
+      end
+    end
+
+    assert_equal "pending", @image.reload.analysis_status
   end
 
   test "POA 日射量が 600 W/m² 未満なら needs_review（low_irradiance）" do

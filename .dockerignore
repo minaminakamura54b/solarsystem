@@ -49,3 +49,9 @@
 # Ignore Docker-related files
 /.dockerignore
 /Dockerfile*
+
+# 解析エンジン: 仮想環境はイメージ内で作り直す。DJI SDK はライセンス上イメージに含めない（実行時にマウントする）
+/analyzer/.venv/
+/analyzer/.pytest_cache/
+/analyzer/bin/
+**/__pycache__/

@@ -15,4 +15,9 @@ class Anomaly < ApplicationRecord
   validates :severity, inclusion: { in: SEVERITIES }, allow_nil: true
   validates :review_status, inclusion: { in: REVIEW_STATUSES }
   validates :evidence_level, inclusion: { in: EVIDENCE_LEVELS }, allow_nil: true
+  validates :detection, inclusion: { in: %w[local baseline] }, allow_nil: true
+
+  scope :candidates, -> { where(review_status: "pending") }
+  # 件数・重大度の集計に使う異常（群の構成パネルは群を1件として数えるため除く。docs/IMPROVEMENT_PLAN.md 4.4）
+  scope :countable, -> { where(anomaly_group_id: nil) }
 end

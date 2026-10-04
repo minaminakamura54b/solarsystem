@@ -19,6 +19,12 @@ class SeverityRule < ApplicationRecord
     persisted? || super
   end
 
+  # 判定時の閾値のコピー（anomalies.rule_snapshot に保存する）
+  def snapshot
+    COPYABLE_ATTRIBUTES.index_with { |attr| value = public_send(attr); value.is_a?(BigDecimal) ? value.to_f : value }
+      .merge("version" => rule_set.version)
+  end
+
   private
 
   # 各系列で mild < warning < critical
