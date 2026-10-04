@@ -83,7 +83,7 @@ docker run --rm -v "$PWD/work:/work" solarsystem-analyzer analyze --thermal /wor
 
 ```
 analyzer/
-  contract.py               入出力の約束（pydantic、schema_version 2.0）
+  contract.py               入出力の約束（pydantic、schema_version 2.1）
   pipeline.py               解析の流れ
   params.py / config/       ルールセットに含まれない解析パラメータ
   errors.py                 終了コードに対応する例外
@@ -103,13 +103,28 @@ tests/
   fixtures/make_synthetic.py 合成の温度行列
 ```
 
-## 分類の決まりごと（2026-10-03 ユーザー確認済み）
+## 分類の決まりごと
 
-- **bypass_pattern の band_axis**: その辺を `bands` 等分した帯として扱う（`short_side` なら短辺を等分し、長辺方向に伸びる帯）。一致の条件は、高温領域が1つ・面積比が `band_area_ratio ± tolerance`・帯が伸びる方向にパネルの `(1 − tolerance)` 以上・等分する方向の幅が `(band_area_ratio + tolerance)` 以下
-- **グレア疑い**: 面積がパネルの 0.3% 未満の高温領域があればフラグを付ける（検出は消さない）。「セル境界と無関係」は、セル配置の情報が無いため判定しない（TODO）
+パネルごとに2つの判定を独立に行い、それぞれの結果を出力します（出力の `detection` に、どちらの判定かが入ります）。
+
+- **局所的な判定**（`local`）: パネル自身の中央値から見た高温領域で、hotspot / multi_hotspot / substring_bypass / partial_module を判定
+- **基準温度からの判定**（`baseline`）: パネル平均の ΔT が **module_wide の mild** 以上のとき、「基準温度 + module_wide の mild を超える画素」で領域を取り直し、module_wide（面積比 ≥ 0.80）/ substring_bypass（帯に一致）/ partial_module を判定。パネルの 50〜80% が温まると、パネル自身の中央値が高温側になり局所的な判定では見つからないため（2026-10-04 追加。既知の問題 O への対応）
+- **両方に当てはまれば別々に出力**（例: 2/3 の帯 ＋ その中のホットスポット、module_wide ＋ その中のホットスポット）。ただし基準温度からの判定で異常が出たパネルでは、局所的な判定の substring_bypass / partial_module は同じ発熱の二重計上になるため出さない
+- **substring_bypass は作動した帯の本数を `active_bands` に出す**（連続した k 本、または離れた複数の帯の合計。Phase 7 の損失計算で使う）
 - **どれにも当てはまらない高温領域**: すべて `partial_module`。ルールセットに `other` の閾値が無いため、解析エンジンは `other` を出さない（`other` はレビューで人が使う）
-- **高温領域の最小画素数**: 設けない（1画素から高温領域とする。見逃さない側に倒す）
+- **グレア疑い**: 面積がパネルの 0.3% 未満の高温領域があればフラグを付ける（検出は消さない）。「セル境界と無関係」は、セル配置の情報が無いため判定しない（TODO）
+- **高温領域の最小画素数**: `config/default_params.json` の `min_region_pixels`（既定 1）。これより小さい連結領域は使わない。**実画像を見てから調整する**
+
+### 帯の向き（band_axis）の解釈 — 仮
+
+**実画像で確認するまでの仮の解釈です。** `band_axis` の辺を `bands` 等分した帯として扱います（`short_side` なら短辺を等分し、帯は長辺方向に伸びる）。k 本の帯との一致の条件は、与えられた値だけで作っています:
+
+- 面積比が `k × band_area_ratio ± tolerance`
+- 帯が伸びる方向に、パネルの `(1 − tolerance)` 以上にわたっている
+- 等分する方向の幅が、パネルの `(k × band_area_ratio + tolerance)` 以下
+
+Phase S 以降に実画像でバイパス発熱の向きを確認し、解釈が違えば見直します（2026-10-03 ユーザー確認、2026-10-04 仮の解釈として明記）。
 
 ## 既知の問題
 
-- **O: パネルの 50〜80% が温まったケースを検出できない**。module_wide の条件（基準温度から測った面積比 ≥ 0.80）を満たさず、パネル自身の中央値が高温側になるため、パネル内の高温領域も見つからない（例: 3つのバイパスダイオードのうち2つが作動）。補う判定の追加はユーザーの確認待ち。`tests/test_patterns.py` の xfail のテストで明示している
+- ~~O: パネルの 50〜80% が温まったケースを検出できない~~ → 2026-10-04 に「基準温度からの判定」を追加して対応済み

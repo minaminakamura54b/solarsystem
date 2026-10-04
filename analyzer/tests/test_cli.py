@@ -29,7 +29,7 @@ def test_analyzeは合成データを解析して終了コード0(cli, save_npy)
                         "--irradiance", "800", "--irradiance-type", "poa")
 
     assert code == 0
-    assert data["schema_version"] == "2.0"
+    assert data["schema_version"] == "2.1"
     assert data["analyzer_version"] == "thermal_rules_v1"
     assert data["status"] == "completed"
     assert data["rule_version"] == "test-initial"

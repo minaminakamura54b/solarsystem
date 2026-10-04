@@ -1,7 +1,12 @@
 """解析の流れ（docs/IMPROVEMENT_PLAN.md 5.5〜5.7）。
 
 温度行列 → グリッドからパネル領域 → 画像端のパネルを除外 → パネルごとの特徴量 → 基準温度
-→ パネルごとに module_wide を先に判定 → パネル内の高温領域を分類 → mild 以上だけを異常として出力
+→ パネルごとに2つの判定を独立に行い、それぞれ mild 以上だけを異常として出力する
+   - 基準温度からの判定: パネル平均の ΔT が module_wide の mild 以上なら、基準温度 + その mild を超える領域で
+     module_wide / substring_bypass / partial_module を判定する
+   - 局所的な判定: パネル自身の中央値から見た高温領域で hotspot / multi_hotspot / substring_bypass / partial_module を判定する
+   - 両方に当てはまれば別々に出力する（例: 2/3 の帯 ＋ その中のホットスポット）。ただし基準温度からの判定で異常が出た
+     パネルでは、局所的な判定の substring_bypass / partial_module は同じ発熱の二重計上になるため出さない
 → 同じグリッドの同じ行で隣接する module_wide を panel_row_group にまとめる。
 
 severity は出さない（Rails がルールセットの閾値で付ける）。
@@ -13,7 +18,7 @@ import numpy as np
 
 from analyzer.analysis import patterns
 from analyzer.analysis.baseline import compute_baseline
-from analyzer.analysis.detection import MildThresholds, hot_regions
+from analyzer.analysis.detection import MildThresholds, baseline_regions, hot_regions
 from analyzer.analysis.features import PanelStats, panel_stats
 from analyzer.contract import (
     AnalysisResult,
@@ -103,11 +108,9 @@ def analyze(
     for panel in regions:
         if panel.index not in stats:
             continue
-        anomaly = _detect_panel(panel, rectified[panel.index], stats[panel.index], base, mild, module, rules, params, width, height)
-        if anomaly is None:
-            continue
-        result.anomalies.append(anomaly)
-        if anomaly.anomaly_type == "module_wide":
+        found = _detect_panel(panel, rectified[panel.index], stats[panel.index], base, mild, module, rules, params, width, height)
+        result.anomalies.extend(found)
+        if any(a.anomaly_type == "module_wide" for a in found):
             module_wide_cells.append((panel.grid_index, panel.row, panel.col, panel.index))
 
     deltas = {a.panel_index: a.delta_t for a in result.anomalies if a.anomaly_type == "module_wide"}
@@ -136,31 +139,53 @@ def _panel_result(panel: PanelRegion, stats: PanelStats | None, exclusion, basel
     )
 
 
-def _detect_panel(panel, rect, stats: PanelStats, base, mild: MildThresholds, module, rules, params, width, height):
+def _detect_panel(panel, rect, stats: PanelStats, base, mild: MildThresholds, module, rules, params, width, height) -> list[AnomalyResult]:
     patch = rect.patch
     flags = [] if mild.basis == "normalized" else ["unnormalized"]
+    common = {"panel_index": panel.index, "threshold_basis": mild.basis, "baseline_temp": r(base)}
+    anomalies: list[AnomalyResult] = []
 
-    # module_wide を先に判定する。面積比は「基準温度 + mild を超える画素の割合」（パネル自身の中央値ではなく基準温度から測る）
+    # ── 基準温度からの判定 ──
+    # パネル平均の ΔT が module_wide の mild 以上なら、基準温度 + その mild を超える画素で領域を取り直す
+    # （パネルの大部分が温まるとパネル自身の中央値が高温側になり、局所的な判定では見つからないため）
     panel_delta = stats.t_mean - base
-    module_wide_area = float((patch > base + mild["module_wide"]).mean())
-    if panel_delta >= mild["module_wide"] and module_wide_area >= params.module_wide_min_area_ratio:
-        h, w = patch.shape
-        return AnomalyResult(
-            panel_index=panel.index, anomaly_type="module_wide",
-            bbox=patch_bbox_to_image((0, 0, w - 1, h - 1), rect.to_image, width, height),
-            measure="panel_mean", delta_t=r(panel_delta), normalized_delta_t=r(mild.normalized(panel_delta)),
-            threshold_basis=mild.basis, area_ratio=r(module_wide_area, 4),
-            t_max=r(stats.t_max), t_mean=r(stats.t_mean), t_min=r(stats.t_min), baseline_temp=r(base),
-            shape={"criteria": "パネル平均の ΔT が mild 以上・基準温度から測った面積比が module_wide の条件以上", "area_ratio_basis": "baseline"},
-            flags=flags,
-        )
+    if panel_delta >= mild["module_wide"]:
+        above = patch > base + mild["module_wide"]
+        area = float(above.mean())
+        if area >= params.module_wide_min_area_ratio:
+            h, w = patch.shape
+            anomalies.append(AnomalyResult(
+                **common, anomaly_type="module_wide", detection="baseline",
+                bbox=patch_bbox_to_image((0, 0, w - 1, h - 1), rect.to_image, width, height),
+                measure="panel_mean", delta_t=r(panel_delta), normalized_delta_t=r(mild.normalized(panel_delta)),
+                area_ratio=r(area, 4), t_max=r(stats.t_max), t_mean=r(stats.t_mean), t_min=r(stats.t_min),
+                shape={"criteria": "パネル平均の ΔT が mild 以上・基準温度から測った面積比が module_wide の条件以上", "area_ratio_basis": "baseline"},
+                flags=list(flags),
+            ))
+        else:
+            regions = baseline_regions(patch, base + mild["module_wide"], params.min_region_pixels)
+            if regions:
+                anomaly_type, shape, active_bands = patterns.classify_baseline(regions, patch.shape, panel.orientation, module, params)
+                anomaly = _region_anomaly(regions, patch, rect, anomaly_type, shape, active_bands, "baseline", base, mild, flags, common, params, width, height)
+                if anomaly:
+                    anomalies.append(anomaly)
 
-    found, threshold = hot_regions(patch, rules.detection_params)
-    if not found:
-        return None
+    # ── 局所的な判定（パネル自身の中央値から見た高温領域）──
+    found, threshold = hot_regions(patch, rules.detection_params, params.min_region_pixels)
+    if found:
+        anomaly_type, shape, active_bands = patterns.classify_local(found, patch.shape, panel.orientation, module, params)
+        duplicate = anomalies and anomaly_type in ("substring_bypass", "partial_module")
+        if not duplicate:
+            shape["region_threshold_c"] = r(threshold)
+            anomaly = _region_anomaly(found, patch, rect, anomaly_type, shape, active_bands, "local", base, mild, flags, common, params, width, height)
+            if anomaly:
+                anomalies.append(anomaly)
+    return anomalies
 
-    anomaly_type, shape = patterns.classify(found, patch.shape, panel.orientation, module, params)
-    mask = patterns.union_mask(found)
+
+def _region_anomaly(regions, patch, rect, anomaly_type, shape, active_bands, detection, base, mild, flags, common, params, width, height):
+    """高温領域から異常を作る。ΔT が mild 未満なら None。"""
+    mask = patterns.union_mask(regions)
     values = patch[mask].astype(np.float64)
     if anomaly_type in ("hotspot", "multi_hotspot"):
         measure, delta = "region_max", float(values.max()) - base
@@ -170,15 +195,15 @@ def _detect_panel(panel, rect, stats: PanelStats, base, mild: MildThresholds, mo
         return None
 
     total = patch.size
-    if any(region.area_px / total < params.glare_max_area_ratio for region in found):
-        flags.append("glare_suspect")
-    shape["region_threshold_c"] = r(threshold)
+    region_flags = list(flags)
+    if any(region.area_px / total < params.glare_max_area_ratio for region in regions):
+        region_flags.append("glare_suspect")
 
     return AnomalyResult(
-        panel_index=panel.index, anomaly_type=anomaly_type,
-        bbox=patch_bbox_to_image(patterns.union_bbox(found), rect.to_image, width, height),
-        measure=measure, delta_t=r(delta), normalized_delta_t=r(mild.normalized(delta)), threshold_basis=mild.basis,
+        **common, anomaly_type=anomaly_type, detection=detection, active_bands=active_bands,
+        bbox=patch_bbox_to_image(patterns.union_bbox(regions), rect.to_image, width, height),
+        measure=measure, delta_t=r(delta), normalized_delta_t=r(mild.normalized(delta)),
         area_ratio=r(int(mask.sum()) / total, 4),
-        t_max=r(values.max()), t_mean=r(values.mean()), t_min=r(values.min()), baseline_temp=r(base),
-        shape=shape, flags=flags,
+        t_max=r(values.max()), t_mean=r(values.mean()), t_min=r(values.min()),
+        shape=shape, flags=region_flags,
     )

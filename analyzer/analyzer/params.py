@@ -15,6 +15,7 @@ class AnalyzerParams:
     hotspot_max_aspect: float
     module_wide_min_area_ratio: float
     glare_max_area_ratio: float
+    min_region_pixels: int
     edge_margin_px: float
     edge_min_inside_ratio: float
     segmenter_min_panels: int

@@ -1,6 +1,6 @@
 # ARCHITECTURE（現状）
 
-Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜3（ブランチ `phase-3`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
+Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜3b（ブランチ `phase-3b`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
 
 ---
 
@@ -122,9 +122,12 @@ CLI の `python -m analyzer analyze` / `propose-grid`。詳しくは [analyzer/R
 → 画像の端に接するパネルを除外（edge_cut）
 → パネルごとの t_max / t_mean / t_min / p95
 → 基準温度（正常パネルの t_mean の中央値。MAD の下限つき。足りなければ終了コード 4）
-→ パネルごとに module_wide を先に判定（パネル平均の ΔT と、基準温度から測った面積比）
-→ パネル内の高温領域（パネル中央値 + max(k × MAD, 1℃) を超える連結領域）を分類
-   hotspot / multi_hotspot / substring_bypass（bypass_pattern に一致）/ partial_module（それ以外）
+→ パネルごとに2つの判定を独立に行う（両方に当てはまれば別々に出力。出力の detection に local / baseline）
+   基準温度からの判定: パネル平均の ΔT が module_wide の mild 以上なら、基準温度 + その mild を超える領域で
+     module_wide（面積比 ≥ 0.80）/ substring_bypass（帯に一致。作動した帯の本数 active_bands）/ partial_module
+   局所的な判定: パネル中央値 + max(k × MAD, 1℃) を超える連結領域で
+     hotspot / multi_hotspot / substring_bypass / partial_module
+   基準温度からの判定で異常が出たパネルでは、局所的な判定の substring_bypass / partial_module は出さない（二重計上の防止）
 → mild（正規化ΔT が出せれば normalized_mild、出せなければ raw_mild を生ΔT に換算）以上だけを出力
 → 同じグリッドの同じ行で隣接する module_wide を panel_row_group にまとめる
 ```
@@ -152,13 +155,13 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 | K | **アプリのタイムゾーンが UTC のまま。** 点検日時などの表示は UTC。撮影時刻と気象データの時刻だけは `config/image_quality.yml` の `capture_time_zone`（Asia/Tokyo）で解釈・表示している | `config/application.rb` | 未対応（アプリ全体の表示が変わるため、指示を受けて対応） |
 | L | 発電所の詳細画面（`sites/show`）のビューが無く、更新後の `site_path` へのリダイレクトでエラーになっていた | `SitesController#update` | **Phase 2 で最小限の修正**（更新後は発電所一覧に戻す）。詳細画面は未作成 |
 | N | 発電所フォームの `defined?(method)` が Ruby 組み込みの `method` メソッドを指し、**新規登録画面が開けなかった**（Phase 2 以前から） | `sites/_form.html.erb` | **Phase 2 で修正**（`local_assigns.fetch(:method, :post)`） |
-| O | **解析エンジンが、パネルの 50〜80% が温まったケースを検出できない**（仕様のすき間）。module_wide の面積比の条件（≥ 0.80）を満たさず、パネル自身の中央値が高温側になるためパネル内の高温領域も見つからない（例: バイパスダイオード3つのうち2つが作動） | `analyzer/analyzer/pipeline.py` | 補う判定の追加はユーザーの確認待ち。`analyzer/tests/test_patterns.py` の xfail テストで明示 |
+| O | 解析エンジンが、パネルの 50〜80% が温まったケースを検出できない（仕様のすき間） | `analyzer/analyzer/pipeline.py` | **Phase 3b で対応済み**（ユーザー承認: 基準温度からの判定を追加。指示書 5.6） |
 | M | 温度データの有無はメタデータのタグによる仮判定。実際の R-JPEG でどのタグが出るかは未確認 | `config/image_quality.yml` の `radiometric_tags` | Phase S で実画像を確認して見直す。最終判定は Phase 3 の解析エンジン |
 
 ## 6. テスト
 
 - `bin/rails test`: 179件（Phase 3 時点）。services / jobs / controllers / models と主要画面のスモークテスト
-- 解析エンジン: `cd analyzer && uv run pytest`（50件 + 仕様のすき間を示す xfail 1件）。合成の温度行列（`analyzer/tests/fixtures/make_synthetic.py`）だけを使う。CI の `analyzer-test` ジョブでも実行する
+- 解析エンジン: `cd analyzer && uv run pytest`（60件）。合成の温度行列（`analyzer/tests/fixtures/make_synthetic.py`）だけを使う。CI の `analyzer-test` ジョブでも実行する
 - Claude API は呼ばない。`ClaudePanelAnalyzer.default_client` に偽クライアントを渡す（`with_fake_claude`）
 - exiftool は**実際に動かす**テストと、**偽の読み取りクラスに差し替える**テストがある。本物の R-JPEG の熱画像タグは exiftool で書き込めないため、温度データありの場合は `ProcessInspectionImageJob.exif_reader` を `with_fake_exif(tags:)` で差し替える（本番では常に `ExifReader`）。開発機・CI とも exiftool が必要（CI は apt で導入）
 - テスト用画像はすべて合成: `panel.png`（8×8）、`thermal_plain_T.jpg`（640×512、EXIF あり・温度データなし）、`lowres_T.jpg`（320×256）、`rgb_V.jpg`、`memo.txt`（画像以外）。顧客画像は使わない

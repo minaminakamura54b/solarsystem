@@ -1,10 +1,19 @@
 """発熱パターンの分類（docs/IMPROVEMENT_PLAN.md 5.7）。パラメータはすべて設定値。
 
-module_wide はパネル平均で先に判定する（pipeline.py）。ここではパネル内の高温領域を分類する:
+パネルごとに2つの判定を独立に行い、それぞれの結果を出力する（pipeline.py）:
+
+  局所的な判定（パネル自身の中央値から見た高温領域）→ classify_local
   - hotspot        : 領域が1つ、面積比 < hotspot_max_area_ratio、縦横比 < hotspot_max_aspect
   - multi_hotspot  : 領域が2つ以上で、どの領域も hotspot の条件を満たす
-  - substring_bypass: 領域が1つで bypass_pattern に一致（モジュールのセル構成と bypass_pattern が登録されている場合だけ）
+  - substring_bypass: 領域が1つで bypass_pattern の帯に一致（セル構成と bypass_pattern が登録されている場合だけ）
   - partial_module : 上のどれにも当てはまらない高温領域すべて（ルールセットに other の閾値が無いため other は出さない）
+
+  基準温度からの判定（パネル平均の ΔT が module_wide の mild 以上のとき、基準温度 + その mild を超える領域）
+  - module_wide    : 面積比 ≥ module_wide_min_area_ratio（pipeline.py で判定）
+  - substring_bypass: すべての領域が bypass_pattern の帯（1本以上の連続した帯）に一致し、帯の合計が bands 未満 → classify_baseline
+  - partial_module : それ以外
+
+帯の向き（band_axis）は「その辺を bands 等分した帯」と解釈する（実画像で確認するまでの仮の解釈）。
 """
 
 from __future__ import annotations
@@ -16,11 +25,8 @@ from analyzer.contract import BypassPattern, ModuleSpec
 from analyzer.params import AnalyzerParams
 
 
-def classify(
-    regions: list[HotRegion], patch_shape: tuple[int, int], orientation: str, module: ModuleSpec, params: AnalyzerParams
-) -> tuple[str, dict]:
-    total = patch_shape[0] * patch_shape[1]
-    region_info = [
+def _region_info(regions: list[HotRegion], total: int, params: AnalyzerParams) -> list[dict]:
+    return [
         {
             "area_ratio": round(r.area_px / total, 4),
             "aspect": round(r.aspect, 3),
@@ -28,37 +34,79 @@ def classify(
         }
         for r in regions
     ]
+
+
+def _bypass_ready(module: ModuleSpec) -> bool:
+    return module.cell_layout is not None and module.bypass_pattern is not None
+
+
+NOT_EVALUATED = {"evaluated": False, "reason": "モジュールのセル構成または bypass_pattern が未登録"}
+
+
+def classify_local(
+    regions: list[HotRegion], patch_shape: tuple[int, int], orientation: str, module: ModuleSpec, params: AnalyzerParams
+) -> tuple[str, dict, int | None]:
+    """局所的な判定の高温領域を分類する。戻り値: (種類, 分類根拠, 作動した帯の本数)"""
+    total = patch_shape[0] * patch_shape[1]
+    region_info = _region_info(regions, total, params)
     shape: dict = {"regions": len(regions), "region_details": region_info}
 
     if len(regions) == 1 and region_info[0]["hotspot_like"]:
         shape["criteria"] = "領域1つ・面積比と縦横比が hotspot の条件内"
-        return "hotspot", shape
+        return "hotspot", shape, None
     if len(regions) >= 2 and all(r["hotspot_like"] for r in region_info):
         shape["criteria"] = "領域2つ以上・すべて hotspot の条件内"
-        return "multi_hotspot", shape
+        return "multi_hotspot", shape, None
 
-    bypass_ready = module.cell_layout is not None and module.bypass_pattern is not None
-    if len(regions) == 1 and bypass_ready:
-        matched, details = bypass_match(regions[0], patch_shape, orientation, module.bypass_pattern)
-        shape["bypass_match"] = details
-        if matched:
-            shape["criteria"] = "領域1つ・bypass_pattern に一致"
-            return "substring_bypass", shape
-    if not bypass_ready:
-        shape["bypass_match"] = {"evaluated": False, "reason": "モジュールのセル構成または bypass_pattern が未登録"}
+    if not _bypass_ready(module):
+        shape["bypass_match"] = NOT_EVALUATED
+    elif len(regions) == 1:
+        bands, details = bypass_bands(regions[0], patch_shape, orientation, module.bypass_pattern)
+        shape["bypass_match"] = {"evaluated": True, "active_bands": bands, "bands_total": module.bypass_pattern.bands, "regions": [details]}
+        if bands is not None:
+            shape["criteria"] = f"領域1つ・bypass_pattern の帯 {bands} 本に一致"
+            return "substring_bypass", shape, bands
 
     shape["criteria"] = "hotspot・multi_hotspot・substring_bypass のいずれにも当てはまらない"
-    return "partial_module", shape
+    return "partial_module", shape, None
 
 
-def bypass_match(region: HotRegion, patch_shape: tuple[int, int], orientation: str, pattern: BypassPattern) -> tuple[bool, dict]:
-    """band_axis の辺を bands 等分した帯と一致するか。
+def classify_baseline(
+    regions: list[HotRegion], patch_shape: tuple[int, int], orientation: str, module: ModuleSpec, params: AnalyzerParams
+) -> tuple[str, dict, int | None]:
+    """基準温度からの判定の領域（module_wide に当たらないもの）を分類する。戻り値: (種類, 分類根拠, 作動した帯の本数)"""
+    total = patch_shape[0] * patch_shape[1]
+    shape: dict = {"regions": len(regions), "region_details": _region_info(regions, total, params), "area_ratio_basis": "baseline"}
 
-    パッチ上で、landscape はパネルの長辺が横（x）、portrait は縦（y）。
-    short_side なら短辺を等分する（帯は長辺方向に伸びる）。一致の条件:
-      - 面積比が band_area_ratio ± tolerance
+    if not _bypass_ready(module):
+        shape["bypass_match"] = NOT_EVALUATED
+    else:
+        pattern = module.bypass_pattern
+        matches = [bypass_bands(region, patch_shape, orientation, pattern) for region in regions]
+        counts = [bands for bands, _ in matches]
+        active = sum(counts) if all(c is not None for c in counts) else None
+        if active is not None and active >= pattern.bands:
+            active = None  # すべての帯が作動しているなら帯ではない（module_wide の面積比に届かない場合は partial_module）
+        shape["bypass_match"] = {
+            "evaluated": True, "active_bands": active, "bands_total": pattern.bands, "regions": [d for _, d in matches],
+        }
+        if active is not None:
+            shape["criteria"] = f"基準温度から測った領域が bypass_pattern の帯（合計 {active} 本）に一致"
+            return "substring_bypass", shape, active
+
+    shape["criteria"] = "基準温度から測った領域が module_wide・substring_bypass のいずれにも当てはまらない"
+    return "partial_module", shape, None
+
+
+def bypass_bands(region: HotRegion, patch_shape: tuple[int, int], orientation: str, pattern: BypassPattern) -> tuple[int | None, dict]:
+    """領域が、連続した k 本の帯（k = 1 〜 bands − 1）と一致するか。一致すれば k を返す。
+
+    band_axis の辺を bands 等分した帯として扱う（short_side なら短辺を等分し、帯は長辺方向に伸びる）。
+    パッチ上で、landscape はパネルの長辺が横（x）、portrait は縦（y）。k 本の帯との一致の条件:
+      - 面積比が k × band_area_ratio ± tolerance
       - 帯が伸びる方向に、パネルの (1 − tolerance) 以上にわたっている
-      - 等分する方向の幅が、パネルの (band_area_ratio + tolerance) 以下
+      - 等分する方向の幅が、パネルの (k × band_area_ratio + tolerance) 以下
+    一致しない場合の checks は、面積比がいちばん近い k に対する結果。
     """
     height, width = patch_shape
     long_axis = "x" if orientation == "landscape" else "y"
@@ -69,20 +117,28 @@ def bypass_match(region: HotRegion, patch_shape: tuple[int, int], orientation: s
     span_extent = extent["y" if divided_axis == "x" else "x"]
     area_ratio = region.area_px / (width * height)
 
-    checks = {
-        "area_ratio": abs(area_ratio - pattern.band_area_ratio) <= pattern.tolerance,
-        "spans_panel": span_extent >= 1 - pattern.tolerance,
-        "band_width": divided_extent <= pattern.band_area_ratio + pattern.tolerance,
-    }
+    candidates = range(1, pattern.bands)
+    results = {}
+    for k in candidates:
+        expected = k * pattern.band_area_ratio
+        results[k] = {
+            "area_ratio": abs(area_ratio - expected) <= pattern.tolerance,
+            "spans_panel": span_extent >= 1 - pattern.tolerance,
+            "band_width": divided_extent <= expected + pattern.tolerance,
+        }
+    matched = next((k for k in candidates if all(results[k].values())), None)
+    nearest = matched or min(candidates, key=lambda k: abs(area_ratio - k * pattern.band_area_ratio), default=None)
     details = {
         "evaluated": True,
+        "matched_bands": matched,
         "divided_axis": divided_axis,
         "area_ratio": round(area_ratio, 4),
         "span_extent": round(span_extent, 4),
         "divided_extent": round(divided_extent, 4),
-        "checks": checks,
+        "compared_bands": nearest,
+        "checks": results.get(nearest, {}),
     }
-    return all(checks.values()), details
+    return matched, details
 
 
 def union_mask(regions: list[HotRegion]) -> np.ndarray:

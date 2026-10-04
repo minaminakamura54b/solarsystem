@@ -5,4 +5,4 @@
 """
 
 ANALYZER_VERSION = "thermal_rules_v1"
-SCHEMA_VERSION = "2.0"
+SCHEMA_VERSION = "2.1"  # 2.1: anomalies に detection（local / baseline）と active_bands を追加

@@ -324,7 +324,7 @@ python -m analyzer propose-grid --thermal DJI_0001_T.JPG --out proposal.json
 ### 5.3 出力 JSON（抜粋）
 ```json
 {
-  "schema_version": "2.0",
+  "schema_version": "2.1",
   "analyzer_version": "thermal_rules_v1",
   "status": "completed | needs_review | failed",
   "review_reason": null,
@@ -334,7 +334,7 @@ python -m analyzer propose-grid --thermal DJI_0001_T.JPG --out proposal.json
   "baseline": {"temp": 42.4, "method": "median_of_normal_panels", "panel_count": 38, "mad": 0.42, "mad_used": 0.5},
   "panels": [{"index": 0, "grid_index": 0, "bbox": {}, "t_max": 43.1, "t_mean": 42.2, "t_min": 40.9, "p95": 42.9,
               "excluded": false, "exclude_reason": null, "is_baseline": true}],
-  "anomalies": [{"panel_index": 7, "anomaly_type": "hotspot", "bbox": {},
+  "anomalies": [{"panel_index": 7, "anomaly_type": "hotspot", "detection": "local", "active_bands": null, "bbox": {},
                  "measure": "region_max", "delta_t": 25.4, "normalized_delta_t": 34.2,
                  "threshold_basis": "normalized",
                  "area_ratio": 0.028, "shape": {}, "flags": ["glare_suspect"]}],
@@ -343,6 +343,7 @@ python -m analyzer propose-grid --thermal DJI_0001_T.JPG --out proposal.json
 }
 ```
 Python は severity を出さない。群の構成パネルは `anomalies` にも module_wide として出力する（計上ルールは 4.4）。
+`detection` はその異常を見つけた判定（`local` = 局所的な判定 / `baseline` = 基準温度からの判定。5.6）。`active_bands` は substring_bypass のときだけ、作動した帯（サブストリング）の本数（Phase 7 の損失計算で使う）。schema_version 2.1 で追加（2026-10-04）。
 
 ### 5.4 温度行列の取得（`dji_reader.py`）
 - DJI Thermal SDK の `dji_irp` を subprocess で呼ぶ。**オプション名と出力形式は Phase S（検証）で確認した内容に合わせる。**
@@ -385,24 +386,31 @@ Python は severity を出さない。群の構成パネルは `anomalies` に�
 
 **正規化ΔT** = ΔT × 1000 / 日射量。**日射量が POA のときのみ計算する。** GHI・不明のときは null とし `unnormalized` フラグ、`threshold_basis = raw`。
 
-**判定の順序**（1パネルに複数の条件が当てはまるときの優先順位）: module_wide を先に評価する。module_wide に該当したパネルは、パネル内の高温領域の判定（hotspot 等）を行わず、module_wide 1件として出力する。
+**2つの判定を独立に行う**（2026-10-04 改訂。旧: 「module_wide を先に評価し、該当したパネルはパネル内の判定を行わない」。既知の問題 O への対応としてユーザー承認）:
+- **局所的な判定**（`detection: local`）: 上の「パネル内の高温領域」で hotspot / multi_hotspot / substring_bypass / partial_module を判定する（従来どおり）
+- **基準温度からの判定**（`detection: baseline`）: パネル平均の ΔT が **module_wide の mild** 以上のとき、「基準温度 + module_wide の mild を超える画素」で領域を取り直し、面積比 ≥ 0.80 なら module_wide、すべての領域が bypass_pattern の帯に一致すれば substring_bypass（帯の合計本数を `active_bands` に出す）、それ以外は partial_module。パネルの大部分（50〜80%）が温まると、パネル自身の中央値が高温側になり局所的な判定では見つからないため
+- **両方に当てはまるパネルは異常を別々に出力する**（例: 2/3 の帯 ＋ その中のホットスポット、module_wide ＋ その中のホットスポット）。ただし基準温度からの判定で異常が出たパネルでは、局所的な判定の substring_bypass / partial_module は同じ発熱の二重計上になるため出さない（hotspot / multi_hotspot は常に出す）
+- 分類したあとの出力の条件は、それぞれの種類の mild を使う
+- **高温領域の最小画素数** `min_region_pixels`（`analyzer/config/default_params.json`、既定 1）未満の連結領域は使わない。実画像を見てから調整する
 
 ### 5.7 発熱パターン分類（`patterns.py`、すべて設定値）
 | パターン | 条件（既定値） |
 |---|---|
 | hotspot | 領域数 1、面積比 < 0.10、縦横比 < 3 |
 | multi_hotspot | 領域数 ≥ 2、各領域が hotspot 条件 |
-| substring_bypass | `bypass_pattern` の定義に一致（下記） |
+| substring_bypass | `bypass_pattern` の定義に一致（下記）。連続した k 本（1 ≤ k < bands）の帯、または離れた複数の帯（合計本数）。作動した帯の本数を `active_bands` に出す |
 | module_wide | panel_mean の ΔT が mild 以上、かつ面積比（基準温度から測る。5.6）≥ 0.80 |
-| partial_module | 帯状・部分的な発熱だが `bypass_pattern` に一致しない、またはモジュール構成が不明 |
+| partial_module | 帯状・部分的な発熱だが `bypass_pattern` に一致しない、またはモジュール構成が不明。**hotspot・multi_hotspot・substring_bypass・module_wide のどれにも当てはまらない高温領域はすべてこれ**（2026-10-03 ユーザー確認） |
 | panel_row_group | 同じグリッドの同じ行で隣接する module_wide が `row_group_min_panels`（既定 3）枚以上 → `groups` に出力。構成パネルは `anomalies` にも module_wide として出す |
-| other | 上記以外 |
+| other | 解析エンジンは出さない（ルールセットに other の閾値が無いため）。レビューで人が修正するときに使う |
 
 **`bypass_pattern`** はモジュール型式ごとに Site に登録する。例（フルセル・3サブストリング）:
 ```json
 {"layout": "full_cell", "bands": 3, "band_axis": "short_side", "band_area_ratio": 0.333, "tolerance": 0.12}
 ```
 ハーフカットなどで発熱形状が異なる型式は、その型式の実際の形状を確認してから定義を追加する。**定義がない、または `cell_layout` が不明な場合は `substring_bypass` と判定せず `partial_module` にする。**
+
+**band_axis の解釈（仮。実画像で確認するまでの解釈。2026-10-03 ユーザー確認）**: `band_axis` の辺を `bands` 等分した帯として扱う。`short_side` なら短辺を等分し、帯は長辺方向に伸びる（フルセル 60 セルの典型的なバイパス発熱）。k 本の帯との一致の条件は、与えられた値だけで作る: 面積比が `k × band_area_ratio ± tolerance`、帯が伸びる方向にパネルの `(1 − tolerance)` 以上、等分する方向の幅がパネルの `(k × band_area_ratio + tolerance)` 以下。**Phase S 以降に実画像でバイパス発熱の向きを確認し、解釈が違えば見直す。**
 
 ### 5.8 テスト
 - `make_synthetic.py` で合成温度行列を作る:
@@ -493,7 +501,7 @@ Phase 0 より前に、前提が成り立つかを確かめる。
 5. `panel_segmenter.py` と `propose-grid` サブコマンド（精度が低くてもよい。提案できなければ終了コード 3）
 6. `analyzer/README.md` と Dockerfile
 
-**実施時の決定事項（2026-10-03、ユーザー承認）**: Python 3.12 + uv（pyproject.toml・uv.lock）。Phase S 未実施のため `dji_reader.py` は「JPEG でない・SDK が無い → 終了コード 2」までとし、SDK 依存部分は TODO。bypass_pattern の band_axis は「その辺を bands 等分した帯」。グレア疑いは面積条件だけ。どれにも当てはまらない高温領域は partial_module（解析エンジンは other を出さない）。パネルの 50〜80% が温まったケースは仕様どおりでは検出できない（docs/ARCHITECTURE.md の既知の問題 O）。
+**実施時の決定事項（2026-10-03、ユーザー承認）**: Python 3.12 + uv（pyproject.toml・uv.lock）。Phase S 未実施のため `dji_reader.py` は「JPEG でない・SDK が無い → 終了コード 2」までとし、SDK 依存部分は TODO。bypass_pattern の band_axis は「その辺を bands 等分した帯」。グレア疑いは面積条件だけ。どれにも当てはまらない高温領域は partial_module（解析エンジンは other を出さない）。パネルの 50〜80% が温まったケースは仕様どおりでは検出できなかった（docs/ARCHITECTURE.md の既知の問題 O）→ Phase 3b（2026-10-04）で「基準温度からの判定」を追加して対応（5.6）。
 
 受け入れ確認: `pytest` が通る。合成データの全ケースが期待どおり分類・除外される。モジュール全体 +2℃ が検出される。温度がほぼ均一な正常画像で誤検出がない。連続群で正常パネルが不足する画像は終了コード 4 になる。
 
