@@ -24,6 +24,7 @@ class ProcessInspectionImageJob < ApplicationJob
 
     InspectionImageQuality.apply(image)
     image.save!
+    InspectionImagePipeline.after_quality(image)
     image.inspection.refresh_status!
   rescue => e
     Rails.logger.error("ProcessInspectionImageJob failed: #{e.class}: #{e.message}")

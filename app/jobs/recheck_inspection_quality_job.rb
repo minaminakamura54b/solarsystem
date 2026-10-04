@@ -1,4 +1,4 @@
-# 気象データを変更したときに、点検の全画像へ気象データを割り当て直し、品質チェックをやり直す。
+# 気象データを変更したときに、点検の全画像へ気象データを割り当て直し、品質チェックをやり直す（合格した画像は解析し直す）。
 # メタデータは読み直さない。除外済み・メタデータ未読み取りの画像は対象外
 class RecheckInspectionQualityJob < ApplicationJob
   queue_as :default
@@ -12,6 +12,8 @@ class RecheckInspectionQualityJob < ApplicationJob
 
       InspectionImageQuality.apply(image)
       image.save!
+      # 日射量が変わると正規化ΔT と品質チェックの結果が変わるため、グリッドがあれば解析し直す
+      InspectionImagePipeline.after_quality(image)
     end
     inspection.refresh_status!
   end

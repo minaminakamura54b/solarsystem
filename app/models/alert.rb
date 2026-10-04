@@ -2,6 +2,8 @@ class Alert < ApplicationRecord
   belongs_to :site
   belongs_to :inspection, optional: true
   belongs_to :panel, optional: true
+  belongs_to :anomaly, optional: true
+  belongs_to :anomaly_group, optional: true
 
   SEVERITIES = %w[info warning critical].freeze
 

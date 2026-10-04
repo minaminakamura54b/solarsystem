@@ -5,6 +5,7 @@
        data-controller="auto-refresh"
        data-auto-refresh-url-value="<%= inspection_path(@inspection, format: :json) %>"
        data-auto-refresh-interval-value="3000"
+       data-auto-refresh-max-value="<%= (AnalyzerConfig.current.stale_after_minutes + 5) * 60 * 1000 %>"
      <% end %>>
 
   <%# ── サマリー ─────────────────────────────── %>
