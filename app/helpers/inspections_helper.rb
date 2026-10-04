@@ -77,5 +77,4 @@ module InspectionsHelper
     type = { "poa" => "POA", "ghi" => "GHI", "unknown" => "種類不明" }.fetch(image.irradiance_type.to_s, "種類不明")
     "#{image.irradiance_w_m2.to_f.round} W/m²（#{type}）"
   end
-
 end
