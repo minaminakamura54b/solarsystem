@@ -169,6 +169,10 @@ class PanelResult(BaseModel):
 class AnomalyResult(BaseModel):
     panel_index: int
     anomaly_type: str
+    # どちらの判定で見つけたか。local = パネル自身の中央値から見た高温領域 / baseline = 基準温度 + module_wide の mild を超える領域
+    detection: Literal["local", "baseline"]
+    # substring_bypass のときだけ、作動した帯（サブストリング）の本数。Phase 7 の損失計算で使う
+    active_bands: int | None = None
     bbox: BBox
     measure: Measure
     delta_t: float

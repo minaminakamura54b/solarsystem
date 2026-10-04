@@ -1,5 +1,7 @@
 """合成データで、発熱パターンの分類・除外・基準温度が仕様どおりになることを確認する（5.8）。"""
 
+from dataclasses import replace
+
 import pytest
 
 from tests.fixtures.make_synthetic import FULL_CELL_MODULE, GridLayout, make_scene
@@ -54,17 +56,31 @@ def test_複数のホットスポット(run_analysis):
     assert a.shape["regions"] == 2
 
 
-def test_短辺の1_3の帯はbypass_patternがあればsubstring_bypass(run_analysis):
+def test_短辺の1_3の帯はbypass_patternがあればsubstring_bypassで帯1本(run_analysis):
     scene = make_scene().heat_rect(0, 1, 1, 0.0, 0.0, 1.0, 1 / 3, 6.0)  # 長辺方向に伸び、短辺の 1/3 の帯
+
+    result, _ = run_analysis(scene, module=FULL_CELL_MODULE)
+
+    [a] = result.anomalies  # 両方の判定で見つかるが、基準温度からの判定の1件だけを出す
+    assert a.anomaly_type == "substring_bypass"
+    assert a.detection == "baseline"
+    assert a.active_bands == 1
+    assert a.measure == "region_mean"
+    assert a.delta_t == pytest.approx(6.0, abs=0.5)
+    assert a.area_ratio == pytest.approx(1 / 3, abs=0.05)
+    assert a.shape["bypass_match"]["active_bands"] == 1
+    assert a.shape["bypass_match"]["regions"][0]["checks"] == {"area_ratio": True, "spans_panel": True, "band_width": True}
+
+
+def test_ΔTが小さく基準温度からの判定に届かない帯は局所的な判定で見つける(run_analysis):
+    scene = make_scene().heat_rect(0, 1, 1, 0.0, 0.0, 1.0, 1 / 3, 3.0)  # パネル平均の ΔT は 1.0℃ < mild 1.5℃
 
     result, _ = run_analysis(scene, module=FULL_CELL_MODULE)
 
     [a] = result.anomalies
     assert a.anomaly_type == "substring_bypass"
-    assert a.measure == "region_mean"
-    assert a.delta_t == pytest.approx(6.0, abs=0.5)
-    assert a.area_ratio == pytest.approx(1 / 3, abs=0.05)
-    assert a.shape["bypass_match"]["checks"] == {"area_ratio": True, "spans_panel": True, "band_width": True}
+    assert a.detection == "local"
+    assert a.active_bands == 1
 
 
 def test_モジュール構成が未登録なら帯でもpartial_module(run_analysis):
@@ -91,7 +107,7 @@ def test_向きの違う帯はbypass_patternに一致せずpartial_module(run_an
     result, _ = run_analysis(scene, module=FULL_CELL_MODULE)
 
     assert anomaly_types(result) == ["partial_module"]
-    assert result.anomalies[0].shape["bypass_match"]["checks"]["spans_panel"] is False
+    assert result.anomalies[0].shape["bypass_match"]["regions"][0]["checks"]["spans_panel"] is False
 
 
 def test_モジュール全体が2度高いとmodule_wideで面積比は0_8以上(run_analysis):
@@ -107,12 +123,15 @@ def test_モジュール全体が2度高いとmodule_wideで面積比は0_8以�
     assert a.shape["area_ratio_basis"] == "baseline"
 
 
-def test_module_wideに該当したパネルはパネル内の高温領域を判定しない(run_analysis):
+def test_module_wideのパネルの中のホットスポットは別々に出力する(run_analysis):
     scene = make_scene().heat_panel(0, 2, 3, 3.0).heat_rect(0, 2, 3, 0.4, 0.4, 0.5, 0.6, 10.0)
 
     result, _ = run_analysis(scene)
 
-    assert anomaly_types(result) == ["module_wide"]
+    assert anomaly_types(result) == ["module_wide", "hotspot"]
+    module_wide, hotspot = result.anomalies
+    assert module_wide.detection == "baseline" and hotspot.detection == "local"
+    assert hotspot.delta_t == pytest.approx(13.0, abs=1.0), "ΔT は基準温度から測る"
 
 
 def test_同じ行で連続する4枚はpanel_row_groupになる(run_analysis):
@@ -248,14 +267,66 @@ def test_異常のbboxはパネル内の高温領域の位置を指す(run_analy
     assert bbox.x2 == pytest.approx((x + 36) / 640, abs=0.003)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="仕様のすき間（既知の問題 O）: パネルの 50〜80% が温まると module_wide にならず、"
-    "パネル中央値が高温側になるため高温領域も見つからない。補う判定の追加はユーザーの確認待ち",
-)
-def test_パネルの2_3が温まった場合も検出する(run_analysis):
+def test_パネルの2_3が温まった場合は基準温度からの判定でsubstring_bypassの帯2本(run_analysis):
+    # 既知の問題 O（Phase 3 では検出できなかった）。パネル自身の中央値が高温側になり、局所的な判定では見つからない
     scene = make_scene().heat_rect(0, 1, 1, 0.0, 0.0, 1.0, 2 / 3, 6.0)
 
     result, _ = run_analysis(scene, module=FULL_CELL_MODULE)
 
-    assert result.anomalies != []
+    [a] = result.anomalies
+    assert a.anomaly_type == "substring_bypass"
+    assert a.detection == "baseline"
+    assert a.active_bands == 2
+    assert a.area_ratio == pytest.approx(2 / 3, abs=0.05)
+    assert a.delta_t == pytest.approx(6.0, abs=0.5)
+
+
+def test_2_3の帯の中にホットスポットがあれば別々に出力する(run_analysis):
+    scene = make_scene().heat_rect(0, 1, 1, 0.0, 0.0, 1.0, 2 / 3, 6.0).heat_rect(0, 1, 1, 0.4, 0.17, 0.5, 0.33, 10.0)
+
+    result, _ = run_analysis(scene, module=FULL_CELL_MODULE)
+
+    assert anomaly_types(result) == ["substring_bypass", "hotspot"]
+    band, hotspot = result.anomalies
+    assert (band.detection, band.active_bands) == ("baseline", 2)
+    assert hotspot.detection == "local"
+    assert hotspot.active_bands is None
+    assert hotspot.delta_t == pytest.approx(16.0, abs=1.0), "ΔT は基準温度から測る（帯 +6℃ + ホットスポット +10℃）"
+
+
+def test_離れた2本の帯も合計2本のsubstring_bypass(run_analysis):
+    scene = make_scene().heat_rect(0, 1, 1, 0.0, 0.0, 1.0, 1 / 3, 6.0).heat_rect(0, 1, 1, 0.0, 2 / 3, 1.0, 1.0, 6.0)
+
+    result, _ = run_analysis(scene, module=FULL_CELL_MODULE)
+
+    [a] = result.anomalies
+    assert (a.anomaly_type, a.detection, a.active_bands) == ("substring_bypass", "baseline", 2)
+    assert a.shape["regions"] == 2
+
+
+def test_パネルの2_3が温まってもモジュール構成が未登録ならpartial_module(run_analysis):
+    scene = make_scene().heat_rect(0, 1, 1, 0.0, 0.0, 1.0, 2 / 3, 6.0)
+
+    result, _ = run_analysis(scene, module={})
+
+    [a] = result.anomalies
+    assert (a.anomaly_type, a.detection, a.active_bands) == ("partial_module", "baseline", None)
+
+
+def test_帯でない大きな発熱は基準温度からの判定でpartial_module(run_analysis):
+    scene = make_scene().heat_rect(0, 1, 1, 0.0, 0.0, 0.7, 0.9, 5.0)  # パネルの 63%、帯の形ではない
+
+    result, _ = run_analysis(scene, module=FULL_CELL_MODULE)
+
+    [a] = result.anomalies
+    assert (a.anomaly_type, a.detection) == ("partial_module", "baseline")
+
+
+def test_高温領域の最小画素数より小さい領域は検出しない(run_analysis, params):
+    scene = make_scene().heat_pixels(0, 1, 1, 30, 18, 2, 20.0)  # 2×2 = 4 画素
+
+    default_result, _ = run_analysis(scene)
+    strict_result, _ = run_analysis(scene, analyzer_params=replace(params, min_region_pixels=5))
+
+    assert anomaly_types(default_result) == ["hotspot"], "既定値（1画素）では検出する"
+    assert strict_result.anomalies == []
