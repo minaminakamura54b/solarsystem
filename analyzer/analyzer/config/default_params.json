@@ -1,9 +1,10 @@
 {
-  "_comment": "ルールセット（Rails の rule_sets.detection_params）に含まれない解析パラメータ。値を変えたら analyzer_version の見直しを検討すること",
+  "_comment": "ルールセット（Rails の rule_sets.detection_params）に含まれない解析パラメータ。値を変えたら analyzer_version の見直しを検討すること。min_region_pixels（高温領域の最小画素数）は実画像を見てから調整する",
   "hotspot_max_area_ratio": 0.10,
   "hotspot_max_aspect": 3.0,
   "module_wide_min_area_ratio": 0.80,
   "glare_max_area_ratio": 0.003,
+  "min_region_pixels": 1,
   "edge_margin_px": 1,
   "edge_min_inside_ratio": 0.70,
   "segmenter_min_panels": 4,
