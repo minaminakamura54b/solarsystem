@@ -39,6 +39,11 @@ class InspectionImage < ApplicationRecord
     preview.attached? ? preview : thermal
   end
 
+  # ブラウザで表示できる画像があるか（.npy はプレビューが無ければ表示できない）
+  def displayable?
+    preview.attached? || (thermal.attached? && !npy_thermal?)
+  end
+
   # 画像のピクセルサイズ（グリッド入力画面で使う）
   def pixel_size
     [ width || raw_analysis&.dig("image", "width"), height || raw_analysis&.dig("image", "height") ]

@@ -59,6 +59,10 @@ module InspectionsHelper
     }[inspection.review_reason]
   end
 
+  def anomaly_severity_label(severity)
+    { "mild" => "軽微", "warning" => "注意", "critical" => "重大" }.fetch(severity.to_s, "基準未満")
+  end
+
   def quality_check_icon(result)
     { "ok" => "✓", "warning" => "△", "rejected" => "✕" }.fetch(result, "?")
   end

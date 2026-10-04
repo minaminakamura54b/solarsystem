@@ -33,6 +33,48 @@ class InspectionImagesController < ApplicationController
     redirect_to inspection_path(@inspection), alert: e.message
   end
 
+  # グリッド入力画面
+  def grid
+    images = @inspection.inspection_images.to_a
+    position = images.index(@image)
+    @previous_image = position.positive? ? images[position - 1] : nil
+    @next_image = images[position + 1]
+    @templates = @inspection.grid_templates.order(:created_at)
+  end
+
+  # グリッドを保存し、品質チェックに合格していれば解析ジョブを登録する
+  def grids
+    grids = InspectionImage.normalize_grids(JSON.parse(params.require(:panel_grids)))
+    @image.update!(panel_grids: grids)
+    if !@image.ready_for_analysis?
+      notice = "グリッドを保存しました（品質チェックに合格していないため、解析はしません）"
+    elsif grids.empty?
+      @image.update!(analysis_status: "needs_review", review_reason: "grid_required")
+      notice = "グリッドを削除しました"
+    else
+      @image.update!(analysis_status: "pending", review_reason: nil, error_message: nil)
+      AnalyzeInspectionImageJob.perform_later(@image.id)
+      notice = "グリッド #{grids.size} 個を保存し、解析を始めました"
+    end
+    @inspection.refresh_status!
+    redirect_to grid_inspection_inspection_image_path(@inspection, @image), notice: notice
+  rescue JSON::ParserError, ArgumentError, ActionController::ParameterMissing => e
+    redirect_to grid_inspection_inspection_image_path(@inspection, @image), alert: "グリッドを保存できませんでした: #{e.message}"
+  end
+
+  # 未確定の異常を作り直して解析し直す（確定済み＝locked の異常は残る）。
+  # 判定基準の mild を下げたときに新しい候補を出すには、再判定ではなく再解析が必要
+  def reanalyze
+    if @image.ready_for_analysis? && @image.panel_grids.present?
+      @image.update!(analysis_status: "pending", review_reason: nil, error_message: nil)
+      AnalyzeInspectionImageJob.perform_later(@image.id)
+      @inspection.refresh_status!
+      redirect_to inspection_path(@inspection, anchor: "image_#{@image.id}"), notice: "画像 #{@image.sequence} の再解析を始めました"
+    else
+      redirect_to inspection_path(@inspection, anchor: "image_#{@image.id}"), alert: "品質チェックに合格し、グリッドを指定した画像だけ再解析できます"
+    end
+  end
+
   private
 
   def require_site
