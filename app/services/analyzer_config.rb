@@ -1,6 +1,7 @@
 # config/analyzer.yml の読み込み
 class AnalyzerConfig
-  attr_reader :command, :working_dir, :timeout_seconds, :schema_version, :stale_after_minutes, :template_match
+  attr_reader :command, :working_dir, :timeout_seconds, :schema_version, :stale_after_minutes, :template_match,
+              :locked_overlap_iou
 
   def self.current
     new(Rails.application.config_for(:analyzer))
@@ -15,6 +16,7 @@ class AnalyzerConfig
     @stale_after_minutes = values.fetch(:stale_after_minutes).to_i
     @template_match = values.fetch(:template_match).to_h.transform_keys(&:to_s).transform_values(&:to_f)
     @allow_npy_thermal = values.fetch(:allow_npy_thermal, false)
+    @locked_overlap_iou = values.fetch(:locked_overlap_iou, 0.5).to_f
   end
 
   def allow_npy_thermal?

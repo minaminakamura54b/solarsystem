@@ -69,12 +69,61 @@ class AnalyzeInspectionImageJobTest < ActiveSupport::TestCase
 
   test "再解析では未確定の異常を作り直し、確定済み（locked）は残す" do
     with_fake_analyzer(analyze: analyzer_result(output: analyzer_output)) { AnalyzeInspectionImageJob.perform_now(@image.id) }
-    confirmed = @image.anomalies.sole.tap { |a| a.update!(locked: true, review_status: "confirmed") }
-    with_fake_analyzer(analyze: analyzer_result(output: analyzer_output)) { AnalyzeInspectionImageJob.perform_now(@image.id) }
+    pending_id = @image.anomalies.sole.id
     with_fake_analyzer(analyze: analyzer_result(output: analyzer_output)) { AnalyzeInspectionImageJob.perform_now(@image.id) }
 
-    assert_equal 2, @image.anomalies.count, "確定済み1件 + 新しい候補1件"
-    assert confirmed.reload.locked?
+    assert_not Anomaly.exists?(pending_id), "未確定の候補は作り直す"
+    assert_equal 1, @image.anomalies.count
+  end
+
+  test "確定済みの異常と位置が重なる候補（IoU 0.5 以上）は作らない" do
+    with_fake_analyzer(analyze: analyzer_result(output: analyzer_output)) { AnalyzeInspectionImageJob.perform_now(@image.id) }
+    confirmed = @image.anomalies.sole.tap { |a| a.update!(locked: true, review_status: "confirmed") }
+    shifted = analyzer_anomaly("bbox" => { "x1" => 0.301, "y1" => 0.401, "x2" => 0.321, "y2" => 0.431 }) # ほぼ同じ位置
+    elsewhere = analyzer_anomaly("panel_index" => 9, "bbox" => { "x1" => 0.6, "y1" => 0.4, "x2" => 0.62, "y2" => 0.43 })
+
+    with_fake_analyzer(analyze: analyzer_result(output: analyzer_output(anomalies: [ shifted, elsewhere ]))) do
+      AnalyzeInspectionImageJob.perform_now(@image.id)
+    end
+
+    assert_equal [ confirmed.id ], @image.anomalies.where(locked: true).pluck(:id)
+    assert_equal [ 9 ], @image.anomalies.where(locked: false).pluck(:panel_index_in_image), "重ならない候補は作る"
+  end
+
+  test "却下済み・位置を修正した異常とも、修正後の位置で重なりを判定する" do
+    @image.anomalies.create!(inspection: @inspection, anomaly_type: "hotspot", locked: true, review_status: "corrected",
+                             bbox: { "x1" => 0.0, "y1" => 0.0, "x2" => 0.01, "y2" => 0.01 },
+                             final_bbox: { "x1" => 0.3, "y1" => 0.4, "x2" => 0.32, "y2" => 0.43 })
+    @image.anomalies.create!(inspection: @inspection, anomaly_type: "hotspot", locked: true, review_status: "rejected",
+                             rejection_reason: "glare", bbox: { "x1" => 0.6, "y1" => 0.4, "x2" => 0.62, "y2" => 0.43 })
+    candidates = [ analyzer_anomaly, analyzer_anomaly("panel_index" => 9, "bbox" => { "x1" => 0.6, "y1" => 0.4, "x2" => 0.62, "y2" => 0.43 }) ]
+
+    with_fake_analyzer(analyze: analyzer_result(output: analyzer_output(anomalies: candidates))) do
+      AnalyzeInspectionImageJob.perform_now(@image.id)
+    end
+
+    assert_equal 0, @image.anomalies.where(locked: false).count
+  end
+
+  test "確定済みの群とパネルが重なる群は作らない" do
+    @image.anomaly_groups.create!(inspection: @inspection, group_type: "panel_row_group", panel_count: 3,
+                                  panel_indices: [ 1, 2, 3 ], locked: true, review_status: "confirmed")
+    groups = [ { "type" => "panel_row_group", "grid_index" => 0, "row" => 0, "panel_indices" => [ 2, 3, 4 ],
+                 "measure" => "panel_mean", "delta_t" => 3.1, "normalized_delta_t" => 3.9, "threshold_basis" => "normalized" } ]
+
+    with_fake_analyzer(analyze: analyzer_result(output: analyzer_output(anomalies: [], groups: groups))) do
+      AnalyzeInspectionImageJob.perform_now(@image.id)
+    end
+
+    assert_equal 1, @image.anomaly_groups.count
+  end
+
+  test "証拠レベルは、RGB が添付されていても検出時点では C" do
+    @image.rgb.attach(io: file_fixture("rgb_V.jpg").open, filename: "rgb_V.jpg")
+
+    with_fake_analyzer(analyze: analyzer_result(output: analyzer_output)) { AnalyzeInspectionImageJob.perform_now(@image.id) }
+
+    assert_equal "C", @image.anomalies.sole.evidence_level
   end
 
   test "グリッドが無ければ解析せず needs_review（grid_required）" do

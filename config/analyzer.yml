@@ -14,6 +14,9 @@ shared:
     altitude_m: 2.0
     gimbal_pitch_deg: 3.0
     gimbal_yaw_deg: 5.0
+  # 再解析で作り直した候補が、人が判断した異常（確定・修正・却下・手動追加 = locked）と
+  # 同じ画像の中で bbox の IoU がこの値以上で重なる場合は、候補を作らない（種類は問わない。2026-10-15 ユーザー承認）
+  locked_overlap_iou: 0.5
   # 開発・テスト用: .npy（合成の温度行列）をサーモ画像として登録できるか。本番では false
   allow_npy_thermal: false
 

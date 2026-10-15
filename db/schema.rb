@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_04_145231) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_15_071138) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -107,6 +107,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_04_145231) do
     t.datetime "updated_at", null: false
     t.string "detection"
     t.integer "active_bands"
+    t.jsonb "selected_causes", default: [], null: false
+    t.string "rejection_reason"
     t.index ["anomaly_group_id"], name: "index_anomalies_on_anomaly_group_id"
     t.index ["inspection_id"], name: "index_anomalies_on_inspection_id"
     t.index ["inspection_image_id"], name: "index_anomalies_on_inspection_image_id"
@@ -135,6 +137,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_04_145231) do
     t.text "loss_basis"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "reviewed_at"
+    t.text "reviewer_note"
+    t.string "rejection_reason"
     t.index ["inspection_id"], name: "index_anomaly_groups_on_inspection_id"
     t.index ["inspection_image_id"], name: "index_anomaly_groups_on_inspection_image_id"
     t.index ["rule_set_id"], name: "index_anomaly_groups_on_rule_set_id"
