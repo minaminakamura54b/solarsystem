@@ -47,6 +47,8 @@ bin/rails dev:synthetic_inspection   # 開発用: 合成シーン（.npy）の�
 
 各タスクの完了時に `bin/rails test`、`bin/rubocop`、`bin/brakeman`（Python を変更したら `pytest` も）を実行し、結果を報告する。
 
+**コミット・push 前のチェックは、パイプを使わずに実行するか、`set -o pipefail` を付けて実行する。** `bin/rubocop | tail -3 && git commit` のように書くと、終了コードが最後の `tail` のものになり、失敗を見逃す（Phase 4 で rubocop の指摘を見逃してコミットした）。終了コードを確かめるときは `bin/rubocop; echo "exit=$?"` のように、コマンドの直後に `$?` を見る。
+
 ## 技術スタックと注意点
 
 - Rails 8.1 / Ruby 3.3.10 / PostgreSQL / Propshaft / importmap / Turbo / Stimulus
