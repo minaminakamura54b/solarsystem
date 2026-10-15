@@ -1,11 +1,12 @@
 # 確定した異常・群の所見を Claude に書かせる（docs/IMPROVEMENT_PLAN.md Phase 6）。
 # - 入力は保存済みの数値・種類などの構造化データだけ（画像は送らない。2026-10-15 ユーザー承認）
+# - 確定済みの重大度は、ルールで確定した事実として入力に含める（v2。推奨対応の緊急度を重大度と整合させるため。ユーザー指示）
 # - 出力は固定スキーマ（structured outputs）。severity や正常/異常の判断はスキーマに無く、返ってきても保存しない
 # - 書き込むのは所見の列だけ。種類・重大度・状態・パネルなど、判定と人の確認の結果には触れない
 # - 入力（と prompt_version）が前回と同じなら作り直さない（force: true の「所見を作り直す」は除く）
 # - 失敗したらエラーを記録する。入力が変わっていた場合は、古い所見を消す（今のデータと合わない所見を残さない）
 class AnomalyExplainer
-  PROMPT_VERSION = "anomaly_explainer_v1".freeze
+  PROMPT_VERSION = "anomaly_explainer_v2".freeze
   PROMPT_PATH = Rails.root.join("app/prompts/#{PROMPT_VERSION}.txt")
   RESULT_KEYS = %w[cause_candidates reasoning additional_checks recommended_action report_text].freeze
 
@@ -41,6 +42,8 @@ class AnomalyExplainer
   }.freeze
   FLAG_LABELS = { "glare_suspect" => "グレア（反射）の疑い", "unnormalized" => "未正規化", "edge_adjacent" => "パネル端に接する" }.freeze
   CELL_LAYOUTS = { "full_cell" => "フルセル", "half_cut" => "ハーフカット", "other" => "その他" }.freeze
+  SEVERITY_LABELS = { "mild" => "軽微", "warning" => "注意", "critical" => "重大" }.freeze
+  SEVERITY_SCALE = "3 段階: 軽微 < 注意 < 重大".freeze
   EVIDENCE_LABELS = { "A" => "A（サーモ＋RGB＋電気測定）", "B" => "B（サーモ＋RGB）", "C" => "C（サーモのみ）" }.freeze
 
   Error = Class.new(StandardError)
@@ -121,6 +124,7 @@ class AnomalyExplainer
     [
       "種類: #{type}（#{RuleSetsHelper::ANOMALY_TYPE_LABELS.fetch(type, type)}#{bands}。#{TYPE_NOTES.fetch(type, '-')}）",
       ("人が修正する前の種類: #{anomaly.anomaly_type}" if anomaly.final_anomaly_type.present?),
+      severity_line(anomaly.effective_severity),
       ("検出: レビューで人が追加した見逃し（温度の数値なし）" if anomaly.detection == "manual"),
       delta_line(anomaly),
       ("面積比: #{format_number(anomaly.area_ratio)}" if anomaly.area_ratio),
@@ -139,6 +143,7 @@ class AnomalyExplainer
     [
       "種類: #{group.group_type}（#{RuleSetsHelper::ANOMALY_TYPE_LABELS.fetch(group.group_type, group.group_type)}。#{TYPE_NOTES.fetch(group.group_type, '-')}）",
       "パネル数: #{group.panel_count}",
+      severity_line(group.severity),
       delta_line(group, note: "構成パネルの中央値"),
       irradiance_line(group.inspection_image),
       module_line(group.inspection.site),
@@ -147,6 +152,10 @@ class AnomalyExplainer
       "パネル: #{members.filter_map { |m| m.panel&.number }.uniq.join('、').presence || '未割り当て'}",
       "フラグ: #{members.flat_map { |m| Array(m.flags) }.uniq.map { |f| FLAG_LABELS.fetch(f, f) }.join('、').presence || 'なし'}"
     ]
+  end
+
+  def severity_line(severity)
+    "重大度（ルールで確定・人が確認済み。変更しない）: #{SEVERITY_LABELS.fetch(severity.to_s, '不明')}（#{SEVERITY_SCALE}）"
   end
 
   def delta_line(record, note: nil)

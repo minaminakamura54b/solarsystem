@@ -27,7 +27,7 @@ class InspectionSummaryWriterTest < ActiveSupport::TestCase
     assert_equal "確定した熱異常は 1 件でした。", @inspection.summary_text
     assert_equal [ "重大の異常のパネルを電気測定で確認する" ], @inspection.summary_priority_actions
     assert_equal [ "除外した画像の撮り直し" ], @inspection.summary_additional_checks
-    assert_equal "inspection_summary_v1", @inspection.summary_prompt_version
+    assert_equal "inspection_summary_v2", @inspection.summary_prompt_version
     assert_equal [ "completed", "critical" ], [ @inspection.analysis_status, @inspection.severity ]
   end
 
@@ -40,7 +40,10 @@ class InspectionSummaryWriterTest < ActiveSupport::TestCase
     assert_includes input, "画像: 判定に使った 1 枚 / 除外した 1 枚"
     assert_includes input, "日射量: 800〜800 W/m²（POA 1 枚）"
     assert_includes input, "気温 21.5〜21.5℃"
-    assert_includes input, "点検全体の重要度（人が確認済み）: 重大"
+    assert_includes input, "点検全体の重要度（ルールで確定・人が確認済み。変更しない）: 重大"
+    assert_includes input, "重大度の段階: 3 段階: 軽微 < 注意 < 重大"
+    assert_includes request[:system_], "入力の重大度と重要度は、ルールで確定した事実として渡します"
+    assert_includes request[:system_], "各対応の緊急度は対象の異常の重大度と整合させる"
     assert_includes input, "確定した異常: 1 件"
     assert_includes input, "- ホットスポット / 重大度 重大 / ΔT 25.1℃ / パネル 未割り当て / 証拠レベル C"
     assert_includes input, "未確定のまま残った候補: 1 件（重要度に含めていない）"
@@ -56,7 +59,7 @@ class InspectionSummaryWriterTest < ActiveSupport::TestCase
     write(client)
 
     input = client.requests.first[:messages].first[:content]
-    assert_includes input, "点検全体の重要度（人が確認済み）: 正常（確定した異常なし）"
+    assert_includes input, "点検全体の重要度（ルールで確定・人が確認済み。変更しない）: 正常（確定した異常なし）"
     assert_includes input, "確定した異常: 0 件"
     assert_not_includes input, "異常の一覧"
   end
