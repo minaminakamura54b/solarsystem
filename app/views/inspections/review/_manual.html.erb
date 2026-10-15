@@ -1,0 +1,16 @@
+<details class="card p-4" id="manual">
+  <summary class="form-label" style="cursor:pointer;">見逃しを追加</summary>
+  <%= form_with url: inspection_anomalies_path(image.inspection), class: "space-y-2 mt-2" do %>
+    <%= hidden_field_tag :image_id, image.id %>
+    <%= hidden_field_tag :bbox, "", id: "manual_bbox" %>
+    <div class="flex flex-wrap gap-2 items-center">
+      <button type="button" class="btn btn-sm btn-secondary" data-action="review#startDrawing" data-input-id="manual_bbox">画像の上で範囲を指定</button>
+      <%= select_tag :anomaly_type, options_for_select(Anomaly::ANOMALY_TYPES.map { |t| [ anomaly_type_label(t), t ] }), class: "form-select", style: "width:auto; font-size:0.75rem;" %>
+      <%= select_tag :severity, options_for_select([ [ "軽微", "mild" ], [ "注意", "warning" ], [ "重大", "critical" ] ]), prompt: "重大度", class: "form-select", style: "width:auto; font-size:0.75rem;" %>
+      <%= number_field_tag :panel_index, nil, min: 0, class: "form-input", placeholder: "パネル番号（任意）", style: "width:9rem; font-size:0.75rem;" %>
+    </div>
+    <p class="text-xs text-gray-400">手動で追加した異常は温度の数値が無いため、重大度は人が選びます。追加すると確定扱いになります。</p>
+    <%= render "inspections/review/causes", anomaly: nil, image: image %>
+    <%= submit_tag "見逃しを追加", class: "btn btn-sm btn-primary" %>
+  <% end %>
+</details>

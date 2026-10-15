@@ -1,0 +1,20 @@
+<div class="card p-4 space-y-2" id="complete">
+  <p class="form-label">レビュー完了</p>
+  <% blockers = review.blockers %>
+  <% pending = review.pending_candidates %>
+  <% if blockers.any? %>
+    <% blockers.each do |b| %><p class="text-sm" style="color:#e24b4a;"><%= b %></p><% end %>
+  <% end %>
+  <% if pending.positive? %>
+    <p class="text-sm" style="color:#ef9f27;">未確定の候補が <%= pending %> 件残っています。残った候補は重要度に入れず、候補のまま残ります（報告書では別表）。</p>
+  <% end %>
+  <%= form_with url: complete_review_inspection_path(inspection), class: "space-y-1" do %>
+    <%= hidden_field_tag :image, image.sequence %>
+    <label class="text-sm block"><%= check_box_tag :all_images_checked, "1", false %> すべての画像を確認し、見逃しがないことを確認した（候補が0件でも必要）</label>
+    <% if pending.positive? %>
+      <label class="text-sm block"><%= check_box_tag :acknowledge_pending, "1", false %> 未確定の候補が残っていることを確認した</label>
+    <% end %>
+    <%= submit_tag "レビューを完了する", class: "btn btn-primary", disabled: blockers.any? %>
+  <% end %>
+  <p class="text-xs text-gray-400">完了すると点検の重要度を、確定・修正した異常の最大重大度で付けます（無ければ「正常」）。完了後に異常を変更すると、レビュー待ちに戻ります。</p>
+</div>

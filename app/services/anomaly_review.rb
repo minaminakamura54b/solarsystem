@@ -88,7 +88,7 @@ class AnomalyReview
     raise Error, "重大度を選んでください" unless Anomaly::SEVERITIES.include?(severity)
 
     normalized = Bbox.normalize(bbox)
-    raise Error, "位置（bbox）を画像の上で指定してください" unless normalized && Bbox.area(normalized).positive?
+    raise Error, "「画像の上で範囲を指定」を押して、異常の範囲を指定してください" unless normalized && Bbox.area(normalized).positive?
 
     anomaly = image.anomalies.create!(
       inspection: image.inspection, anomaly_type: anomaly_type, detection: "manual", bbox: normalized,

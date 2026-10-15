@@ -168,7 +168,7 @@
                   <span class="text-gray-400">-</span>
                 <% end %>
               </td>
-              <td><%= ins.completed? ? ins.anomaly_count : "-" %></td>
+              <td><%= ins.completed? ? ins.anomaly_total : "-" %></td>
               <td><%= link_to "詳細", inspection_path(ins), class: "text-xs text-blue-600" %></td>
             </tr>
           <% end %>

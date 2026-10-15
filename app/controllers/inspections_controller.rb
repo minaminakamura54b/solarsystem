@@ -1,6 +1,6 @@
 class InspectionsController < ApplicationController
   before_action :require_site
-  before_action :find_inspection, only: %i[show destroy rejudge]
+  before_action :find_inspection, only: %i[show destroy rejudge review complete_review]
 
   def index
     @inspections = current_site.inspections.recent.includes(:site, :inspection_images, image_attachment: :blob)
@@ -72,6 +72,35 @@ class InspectionsController < ApplicationController
       redirect_to inspection_path(@inspection),
         notice: "未確定の異常・群 #{count} 件を判定基準「#{rule_set.version}」で判定し直しました。確定済みのものは変わりません。" \
                 "mild を下げた場合、新しい候補を出すには画像の再解析が必要です"
+    end
+  end
+
+  # レビュー画面（画像ごと）。params[:image] は画像の番号（sequence）
+  def review
+    @images = @inspection.inspection_images.to_a
+    if @images.empty?
+      redirect_to inspection_path(@inspection), alert: "旧方式の点検はレビューできません"
+      return
+    end
+    @image = @images.find { |i| i.sequence == params[:image].to_i } || @images.first
+    @groups = @image.anomaly_groups.includes(:anomalies).order(:id)
+    @anomalies = @image.anomalies.includes(:panel).order(:panel_index_in_image, :id)
+    @panels = @inspection.site.panels.by_position
+    @review = InspectionReview.new(@inspection)
+  end
+
+  # レビュー完了。完了できなければ理由と警告を表示してレビュー画面に戻る
+  def complete_review
+    result = InspectionReview.new(@inspection).complete!(
+      all_images_checked: params[:all_images_checked] == "1", acknowledge_pending: params[:acknowledge_pending] == "1"
+    )
+    if result.completed?
+      notice = "レビューを完了しました（重要度: #{@inspection.reload.severity_label}）"
+      notice += "。#{result.warnings.join('。')}" if result.warnings.any?
+      redirect_to inspection_path(@inspection), notice: notice
+    else
+      redirect_to review_inspection_path(@inspection, image: params[:image], anchor: "complete"),
+                  alert: (result.warnings + result.errors).join("。")
     end
   end
 

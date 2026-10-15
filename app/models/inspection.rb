@@ -110,6 +110,14 @@ class Inspection < ApplicationRecord
     anomalies.candidates.countable.count + anomaly_groups.where(review_status: "pending").count
   end
 
+  # 異常の件数（旧方式は Claude の判定の件数。新方式は確定・修正した異常の件数で、群は1件として数える）
+  def anomaly_total
+    return anomaly_count if legacy?
+
+    anomalies.where(review_status: InspectionReview::CONFIRMED).countable.count +
+      anomaly_groups.where(review_status: InspectionReview::CONFIRMED).count
+  end
+
   # 候補の種類別・重大度別の件数（群の構成パネルは除き、群を1件として数える）
   def candidate_summary
     anomaly_counts = anomalies.candidates.countable.group(:anomaly_type, :severity).count
