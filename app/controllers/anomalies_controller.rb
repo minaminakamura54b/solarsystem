@@ -23,6 +23,7 @@ class AnomaliesController < ApplicationController
   def correct
     review do |r|
       r.correct!(final_anomaly_type: params[:final_anomaly_type], final_bbox: parse_bbox(params[:final_bbox]),
+                 final_severity: params[:final_severity],
                  rgb_checked: checked?(:rgb_checked), causes: params[:causes], note: params[:note])
     end
   end

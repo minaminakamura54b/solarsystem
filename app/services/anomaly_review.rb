@@ -24,8 +24,10 @@ class AnomalyReview
     review!("confirmed", rgb_checked: rgb_checked, causes: causes, note: note)
   end
 
-  # 種類・位置を修正して確定する。重大度は、判定時のルールセットで修正後の種類の閾値を使って付け直す
-  def correct!(final_anomaly_type:, final_bbox: nil, rgb_checked: false, causes: [], note: nil)
+  # 種類・位置を修正して確定する。重大度は、修正後の種類の ΔT の指標（measure）と同じ指標の値が保存されていれば
+  # 判定時のルールセットの閾値で付け直し、無ければ（指標が違う・手動追加で数値が無い）人が選ぶ（final_severity）。
+  # ΔT の指標は種類ごとに違う（region_max / region_mean / panel_mean）ため、別の指標の値で判定しない（2026-10-15 ユーザー指示）
+  def correct!(final_anomaly_type:, final_bbox: nil, final_severity: nil, rgb_checked: false, causes: [], note: nil)
     raise Error, "異常群は種類・位置を修正できません（群から外してから修正してください）" if group?
     raise Error, "種類が不正です" unless Anomaly::ANOMALY_TYPES.include?(final_anomaly_type)
 
@@ -34,7 +36,7 @@ class AnomalyReview
 
     @record.final_anomaly_type = final_anomaly_type
     @record.final_bbox = bbox if bbox
-    @record.final_severity = corrected_severity(final_anomaly_type)
+    @record.final_severity = corrected_severity(final_anomaly_type, final_severity.presence)
     review!("corrected", rgb_checked: rgb_checked, causes: causes, note: note)
   end
 
@@ -135,12 +137,19 @@ class AnomalyReview
     end
   end
 
-  # 判定時のルールセット（無ければ現在有効なもの）で、修正後の種類の閾値を使って重大度を付け直す
-  def corrected_severity(anomaly_type)
+  # 修正後の種類の重大度。保存されている ΔT の指標が修正後の種類の指標と同じなら、判定時のルールセット（無ければ
+  # 現在有効なもの）の閾値で付け直す。違えば人が選んだ重大度を使い、選ばれていなければエラー
+  def corrected_severity(anomaly_type, chosen)
     rule_set = @record.rule_set || RuleSet.active_set
     rule = rule_set&.rule_for(anomaly_type)
-    rule ? SeverityRuleEngine.new(rule_set).severity(rule, @record) : @record.severity
+    if rule && @record.measure.present? && rule.measure == @record.measure && @record.delta_t.present?
+      return SeverityRuleEngine.new(rule_set).severity(rule, @record)
+    end
+    return chosen if Anomaly::SEVERITIES.include?(chosen)
+
+    raise Error, "修正後の種類（#{RuleSetsHelper::ANOMALY_TYPE_LABELS.fetch(anomaly_type, anomaly_type)}）は ΔT の指標が保存されている値と違うため、重大度を選んでください"
   end
+
 
   def reopen_inspection
     InspectionReview.new(@record.inspection).reopen!

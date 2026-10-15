@@ -42,6 +42,32 @@ class AnomalyReviewTest < ActiveSupport::TestCase
     assert_equal "B", checked.reload.evidence_level
   end
 
+  test "指標が違う種類（region_max → region_mean）に修正するときは、人が選んだ重大度を使い、選ばなければエラー" do
+    record = candidate(normalized_delta_t: 20.0, severity: "critical") # hotspot は region_max
+
+    assert_raises(AnomalyReview::Error) { AnomalyReview.new(record).correct!(final_anomaly_type: "partial_module") }
+    assert_equal "pending", record.reload.review_status
+
+    AnomalyReview.new(record).correct!(final_anomaly_type: "partial_module", final_severity: "warning")
+    assert_equal [ "corrected", "warning" ], [ record.reload.review_status, record.final_severity ]
+  end
+
+  test "指標が同じ種類に修正するときは、人が選んだ重大度ではなく判定基準で付け直す" do
+    record = candidate(normalized_delta_t: 4.0, severity: "mild")
+
+    AnomalyReview.new(record).correct!(final_anomaly_type: "multi_hotspot", final_severity: "critical")
+
+    assert_equal "warning", record.reload.final_severity, "multi_hotspot（1/2.5/7.5）の閾値で付け直す"
+  end
+
+  test "手動追加（数値なし）の異常の種類を修正するときは、人が重大度を選ぶ" do
+    manual = AnomalyReview.add_manual!(@image, anomaly_type: "hotspot", severity: "mild", bbox: { "x1" => 0.5, "y1" => 0.5, "x2" => 0.52, "y2" => 0.53 })
+
+    AnomalyReview.new(manual).correct!(final_anomaly_type: "module_wide", final_severity: "critical")
+
+    assert_equal "critical", manual.reload.final_severity
+  end
+
   test "種類・位置を修正すると final_* に保存し、重大度は判定時のルールセットで修正後の種類の閾値で付け直す" do
     record = candidate(normalized_delta_t: 4.0, severity: "mild") # hotspot（2/5/15）では mild
 
