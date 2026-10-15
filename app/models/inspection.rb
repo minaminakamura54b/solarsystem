@@ -9,7 +9,7 @@ class Inspection < ApplicationRecord
   has_many :anomaly_groups, dependent: :destroy
   has_many :anomalies, dependent: :destroy
 
-  SEVERITIES = %w[normal warning critical].freeze
+  SEVERITIES = %w[normal mild warning critical].freeze
   ANALYSIS_STATUSES = %w[pending analyzing completed needs_review failed].freeze
 
   validates :conducted_at, presence: true
@@ -23,11 +23,11 @@ class Inspection < ApplicationRecord
   scope :recent, -> { order(conducted_at: :desc) }
 
   def severity_label
-    { "normal" => "正常", "warning" => "注意", "critical" => "重大" }.fetch(severity, "判定なし")
+    { "normal" => "正常", "mild" => "軽微", "warning" => "注意", "critical" => "重大" }.fetch(severity, "判定なし")
   end
 
   def severity_color_class
-    { "normal" => "badge-success", "warning" => "badge-warning", "critical" => "badge-error" }.fetch(severity, "badge-gray")
+    { "normal" => "badge-success", "mild" => "badge-info", "warning" => "badge-warning", "critical" => "badge-error" }.fetch(severity, "badge-gray")
   end
 
   def pending?
@@ -81,18 +81,23 @@ class Inspection < ApplicationRecord
   # すべての画像の解析が終わっても、人のレビューが終わるまでは completed にせず needs_review（review_pending）にする。
   # 候補が0件でも同じ（見逃しの手動追加があるため、人が画像を確認するまで「正常」にしない。2026-10-04 ユーザー承認）。
   # completed と重要度（確定済みの異常の最大重大度）は、Phase 5 の「レビュー完了」の操作で付ける
+  #
+  # レビュー完了（InspectionReview#complete!）した点検は、画像がすべて解析済みのままなら completed を保つ。
+  # 再解析などで画像のステータスが変わったら、重要度とレビュー完了を取り消してレビュー待ちに戻す
   def refresh_status!
     inspection_images.reload
     status = aggregated_status
+    return if status == "completed" && completed? && reviewed_at.present?
+
     reason =
       case status
       when "completed" then "review_pending"
       when "needs_review" then "images_need_review"
       end
     status = "needs_review" if status == "completed"
-    return if status == analysis_status && reason == review_reason
+    return if status == analysis_status && reason == review_reason && reviewed_at.nil?
 
-    update_columns(analysis_status: status, review_reason: reason, updated_at: Time.current)
+    update_columns(analysis_status: status, review_reason: reason, severity: nil, reviewed_at: nil, updated_at: Time.current)
   end
 
   # 品質チェックに合格し、グリッドの指定か解析を待っている画像の数
@@ -103,6 +108,14 @@ class Inspection < ApplicationRecord
   # 未確定の異常の候補の件数（群の構成パネルは群を1件として数える。docs/IMPROVEMENT_PLAN.md 4.4）
   def candidate_count
     anomalies.candidates.countable.count + anomaly_groups.where(review_status: "pending").count
+  end
+
+  # 異常の件数（旧方式は Claude の判定の件数。新方式は確定・修正した異常の件数で、群は1件として数える）
+  def anomaly_total
+    return anomaly_count if legacy?
+
+    anomalies.where(review_status: InspectionReview::CONFIRMED).countable.count +
+      anomaly_groups.where(review_status: InspectionReview::CONFIRMED).count
   end
 
   # 候補の種類別・重大度別の件数（群の構成パネルは除き、群を1件として数える）

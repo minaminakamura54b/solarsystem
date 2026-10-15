@@ -47,6 +47,8 @@ bin/rails dev:synthetic_inspection   # 開発用: 合成シーン（.npy）の�
 
 各タスクの完了時に `bin/rails test`、`bin/rubocop`、`bin/brakeman`（Python を変更したら `pytest` も）を実行し、結果を報告する。
 
+**コミット・push 前のチェックは、パイプを使わずに実行するか、`set -o pipefail` を付けて実行する。** `bin/rubocop | tail -3 && git commit` のように書くと、終了コードが最後の `tail` のものになり、失敗を見逃す（Phase 4 で rubocop の指摘を見逃してコミットした）。終了コードを確かめるときは `bin/rubocop; echo "exit=$?"` のように、コマンドの直後に `$?` を見る。
+
 ## 技術スタックと注意点
 
 - Rails 8.1 / Ruby 3.3.10 / PostgreSQL / Propshaft / importmap / Turbo / Stimulus
@@ -71,4 +73,6 @@ bin/rails dev:synthetic_inspection   # 開発用: 合成シーン（.npy）の�
 - `app/services/thermal_analyzer_client.rb` — 解析エンジンの呼び出し（タイムアウト・出力の検証）。設定は `config/analyzer.yml`
 - `app/jobs/analyze_inspection_image_job.rb` / `app/services/analysis_result_importer.rb` / `app/services/severity_rule_engine.rb` — 解析・異常の保存・重大度
 - `app/javascript/controllers/grid_editor_controller.js` — グリッド入力画面（canvas）
+- `app/services/anomaly_review.rb` / `app/services/inspection_review.rb` / `app/javascript/controllers/review_controller.js` — レビュー操作・レビュー完了・レビュー画面
+- `app/services/dataset_exporter.rb` — 学習データの書き出し（`bin/rails "dataset:export[OUT_DIR]"`。顧客の画像を含むのでリポジトリに書き出さない）
 - `docs/IMPROVEMENT_PLAN.md` — 改善指示書（仕様の正本）

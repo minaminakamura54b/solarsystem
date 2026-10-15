@@ -1,0 +1,70 @@
+<% content_for :title, "レビュー - 画像 #{@image.sequence}" %>
+<% position = @images.index(@image) %>
+<% prev_image = position.positive? ? @images[position - 1] : nil %>
+<% next_image = @images[position + 1] %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">✔ 異常候補のレビュー</h2>
+    <p class="text-sm text-gray-500 mt-1">
+      画像 <%= @image.sequence %> / <%= @images.size %>（<%= @image.thermal_filename %>）／ <%= image_status_label(@image) %>
+      ／ 点検の未確定の候補 <%= @inspection.candidate_count %> 件
+    </p>
+  </div>
+  <div class="flex gap-2">
+    <%= link_to "← 前の画像", review_inspection_path(@inspection, image: prev_image.sequence), class: "btn btn-secondary", id: "review-prev-link" if prev_image %>
+    <%= link_to "次の画像 →", review_inspection_path(@inspection, image: next_image.sequence), class: "btn btn-secondary", id: "review-next-link" if next_image %>
+    <%= link_to "点検に戻る", inspection_path(@inspection), class: "btn btn-secondary" %>
+  </div>
+</div>
+
+<div class="p-6 space-y-6" data-controller="review"
+     data-review-boxes-value="<%= (@groups.flat_map { |g| g.anomalies.map { |a| { id: "group_#{g.id}", bbox: a.effective_bbox } } } + @anomalies.map { |a| { id: "anomaly_#{a.id}", bbox: a.effective_bbox, status: a.review_status } }).to_json %>">
+  <p class="text-xs text-gray-400">
+    キーボード: <strong>j / k</strong> で候補を移動、<strong>c</strong> で確定、<strong>x</strong> で却下（理由を選んでから）。
+    「位置を描き直す」「範囲を指定」を押したあと、左の画像の上をドラッグして範囲を指定します。
+  </p>
+
+  <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+    <%# ── 画像 ── %>
+    <div class="lg:col-span-2 space-y-3">
+      <div class="card p-3">
+        <p class="form-label">サーモ画像</p>
+        <div style="position:relative; display:inline-block; max-width:100%;">
+          <% if @image.displayable? %>
+            <%= image_tag url_for(@image.display_image), data: { review_target: "image", action: "load->review#imageLoaded" },
+                  style: "display:block; max-width:100%; height:auto;", alt: "サーモ画像" %>
+          <% else %>
+            <div data-review-target="image" style="width:640px; max-width:100%; aspect-ratio:4/3; background:#222;"></div>
+          <% end %>
+          <canvas data-review-target="overlay" style="position:absolute; left:0; top:0;"
+                  data-action="mousedown->review#drawStart mousemove->review#drawMove mouseup->review#drawEnd"></canvas>
+        </div>
+        <p class="text-xs mt-1" style="color:#ef9f27;" data-review-target="message"></p>
+      </div>
+      <% if @image.rgb.attached? %>
+        <div class="card p-3">
+          <p class="form-label">RGB 画像（同時撮影）</p>
+          <%= image_tag url_for(@image.rgb), data: { review_target: "rgb", action: "load->review#imageLoaded" }, style: "display:block; max-width:100%; height:auto;", alt: "RGB 画像" %>
+          <p class="text-xs text-gray-400 mt-1">サーモと RGB の位置合わせは未設定（Phase S で決める）のため、切り出しは「おおよその位置」です。</p>
+        </div>
+      <% end %>
+    </div>
+
+    <%# ── 候補 ── %>
+    <div class="lg:col-span-3 space-y-3">
+      <% if @groups.empty? && @anomalies.empty? %>
+        <div class="card p-4 text-sm">この画像には異常の候補がありません。画像を確認し、見逃しがあれば下の「見逃しを追加」から追加してください。</div>
+      <% end %>
+      <% @groups.each do |group| %>
+        <%= render "inspections/review/group", group: group %>
+      <% end %>
+      <% @anomalies.each do |anomaly| %>
+        <%= render "inspections/review/anomaly", anomaly: anomaly, image: @image, panels: @panels %>
+      <% end %>
+      <%= render "inspections/review/manual", image: @image %>
+    </div>
+  </div>
+
+  <%= render "inspections/review/complete", inspection: @inspection, review: @review, image: @image %>
+</div>

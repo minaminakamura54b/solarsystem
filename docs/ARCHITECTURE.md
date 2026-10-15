@@ -1,6 +1,6 @@
 # ARCHITECTURE（現状）
 
-Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜4（ブランチ `phase-4`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
+Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜5（ブランチ `phase-5`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
 
 ---
 
@@ -44,6 +44,10 @@ Rails 8.1（Puma）
 | `/inspections/:id/images/:id` | `inspection_images` | RGB の手動添付・差し替え・削除、画像の除外・除外の取り消し、グリッド入力画面（`grid`）・グリッドの保存（`grids`）・再解析（`reanalyze`） |
 | `/inspections/:id/grid_templates` | `grid_templates` | グリッドテンプレートの保存・一括適用（`apply`） |
 | `/inspections/:id/rejudge` | `inspections#rejudge` | 未確定の異常・群を現在の判定基準で判定し直す |
+| `/inspections/:id/review` | `inspections#review` | レビュー画面（画像ごと。`?image=番号`）。候補の確定・修正・却下・手動追加、レビュー完了 |
+| `/inspections/:id/complete_review` | `inspections#complete_review` | レビュー完了（completed にして重要度を付ける） |
+| `/inspections/:id/anomalies` | `anomalies` | 見逃しの手動追加（create）、確定・修正・却下・パネルの割り当て・電気測定・群から外す |
+| `/inspections/:id/anomaly_groups/:id` | `anomaly_groups` | 群の確定・却下（構成パネルにも反映） |
 | `/inspections/:id/weather_readings` | `weather_readings` | 気象データ（時刻付き）の登録・削除 |
 | `/rule_sets` | `rule_sets` | 判定基準（閾値）の一覧・詳細・複製して作成・有効化。**編集・削除は無い** |
 | `/alerts` | `alerts` | アラート一覧、既読化（Turbo Stream）、一括既読 |
@@ -138,7 +142,36 @@ RuleSet ──< SeverityRule（閾値。Anomaly / AnomalyGroup が判定時の�
 
 **候補の件数**（`Inspection#candidate_count`）: 未確定の異常のうち群の構成パネルを除き、群を1件として数える（指示書 4.4）。
 
-**アラート**（`ConfirmedAnomalyAlert`）: 人が確定した critical の異常・群ごとに1件だけ。群の構成パネルごとには作らない。呼び出すのは Phase 5 のレビュー操作（Phase 4 ではまだどこからも呼ばれない）。
+**アラート**（`ConfirmedAnomalyAlert`）: 人が確定・修正した critical の異常・群ごとに1件だけ（修正後の重大度で判定）。群の構成パネルごとには作らない。レビュー操作（`AnomalyReview`）から呼ぶ。
+
+**再解析と人の判断**（`AnalysisResultImporter`）: 未確定の候補は作り直し、locked（確定・修正・却下・手動追加）の異常は残す。locked の異常と同じ画像で bbox の IoU が `locked_overlap_iou`（0.5）以上で重なる候補、locked の群とパネルが重なる群は作らない。証拠レベルは検出時点ではすべて C。
+
+#### 4.1.1 レビュー（Phase 5）
+
+```
+レビュー画面（inspections#review、review_controller.js）
+  画像ごとに候補（群 → 異常）を一覧。サーモ・RGB の切り出し（RGB は位置合わせ未設定のため「おおよその位置」）、
+  数値・判定に使った値（正規化ΔT / 生ΔT）・分類の根拠・フラグ・状態を表示
+  キーボード: j / k 移動、c 確定、x 却下（理由が未選択なら選択に案内）
+AnomalyReview（すべて locked にし、元の判定値は残す）
+  確定: 原因候補（selected_causes）、「RGB で確認した」なら証拠レベル B
+  修正: final_anomaly_type / final_bbox（画像の上でドラッグ）。final_severity は判定時のルールセットで修正後の種類の閾値
+  却下: 理由（グレア・影・汚れ・その他）必須
+  群: 群単位で確定・却下し構成パネルにも反映。群から特定のパネルを外せる
+  パネルの割り当て: 人がパネルを選ぶ（ロックしない。自動提案は未実装 → 既知の問題 R）
+  電気測定: 方法・結果・日付 → 証拠レベル A
+  見逃しの手動追加: 画像の上で範囲を指定、種類・重大度は人が選ぶ（detection manual、確定・locked）
+  確定・修正した critical → ConfirmedAnomalyAlert。完了済みの点検で操作したらレビュー待ちに戻す
+InspectionReview（レビュー完了。2026-10-15 ユーザー承認）
+  解析待ち・解析中・要確認・失敗の画像が残っていれば完了できない（除外するか解析を終える）
+  「すべての画像を確認し、見逃しがない」ことの確認が必須（候補0件でも）
+  未確定の候補が残っていれば警告し、確認のチェックがあるときだけ完了。残った候補は重要度に入れない
+  completed・重要度（確定・修正した異常・群の最大重大度。点検の重要度に mild を追加。無ければ normal）・reviewed_at
+  完了後に画像のステータスが変わる・レビュー操作をすると、重要度とレビュー完了を取り消してレビュー待ちに戻る
+学習データ（bin/rails "dataset:export[OUT_DIR]"、DatasetExporter）
+  解析済みで未確定の候補が残っていない画像だけ。確定・修正した異常を YOLO 形式（修正後の種類・位置）、
+  却下だけ・異常なしの画像は空のラベル（負例）。manifest.csv・labels_detail.csv。リポジトリ内（tmp/ 以外）には書き出さない
+```
 
 ### 4.3 解析エンジン（`analyzer/`）
 
@@ -184,13 +217,16 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 | L | 発電所の詳細画面（`sites/show`）のビューが無く、更新後の `site_path` へのリダイレクトでエラーになっていた | `SitesController#update` | **Phase 2 で最小限の修正**（更新後は発電所一覧に戻す）。詳細画面は未作成 |
 | N | 発電所フォームの `defined?(method)` が Ruby 組み込みの `method` メソッドを指し、**新規登録画面が開けなかった**（Phase 2 以前から） | `sites/_form.html.erb` | **Phase 2 で修正**（`local_assigns.fetch(:method, :post)`） |
 | O | 解析エンジンが、パネルの 50〜80% が温まったケースを検出できない（仕様のすき間） | `analyzer/analyzer/pipeline.py` | **Phase 3b で対応済み**（ユーザー承認: 基準温度からの判定を追加。指示書 5.6） |
+| R | レビューのパネルの割り当てで、`panel_grids` の `start_panel_ref` からの自動提案が未実装。`start_panel_ref` の形式が決まっておらず、登録済みのパネルがすべて仮配置のため | `AnomalyReview#assign_panel!` | 人がパネルを選ぶ割り当てだけ。形式と実配置の登録方法を決めてから実装（ユーザーの判断待ち） |
+| S | レビュー画面の RGB の切り出しは、サーモと同じ正規化座標の「おおよその位置」 | `review_controller.js` | Phase S でサーモと RGB の変換を決めてから対応 |
+| T | `csv` は Ruby 3.4 で標準の gem から外れる（Ruby 3.3.10 では警告のみ） | `app/services/dataset_exporter.rb` | Ruby 3.4 に上げるときに Gemfile へ追加（新しい gem の追加のため、そのとき確認） |
 | P | Dockerfile の `RUBY_VERSION` が 3.2.9 で、`.ruby-version`（3.3.10）と食い違っていた（Phase 0 以前から） | `Dockerfile` | **Phase 4 で修正**（3.3.10 に合わせた） |
 | Q | 解析エンジンの DJI Thermal SDK の呼び出しが未実装のため、実際の R-JPEG は `needs_review（sdk_unavailable）` になる | `analyzer/analyzer/thermal/dji_reader.py` | Phase S の後に実装（TODO） |
 | M | 温度データの有無はメタデータのタグによる仮判定。実際の R-JPEG でどのタグが出るかは未確認 | `config/image_quality.yml` の `radiometric_tags` | Phase S で実画像を確認して見直す。最終判定は Phase 3 の解析エンジン |
 
 ## 6. テスト
 
-- `bin/rails test`: 233件（Phase 4 時点）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 3件（グリッド入力画面の JS をヘッドレス Chrome で確認）
+- `bin/rails test`: 275件（Phase 5 時点）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
 - **本物の解析エンジンを呼ぶテスト**（`test/integration/analyzer_end_to_end_test.rb`）: `analyzer/scripts/make_dev_scenes.py` で合成シーン（.npy）を作り、Rails から `uv run python -m analyzer` を実行する。uv と `cd analyzer && uv sync` が必要（CI の test ジョブも uv を入れている）
 - 偽の解析エンジン: `AnalyzeInspectionImageJob.client` を `with_fake_analyzer` で差し替える（本番では常に `ThermalAnalyzerClient`）
 - 解析エンジン: `cd analyzer && uv run pytest`（60件）。合成の温度行列（`analyzer/tests/fixtures/make_synthetic.py`）だけを使う。CI の `analyzer-test` ジョブでも実行する

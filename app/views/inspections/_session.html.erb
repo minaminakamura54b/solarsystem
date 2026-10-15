@@ -34,11 +34,23 @@
       </div>
       <div>
         <p style="font-size:0.65rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em;">重要度</p>
-        <p style="font-size:0.9rem; color:var(--gray-400);">判定なし（レビューで確定した異常から付けます）</p>
+        <% if @inspection.completed? && @inspection.severity %>
+          <span class="badge <%= @inspection.severity_color_class %>"><%= @inspection.severity_label %></span>
+        <% else %>
+          <p style="font-size:0.9rem; color:var(--gray-400);">判定なし（レビューで確定した異常から付けます）</p>
+        <% end %>
       </div>
     </div>
     <% if (review_message = inspection_review_message(@inspection)) %>
       <p style="font-size:0.8rem; color:#ef9f27; margin-top:0.75rem;"><%= review_message %></p>
+    <% end %>
+    <% if @inspection.inspection_images.any?(&:completed?) %>
+      <div class="mt-3">
+        <%= link_to "異常候補をレビューする（未確定 #{@inspection.candidate_count} 件）", review_inspection_path(@inspection), class: "btn btn-primary" %>
+        <% if @inspection.completed? %>
+          <span class="text-xs text-gray-400 ml-2">レビュー完了: <%= @inspection.reviewed_at.strftime("%Y/%m/%d %H:%M") %></span>
+        <% end %>
+      </div>
     <% end %>
     <% if @inspection.candidate_count.positive? %>
       <div class="mt-3 flex items-center gap-3">

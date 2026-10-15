@@ -6,7 +6,27 @@ Rails.application.routes.draw do
 
   resources :sites
   resources :inspections, only: %i[index show new create destroy] do
-    member { post :rejudge }
+    member do
+      post :rejudge
+      get :review
+      post :complete_review
+    end
+    resources :anomalies, only: %i[create] do
+      member do
+        patch :confirm
+        patch :correct
+        patch :reject
+        patch :assign_panel
+        patch :electrical
+        patch :remove_from_group
+      end
+    end
+    resources :anomaly_groups, only: [] do
+      member do
+        patch :confirm
+        patch :reject
+      end
+    end
     resources :inspection_images, only: %i[update], path: "images" do
       member do
         patch :exclude

@@ -1,0 +1,9 @@
+<div class="flex flex-wrap gap-x-2 text-xs">
+  <% AnomalyReview::CAUSES.each do |key, label| %>
+    <label><%= check_box_tag "causes[]", key, anomaly&.selected_causes&.include?(key), id: nil %> <%= label %></label>
+  <% end %>
+</div>
+<% if image.rgb.attached? %>
+  <label class="text-xs"><%= check_box_tag :rgb_checked, "1", false, id: nil %> RGB 画像で確認した（証拠レベル B）</label>
+<% end %>
+<%= text_field_tag :note, nil, class: "form-input", placeholder: "メモ（任意）", style: "font-size:0.75rem;", id: nil %>

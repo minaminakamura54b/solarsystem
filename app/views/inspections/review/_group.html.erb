@@ -1,0 +1,26 @@
+<div class="card p-4 space-y-2" id="group_<%= group.id %>" data-review-target="card" data-card-id="group_<%= group.id %>"
+     data-action="click->review#selectCard" style="border-left:4px solid #3b82f6; <%= 'opacity:0.75;' unless group.review_status == 'pending' %>">
+  <p class="text-sm" style="font-weight:600;">
+    隣接パネル群（<%= group.panel_count %>枚：パネル <%= group.panel_indices.join("・") %>）
+    <span class="badge <%= { 'critical' => 'badge-error', 'warning' => 'badge-warning', 'mild' => 'badge-info' }.fetch(group.severity.to_s, 'badge-gray') %>"><%= anomaly_severity_label(group.severity) %></span>
+    <span class="text-xs text-gray-400">
+      <%= { "pending" => "候補", "confirmed" => "確定", "rejected" => "却下（#{AnomalyReview::REJECTION_REASONS[group.rejection_reason]}）" }[group.review_status] %>
+    </span>
+  </p>
+  <p class="text-xs">
+    パネル平均の ΔT（構成パネルの中央値）<%= group.delta_t&.to_f %>℃
+    ／ <%= group.threshold_basis == "normalized" ? "判定: 正規化ΔT #{group.normalized_delta_t&.to_f}℃" : "判定: 生ΔT（未正規化）" %>
+    ／ 画像内で隣接するパネル群です。電気的なストリングとは限りません
+  </p>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+    <%= form_with url: confirm_inspection_anomaly_group_path(group.inspection, group), method: :patch, data: { review_role: "confirm" } do %>
+      <%= text_field_tag :note, nil, class: "form-input", placeholder: "メモ（任意）", style: "font-size:0.75rem;" %>
+      <%= submit_tag "群を確定（c）", class: "btn btn-sm btn-primary mt-1" %>
+    <% end %>
+    <%= form_with url: reject_inspection_anomaly_group_path(group.inspection, group), method: :patch, data: { review_role: "reject" } do %>
+      <%= select_tag :rejection_reason, options_for_select(AnomalyReview::REJECTION_REASONS.invert, group.rejection_reason), prompt: "却下の理由", class: "form-select", style: "font-size:0.75rem;", data: { review_role: "reject-reason" } %>
+      <%= submit_tag "群を却下（x）", class: "btn btn-sm btn-danger mt-1" %>
+    <% end %>
+  </div>
+  <p class="text-xs text-gray-400">確定・却下は構成パネルの異常にも反映されます。特定のパネルを群から外すときは、下のそのパネルのカードで「群から外す」を押してください。</p>
+</div>

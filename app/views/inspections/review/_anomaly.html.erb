@@ -1,0 +1,86 @@
+<% member = anomaly.anomaly_group_id.present? %>
+<div class="card p-4 space-y-2" id="anomaly_<%= anomaly.id %>" data-review-target="card" data-card-id="anomaly_<%= anomaly.id %>"
+     data-action="click->review#selectCard" style="<%= 'opacity:0.75;' unless anomaly.review_status == 'pending' %>">
+  <div class="flex items-start gap-3">
+    <canvas width="120" height="120" data-review-target="crop" data-source="thermal" data-bbox="<%= anomaly.effective_bbox.to_json %>" style="background:#111; border-radius:4px;"></canvas>
+    <% if image.rgb.attached? %>
+      <div class="text-center">
+        <canvas width="120" height="120" data-review-target="crop" data-source="rgb" data-bbox="<%= anomaly.effective_bbox.to_json %>" style="background:#111; border-radius:4px;"></canvas>
+        <p class="text-xs text-gray-400">おおよその位置</p>
+      </div>
+    <% end %>
+    <div class="flex-1 text-sm space-y-1">
+      <p style="font-weight:600;">
+        <%= anomaly_type_label(anomaly.effective_type) %><%= "（帯 #{anomaly.active_bands} 本）" if anomaly.active_bands %>
+        <span class="badge <%= { 'critical' => 'badge-error', 'warning' => 'badge-warning', 'mild' => 'badge-info' }.fetch(anomaly.effective_severity.to_s, 'badge-gray') %>"><%= anomaly_severity_label(anomaly.effective_severity) %></span>
+        <span class="text-xs text-gray-400">
+          <%= { "pending" => "候補", "confirmed" => "確定", "corrected" => "修正して確定", "rejected" => "却下（#{AnomalyReview::REJECTION_REASONS[anomaly.rejection_reason]}）" }[anomaly.review_status] %>
+          ／ 証拠レベル <%= anomaly.evidence_level || "-" %>
+          ／ <%= { "local" => "局所的な判定", "baseline" => "基準温度からの判定", "manual" => "手動追加" }[anomaly.detection] %>
+          <%= "／ 群の構成パネル" if member %>
+        </span>
+      </p>
+      <% if anomaly.final_anomaly_type.present? %>
+        <p class="text-xs text-gray-400">元の判定: <%= anomaly_type_label(anomaly.anomaly_type) %>・<%= anomaly_severity_label(anomaly.severity) %></p>
+      <% end %>
+      <% unless anomaly.detection == "manual" %>
+        <p class="text-xs">
+          パネル <%= anomaly.panel_index_in_image %>：ΔT <%= anomaly.delta_t&.to_f %>℃（<%= { "region_max" => "高温領域の最高温度", "region_mean" => "高温領域の平均", "panel_mean" => "パネル平均" }[anomaly.measure] %>）
+          ／ <%= anomaly.threshold_basis == "normalized" ? "判定: 正規化ΔT #{anomaly.normalized_delta_t&.to_f}℃" : "判定: 生ΔT（日射量が POA でないため未正規化）" %>
+          ／ 基準温度 <%= anomaly.baseline_temp&.to_f %>℃・最高 <%= anomaly.t_max&.to_f %>℃・面積比 <%= anomaly.area_ratio&.to_f %>
+        </p>
+        <p class="text-xs text-gray-400">分類の根拠: <%= anomaly.shape_features&.dig("criteria") || "-" %>（判定基準 <%= anomaly.rule_version %>）</p>
+      <% end %>
+      <% flags = Array(anomaly.flags).map { |f| { "glare_suspect" => "グレア疑い", "unnormalized" => "未正規化", "edge_adjacent" => "パネル端" }.fetch(f, f) } %>
+      <% if flags.any? %><p class="text-xs" style="color:#ef9f27;">フラグ: <%= flags.join("・") %></p><% end %>
+      <p class="text-xs">割り当てたパネル: <%= anomaly.panel ? "#{anomaly.panel.number}#{'（仮配置）' if anomaly.panel.placeholder_layout?}" : "未割り当て" %>
+        <% if anomaly.selected_causes.any? %>／ 原因候補: <%= anomaly.selected_causes.map { |c| AnomalyReview::CAUSES[c] }.join("・") %><% end %>
+      </p>
+      <% if anomaly.electrical_evidence.present? %>
+        <p class="text-xs">電気測定: <%= AnomalyReview::ELECTRICAL_METHODS[anomaly.electrical_evidence["method"]] %> — <%= anomaly.electrical_evidence["result"] %></p>
+      <% end %>
+    </div>
+  </div>
+
+  <% if member %>
+    <div class="flex gap-2 items-center text-xs">
+      <span class="text-gray-400">群の構成パネルは、群のカードでまとめて確定・却下します。</span>
+      <%= button_to "群から外す", remove_from_group_inspection_anomaly_path(anomaly.inspection, anomaly), method: :patch, class: "btn btn-sm btn-secondary" %>
+    </div>
+  <% else %>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <%= form_with url: confirm_inspection_anomaly_path(anomaly.inspection, anomaly), method: :patch, class: "space-y-1", data: { review_role: "confirm" } do %>
+        <%= render "inspections/review/causes", anomaly: anomaly, image: image %>
+        <%= submit_tag "確定（c）", class: "btn btn-sm btn-primary" %>
+      <% end %>
+      <%= form_with url: reject_inspection_anomaly_path(anomaly.inspection, anomaly), method: :patch, class: "space-y-1", data: { review_role: "reject" } do %>
+        <%= select_tag :rejection_reason, options_for_select(AnomalyReview::REJECTION_REASONS.invert, anomaly.rejection_reason), prompt: "却下の理由", class: "form-select", style: "font-size:0.75rem;", data: { review_role: "reject-reason" } %>
+        <%= text_field_tag :note, nil, class: "form-input", placeholder: "メモ（任意）", style: "font-size:0.75rem;" %>
+        <%= submit_tag "誤検出として却下（x）", class: "btn btn-sm btn-danger" %>
+      <% end %>
+    </div>
+    <details class="text-xs">
+      <summary style="cursor:pointer;">種類・位置を修正 / パネルを割り当て / 電気測定を入力</summary>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
+        <%= form_with url: correct_inspection_anomaly_path(anomaly.inspection, anomaly), method: :patch, class: "space-y-1" do %>
+          <%= select_tag :final_anomaly_type, options_for_select(Anomaly::ANOMALY_TYPES.map { |t| [ anomaly_type_label(t), t ] }, anomaly.effective_type), class: "form-select", style: "font-size:0.75rem;" %>
+          <%= hidden_field_tag :final_bbox, "", id: "final_bbox_#{anomaly.id}" %>
+          <button type="button" class="btn btn-sm btn-secondary" data-action="review#startDrawing" data-input-id="final_bbox_<%= anomaly.id %>">位置を描き直す</button>
+          <%= render "inspections/review/causes", anomaly: anomaly, image: image %>
+          <%= submit_tag "修正して確定", class: "btn btn-sm btn-primary" %>
+        <% end %>
+        <%= form_with url: assign_panel_inspection_anomaly_path(anomaly.inspection, anomaly), method: :patch, class: "space-y-1" do %>
+          <%= select_tag :panel_id, options_for_select(panels.map { |p| [ "#{p.number}#{'（仮配置）' if p.placeholder_layout?}", p.id ] }, anomaly.panel_id), prompt: "パネルを選ぶ", class: "form-select", style: "font-size:0.75rem;" %>
+          <p class="text-gray-400">位置情報か人の指定でだけ割り当てます（自動では割り当てません）。</p>
+          <%= submit_tag "パネルを割り当て", class: "btn btn-sm btn-secondary" %>
+        <% end %>
+        <%= form_with url: electrical_inspection_anomaly_path(anomaly.inspection, anomaly), method: :patch, class: "space-y-1" do %>
+          <%= select_tag :method, options_for_select(AnomalyReview::ELECTRICAL_METHODS.invert, anomaly.electrical_evidence&.dig("method")), prompt: "測定方法", class: "form-select", style: "font-size:0.75rem;" %>
+          <%= text_field_tag :result, anomaly.electrical_evidence&.dig("result"), class: "form-input", placeholder: "測定結果", style: "font-size:0.75rem;" %>
+          <%= date_field_tag :measured_on, anomaly.electrical_evidence&.dig("measured_on"), class: "form-input", style: "font-size:0.75rem;" %>
+          <%= submit_tag "電気測定を保存（証拠レベル A）", class: "btn btn-sm btn-secondary" %>
+        <% end %>
+      </div>
+    </details>
+  <% end %>
+</div>

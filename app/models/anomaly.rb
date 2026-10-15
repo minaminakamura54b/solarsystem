@@ -15,9 +15,15 @@ class Anomaly < ApplicationRecord
   validates :severity, inclusion: { in: SEVERITIES }, allow_nil: true
   validates :review_status, inclusion: { in: REVIEW_STATUSES }
   validates :evidence_level, inclusion: { in: EVIDENCE_LEVELS }, allow_nil: true
-  validates :detection, inclusion: { in: %w[local baseline] }, allow_nil: true
+  validates :detection, inclusion: { in: %w[local baseline manual] }, allow_nil: true # manual = レビューで人が追加した見逃し
+  validates :rejection_reason, inclusion: { in: AnomalyReview::REJECTION_REASONS.keys }, allow_nil: true
 
   scope :candidates, -> { where(review_status: "pending") }
   # 件数・重大度の集計に使う異常（群の構成パネルは群を1件として数えるため除く。docs/IMPROVEMENT_PLAN.md 4.4）
   scope :countable, -> { where(anomaly_group_id: nil) }
+
+  # 修正後の値（無ければ元の値）
+  def effective_type = final_anomaly_type.presence || anomaly_type
+  def effective_bbox = final_bbox.presence || bbox
+  def effective_severity = final_severity.presence || severity
 end
