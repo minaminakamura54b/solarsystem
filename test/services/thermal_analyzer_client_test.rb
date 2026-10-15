@@ -29,6 +29,15 @@ class ThermalAnalyzerClientTest < ActiveSupport::TestCase
                    irradiance: 800, irradiance_type: "poa")
   end
 
+  # プロセスが動いているか。存在しない、または終了済みで回収待ち（Linux の /proc で状態 Z）なら false
+  def process_running?(pid)
+    Process.kill(0, pid)
+    stat = "/proc/#{pid}/stat"
+    !(File.exist?(stat) && File.read(stat).split(") ").last.start_with?("Z"))
+  rescue Errno::ESRCH, Errno::ENOENT
+    false
+  end
+
   test "出力 JSON を読んで返す" do
     result = analyze(client_writing(analyzer_output))
 
@@ -74,7 +83,11 @@ class ThermalAnalyzerClientTest < ActiveSupport::TestCase
     assert_equal "解析エンジンが時間内に終わりませんでした", result.message
     assert elapsed < 10, "タイムアウト後すぐに戻る"
     child = File.read(pid_file).to_i
-    assert_raises(Errno::ESRCH) { Process.kill(0, child) }
+    # 子プロセスはシグナルを受けてから終わり、親が先に終わっていれば init に回収されるまで少しかかる。
+    # 片付くまで一定時間待ってから確かめる（終了済みで回収待ちのゾンビは、残っているとみなさない）
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+    sleep 0.05 while process_running?(child) && Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+    assert_not process_running?(child), "子プロセス（pid #{child}）が残っている"
   ensure
     File.delete(pid_file) if pid_file && File.exist?(pid_file)
   end
