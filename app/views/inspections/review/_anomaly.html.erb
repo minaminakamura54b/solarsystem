@@ -42,6 +42,13 @@
     </div>
   </div>
 
+  <% if !member && InspectionReview::CONFIRMED.include?(anomaly.review_status) %>
+    <details class="text-xs">
+      <summary style="cursor:pointer;">所見（Claude）</summary>
+      <div class="mt-1"><%= render "inspections/explanation", record: anomaly %></div>
+    </details>
+  <% end %>
+
   <% if member %>
     <div class="flex gap-2 items-center text-xs">
       <span class="text-gray-400">群の構成パネルは、群のカードでまとめて確定・却下します。</span>
@@ -64,6 +71,8 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
         <%= form_with url: correct_inspection_anomaly_path(anomaly.inspection, anomaly), method: :patch, class: "space-y-1" do %>
           <%= select_tag :final_anomaly_type, options_for_select(Anomaly::ANOMALY_TYPES.map { |t| [ anomaly_type_label(t), t ] }, anomaly.effective_type), class: "form-select", style: "font-size:0.75rem;" %>
+          <%= select_tag :final_severity, options_for_select([ [ "軽微", "mild" ], [ "注意", "warning" ], [ "重大", "critical" ] ]), prompt: "重大度（指標が違う種類のとき）", class: "form-select", style: "font-size:0.75rem;" %>
+          <p class="text-gray-400">修正後の種類の ΔT の指標が保存されている値と同じなら、重大度は判定基準で付け直します（選んだ値は使いません）。指標が違う種類に修正するときは、重大度を選んでください。</p>
           <%= hidden_field_tag :final_bbox, "", id: "final_bbox_#{anomaly.id}" %>
           <button type="button" class="btn btn-sm btn-secondary" data-action="review#startDrawing" data-input-id="final_bbox_<%= anomaly.id %>">位置を描き直す</button>
           <%= render "inspections/review/causes", anomaly: anomaly, image: image %>

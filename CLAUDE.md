@@ -55,9 +55,9 @@ bin/rails dev:synthetic_inspection   # 開発用: 合成シーン（.npy）の�
 - **exiftool が必要**（画像のメタデータ読み取り。テストでも実際に使う）。gem は使わず `ExifReader` がコマンドを呼ぶ
 - 品質チェックの閾値・温度データの手がかりにするタグ・撮影時刻のタイムゾーンは `config/image_quality.yml`。重大度の閾値は DB のルールセット（初期値は `db/seeds/rule_sets.rb`）
 - ジョブ: 開発は `:inline`（アップロードと同時に同期実行）、本番は `solid_queue`（Puma 内で実行）
-- `anthropic` gem 0.4.1 は**非公式 gem**（`Anthropic::Client.new(access_token:)` 形式）。公式 SDK 1.x は同名だが API が別物。移行は Phase 6 で一度だけ行う予定なので、それまで SDK を変えない。
+- Claude は**公式 Ruby SDK**（`anthropic` 1.x。Phase 6 で非公式 gem 0.4.1 から移行済み）。呼び出しは `ClaudeStructuredOutput`（structured outputs で固定スキーマの JSON を1回もらう）に集め、モデル名は `CLAUDE_MODEL`、上限トークン数・タイムアウト・再試行は `config/claude.yml`。テストは `ClaudeStructuredOutput.default_client` を偽クライアントに差し替え、本物の API を呼ばない。SDK の使い方は推測せず、インストール済みの gem のソースで確かめる。
 - `inspections.analysis_status` は `pending` / `analyzing` / `completed` / `needs_review` / `failed`、画像（`inspection_images`）はこれに `excluded` が加わる。**`completed` を `analyzed` などに改名しない**。
-- 点検には新方式（`inspection_images` を持つ）と旧方式（画像1枚・Claude 判定。`Inspection#legacy?`）がある。旧方式は表示だけで、新しく作らない。旧方式の結果は `legacy_anomalies`（読み取り専用）。
+- 点検には新方式（`inspection_images` を持つ）と旧方式（画像1枚・Claude 判定。`Inspection#legacy?`）がある。旧方式は表示だけで、新しく作らない（判定の処理は Phase 6 で削除済み）。旧方式の結果は `legacy_anomalies`（読み取り専用）。
 - 本番サーバーは **linux/amd64** 前提（DJI Thermal SDK の制約）。
 - マイグレーションは必ず可逆にする。既存データの移行が必要なら rake タスクを分ける。
 - UI の文言は日本語。既存の画面構成は極力維持する。
@@ -66,13 +66,14 @@ bin/rails dev:synthetic_inspection   # 開発用: 合成シーン（.npy）の�
 
 - `app/jobs/process_inspection_image_job.rb` — 画像ごとのメタデータ読み取り・気象データ割り当て・品質チェック
 - `app/services/image_quality_checker.rb` ほか — 品質チェック、`ImageMetadataExtractor`、`WeatherInterpolator`、`ImagePairing`
-- `app/services/claude_panel_analyzer.rb` / `app/jobs/analyze_panel_image_job.rb` — 旧方式の Claude 画像判定（新しい点検では使わない。Phase 6 で置き換え予定）
 - `app/controllers/inspections_controller.rb` — 点検の登録・表示（JSON でステータスを返し、自動更新に使う）
 - `app/javascript/controllers/auto_refresh_controller.js` — 解析中画面のポーリング
 - `analyzer/` — Python 解析エンジン（Python 3.12・uv。仕様と使い方は analyzer/README.md）
 - `app/services/thermal_analyzer_client.rb` — 解析エンジンの呼び出し（タイムアウト・出力の検証）。設定は `config/analyzer.yml`
 - `app/jobs/analyze_inspection_image_job.rb` / `app/services/analysis_result_importer.rb` / `app/services/severity_rule_engine.rb` — 解析・異常の保存・重大度
 - `app/javascript/controllers/grid_editor_controller.js` — グリッド入力画面（canvas）
+- `app/services/anomaly_review.rb` / `app/services/inspection_review.rb` — レビュー操作とレビュー完了（重要度）
+- `app/services/anomaly_explainer.rb` / `app/services/inspection_summary_writer.rb` / `app/jobs/explain_inspection_job.rb` — 確定した異常の所見と点検の総括文（Claude。判定には使わない）。プロンプトは `app/prompts/`（変えるときは新しい版のファイルを作り、`PROMPT_VERSION` を上げる）
 - `app/services/anomaly_review.rb` / `app/services/inspection_review.rb` / `app/javascript/controllers/review_controller.js` — レビュー操作・レビュー完了・レビュー画面
 - `app/services/dataset_exporter.rb` — 学習データの書き出し（`bin/rails "dataset:export[OUT_DIR]"`。顧客の画像を含むのでリポジトリに書き出さない）
 - `docs/IMPROVEMENT_PLAN.md` — 改善指示書（仕様の正本）

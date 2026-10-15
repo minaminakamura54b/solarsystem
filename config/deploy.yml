@@ -46,6 +46,8 @@ env:
     SOLID_QUEUE_IN_PUMA: true
     # DJI Thermal SDK の dji_irp のパス（SDK はイメージに含めず、下の volumes でマウントする。Phase S で確定）
     # DJI_IRP_PATH: /rails/analyzer/bin/dji_irp
+    # 所見の作成に使う Claude のモデル名（ANTHROPIC_API_KEY は secret に追加する。Phase 8 で本番の設定を確定）
+    # CLAUDE_MODEL: claude-opus-5-5
 
     # Set number of processes dedicated to Solid Queue (default: 1)
     # JOB_CONCURRENCY: 3

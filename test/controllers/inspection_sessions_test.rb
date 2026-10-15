@@ -29,10 +29,11 @@ class InspectionSessionsTest < ActionDispatch::IntegrationTest
     assert_match "対になるサーモ画像が無い RGB 画像は登録していません: rgb_V.jpg", flash[:notice]
   end
 
-  test "旧方式の Claude 判定のジョブは登録しない" do
-    assert_no_enqueued_jobs only: AnalyzePanelImageJob do
-      post inspections_path(site_id: @site.id), params: { inspection: { files: [ upload("thermal_plain_T.jpg") ] } }
-    end
+  test "登録時のジョブは画像ごとの処理だけ（旧方式の Claude 判定は無い）" do
+    post inspections_path(site_id: @site.id), params: { inspection: { files: [ upload("thermal_plain_T.jpg") ] } }
+
+    jobs = enqueued_jobs.map { |j| j["job_class"].constantize }.uniq - [ ActiveStorage::AnalyzeJob ]
+    assert_equal [ ProcessInspectionImageJob ], jobs
   end
 
   test "画像ファイル以外は登録できない" do

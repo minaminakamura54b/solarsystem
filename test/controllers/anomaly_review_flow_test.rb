@@ -40,7 +40,7 @@ class AnomalyReviewFlowTest < ActionDispatch::IntegrationTest
 
   test "種類と位置を修正して確定する" do
     patch correct_inspection_anomaly_path(@inspection, @anomaly, site_id: @site.id),
-          params: { final_anomaly_type: "partial_module", final_bbox: { x1: 0.2, y1: 0.3, x2: 0.4, y2: 0.5 }.to_json }
+          params: { final_anomaly_type: "partial_module", final_severity: "warning", final_bbox: { x1: 0.2, y1: 0.3, x2: 0.4, y2: 0.5 }.to_json }
 
     @anomaly.reload
     assert_equal [ "corrected", "partial_module" ], [ @anomaly.review_status, @anomaly.final_anomaly_type ]

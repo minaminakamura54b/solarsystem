@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## 2026-10-15 — Phase 6: Claude の役割変更と SDK 移行（ブランチ `phase-6`）
+
+### 追加
+- **AnomalyExplainer**: 確定・修正した異常と確定した群に、原因候補（根拠付き・最大 4 つ）・考え方・追加の確認・推奨対応・所見文を Claude が書く。入力は保存済みの構造化データの文字だけ（画像・人のメモ・重大度は送らない）。プロンプトは `app/prompts/anomaly_explainer_v1.txt`（ユーザー承認済み）
+- **InspectionSummaryWriter**: レビューを完了した点検の総括文・優先して行う対応・追加の確認。入力は件数・重要度・除外・未確定の候補・撮影条件などの集計だけ。プロンプトは `app/prompts/inspection_summary_v1.txt`
+- **ExplainInspectionJob**: レビュー完了のときに所見と総括文を作る。点検詳細の「所見を作り直す」で作り直せる。入力が前回と同じ異常は作り直さない
+- 点検詳細に「所見・総括」、レビュー画面のカードに「所見（Claude）」。判定に使っていないこと、作成後にデータが変わった古い所見であること、失敗の理由を表示
+- 所見と総括文の列（anomalies・anomaly_groups・inspections。列の追加のみ）、`config/claude.yml`（上限トークン数・タイムアウト・再試行）
+
+### 変更（ユーザー指示・承認）
+- **公式 Anthropic Ruby SDK（`anthropic` 1.79）に移行**し、非公式 gem 0.4.1 を削除。固定スキーマは tool use ではなく structured outputs で受け取る（スキーマに severity は無く、返ってきても保存しない）
+- モデル名は `CLAUDE_MODEL`（未設定なら所見を作らずエラーを表示）。`.env.example` に例を記入
+- 種類を修正したときの重大度: 修正後の種類の ΔT の指標（region_max / region_mean / panel_mean）が保存されている値の指標と同じときだけ判定基準で付け直し、違うときは人が重大度を選ぶ（以前は指標が違っても保存されている ΔT で付け直していた）
+- 指示書に「Phase 5b: 実配置の登録」（Phase 6 の後・Phase 7 の前）と、Phase 7 の検討事項「報告書の版の管理」を追加
+
+### 削除
+- 旧方式の Claude 画像判定（`ClaudePanelAnalyzer`・`AnalyzePanelImageJob`）とそのテスト 38 件。旧方式の点検の表示（`legacy_anomalies`）は残す。既知の問題 G（モデル名の固定）は解消
+
+### 記録した既知の問題
+- U: 開発環境（`:inline`）では、レビュー完了のリクエストの中で Claude API を呼ぶ
+- V: 発電所のモジュール構成などを後から変えても所見は自動で作り直さない（「古い所見」と表示）
+
+### 確認したこと
+- テスト 263 件（旧方式のテスト 38 件を削除、Phase 6 のテスト 23 件と重大度の修正のテスト 3 件を追加）、system test 6 件、rubocop、brakeman
+- 本物の Claude API は呼んでいない（テストは偽クライアント）。実際のモデルでの所見の出来は未確認
+
 ## 2026-10-15 — Phase 5: レビュー UI と学習データ（ブランチ `phase-5`）
 
 ### 追加

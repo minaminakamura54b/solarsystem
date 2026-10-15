@@ -59,6 +59,19 @@ module InspectionsHelper
     }[inspection.review_reason]
   end
 
+  # Claude の所見の状態: :none（未作成）/ :current（今のデータから作った）/ :stale（その後にデータが変わった）
+  def explanation_state(record)
+    return :none if record.explained_at.nil?
+
+    AnomalyExplainer.new(output: nil).current?(record) ? :current : :stale
+  end
+
+  def summary_state(inspection)
+    return :none if inspection.summary_generated_at.nil?
+
+    InspectionSummaryWriter.new(output: nil).current?(inspection) ? :current : :stale
+  end
+
   def anomaly_severity_label(severity)
     { "mild" => "軽微", "warning" => "注意", "critical" => "重大" }.fetch(severity.to_s, "基準未満")
   end

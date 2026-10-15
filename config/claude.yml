@@ -1,0 +1,9 @@
+# Claude API の呼び出し設定（docs/IMPROVEMENT_PLAN.md Phase 6）。
+# モデル名はここに書かず、環境変数 CLAUDE_MODEL で指定する（未設定なら所見を作らず、エラーとして記録する）
+shared:
+  # 1回の応答の上限トークン数（思考を含む）。所見の JSON が途中で切れたら失敗として記録する
+  max_tokens: 8000
+  # 1回のリクエストの待ち時間の上限（秒）
+  timeout_seconds: 120
+  # 接続エラー・429・5xx のときに SDK が自動で再試行する回数
+  max_retries: 2

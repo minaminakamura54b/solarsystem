@@ -1,0 +1,63 @@
+<%# レビューを完了した点検の総括文と、確定した異常・群の所見（Claude。docs/IMPROVEMENT_PLAN.md Phase 6） %>
+<div class="card p-4 space-y-4" id="findings">
+  <div class="flex items-center justify-between gap-3">
+    <p style="font-size:0.65rem; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em;">所見・総括（Claude が作成）</p>
+    <%= button_to "所見を作り直す", explain_inspection_path(@inspection), class: "btn btn-sm btn-secondary" %>
+  </div>
+  <p class="text-xs text-gray-400">
+    異常かどうかと重大度は、温度データと判定基準で判定し、レビューで人が確認したものです。所見と総括文は、その確定済みの数値から Claude が作成した文章で、判定には使っていません。
+    赤外線サーモグラフィによるスクリーニングで、確定診断ではありません。
+  </p>
+
+  <% state = summary_state(@inspection) %>
+  <div class="space-y-1 text-sm">
+    <p class="form-label">総括</p>
+    <% if @inspection.summary_error.present? %>
+      <p class="text-xs" style="color:#e24b4a;">総括文を作れませんでした: <%= @inspection.summary_error %></p>
+    <% end %>
+    <% if state == :none %>
+      <% if @inspection.summary_error.blank? %><p class="text-xs text-gray-400">作成中か、まだ作成していません（画面を再読み込みしてください）</p><% end %>
+    <% else %>
+      <% if state == :stale %>
+        <p class="text-xs" style="color:#ef9f27;">この総括文を作った後に、点検のデータが変わっています。「所見を作り直す」で作り直してください。</p>
+      <% end %>
+      <p><%= @inspection.summary_text %></p>
+      <% if @inspection.summary_priority_actions.present? %>
+        <p class="text-xs" style="font-weight:600;">優先して行う対応</p>
+        <ol class="text-xs" style="list-style:decimal; padding-left:1.25rem;">
+          <% @inspection.summary_priority_actions.each do |action| %><li><%= action %></li><% end %>
+        </ol>
+      <% end %>
+      <% if @inspection.summary_additional_checks.present? %>
+        <p class="text-xs" style="font-weight:600;">追加の確認</p>
+        <ul class="text-xs" style="list-style:disc; padding-left:1.25rem;">
+          <% @inspection.summary_additional_checks.each do |check| %><li><%= check %></li><% end %>
+        </ul>
+      <% end %>
+      <p class="text-xs text-gray-400">（<%= @inspection.summary_prompt_version %>・<%= @inspection.summary_generated_at.strftime("%Y/%m/%d %H:%M") %>）</p>
+    <% end %>
+  </div>
+
+  <% if @confirmed_groups.empty? && @confirmed_anomalies.empty? %>
+    <p class="text-sm text-gray-400">確定した異常はありません。</p>
+  <% end %>
+  <% @confirmed_groups.each do |group| %>
+    <div class="space-y-1">
+      <p class="text-sm" style="font-weight:600;">
+        画像 <%= group.inspection_image.sequence %>：隣接パネル群（<%= group.panel_count %>枚）
+        <span class="badge <%= { 'critical' => 'badge-error', 'warning' => 'badge-warning', 'mild' => 'badge-info' }.fetch(group.severity.to_s, 'badge-gray') %>"><%= anomaly_severity_label(group.severity) %></span>
+      </p>
+      <%= render "inspections/explanation", record: group %>
+    </div>
+  <% end %>
+  <% @confirmed_anomalies.each do |anomaly| %>
+    <div class="space-y-1">
+      <p class="text-sm" style="font-weight:600;">
+        画像 <%= anomaly.inspection_image.sequence %>：<%= anomaly_type_label(anomaly.effective_type) %>
+        <span class="badge <%= { 'critical' => 'badge-error', 'warning' => 'badge-warning', 'mild' => 'badge-info' }.fetch(anomaly.effective_severity.to_s, 'badge-gray') %>"><%= anomaly_severity_label(anomaly.effective_severity) %></span>
+        <span class="text-xs text-gray-400">パネル <%= anomaly.panel&.number || "未割り当て" %>／証拠レベル <%= anomaly.evidence_level || "-" %></span>
+      </p>
+      <%= render "inspections/explanation", record: anomaly %>
+    </div>
+  <% end %>
+</div>

@@ -12,6 +12,12 @@
     ／ <%= group.threshold_basis == "normalized" ? "判定: 正規化ΔT #{group.normalized_delta_t&.to_f}℃" : "判定: 生ΔT（未正規化）" %>
     ／ 画像内で隣接するパネル群です。電気的なストリングとは限りません
   </p>
+  <% if InspectionReview::CONFIRMED.include?(group.review_status) %>
+    <details class="text-xs">
+      <summary style="cursor:pointer;">所見（Claude）</summary>
+      <div class="mt-1"><%= render "inspections/explanation", record: group %></div>
+    </details>
+  <% end %>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
     <%= form_with url: confirm_inspection_anomaly_group_path(group.inspection, group), method: :patch, data: { review_role: "confirm" } do %>
       <%= text_field_tag :note, nil, class: "form-input", placeholder: "メモ（任意）", style: "font-size:0.75rem;" %>

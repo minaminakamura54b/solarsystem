@@ -10,6 +10,7 @@ Rails.application.routes.draw do
       post :rejudge
       get :review
       post :complete_review
+      post :explain
     end
     resources :anomalies, only: %i[create] do
       member do
