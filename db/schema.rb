@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_15_071138) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_15_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -109,6 +109,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_15_071138) do
     t.integer "active_bands"
     t.jsonb "selected_causes", default: [], null: false
     t.string "rejection_reason"
+    t.jsonb "additional_checks"
+    t.text "report_text"
+    t.string "explanation_input_digest"
+    t.datetime "explained_at"
+    t.text "explanation_error"
     t.index ["anomaly_group_id"], name: "index_anomalies_on_anomaly_group_id"
     t.index ["inspection_id"], name: "index_anomalies_on_inspection_id"
     t.index ["inspection_image_id"], name: "index_anomalies_on_inspection_image_id"
@@ -140,6 +145,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_15_071138) do
     t.datetime "reviewed_at"
     t.text "reviewer_note"
     t.string "rejection_reason"
+    t.jsonb "cause_candidates"
+    t.text "explanation"
+    t.jsonb "additional_checks"
+    t.text "recommended_action"
+    t.text "report_text"
+    t.string "prompt_version"
+    t.string "explanation_input_digest"
+    t.datetime "explained_at"
+    t.text "explanation_error"
     t.index ["inspection_id"], name: "index_anomaly_groups_on_inspection_id"
     t.index ["inspection_image_id"], name: "index_anomaly_groups_on_inspection_image_id"
     t.index ["rule_set_id"], name: "index_anomaly_groups_on_rule_set_id"
@@ -212,6 +226,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_15_071138) do
     t.string "review_reason"
     t.text "weather_note"
     t.datetime "reviewed_at"
+    t.text "summary_text"
+    t.jsonb "summary_priority_actions"
+    t.jsonb "summary_additional_checks"
+    t.string "summary_prompt_version"
+    t.string "summary_input_digest"
+    t.datetime "summary_generated_at"
+    t.text "summary_error"
     t.index ["analysis_status"], name: "index_inspections_on_analysis_status"
     t.index ["conducted_at"], name: "index_inspections_on_conducted_at"
     t.index ["severity"], name: "index_inspections_on_severity"
