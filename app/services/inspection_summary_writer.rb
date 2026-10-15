@@ -3,7 +3,7 @@
 # - 重要度・件数は人が確認した値をそのまま渡し、出力には含めない（スキーマに無く、返ってきても保存しない）
 # - 書き込むのは総括文の列だけ。重要度・状態には触れない
 class InspectionSummaryWriter
-  PROMPT_VERSION = "inspection_summary_v1".freeze
+  PROMPT_VERSION = "inspection_summary_v2".freeze
   PROMPT_PATH = Rails.root.join("app/prompts/#{PROMPT_VERSION}.txt")
   MAX_LISTED = 50 # 入力に1件ずつ書く異常の上限（超えた分は件数だけ）
 
@@ -70,7 +70,8 @@ class InspectionSummaryWriter
       irradiance_line(used),
       conditions_line(used),
       "モジュール: #{AnomalyExplainer::CELL_LAYOUTS[inspection.site.cell_layout] || 'セル構成不明'}・サブストリング #{inspection.site.substring_count}",
-      "点検全体の重要度（人が確認済み）: #{INSPECTION_SEVERITY_LABELS.fetch(inspection.severity.to_s, inspection.severity.to_s)}",
+      "点検全体の重要度（ルールで確定・人が確認済み。変更しない）: #{INSPECTION_SEVERITY_LABELS.fetch(inspection.severity.to_s, inspection.severity.to_s)}",
+      "重大度の段階: #{AnomalyExplainer::SEVERITY_SCALE}（各異常の重大度はルールで確定・人が確認済み。変更しない）",
       "確定した異常: #{items.size} 件（隣接パネル群は 1 件と数える）",
       ("重大度別: #{count_line(severities) { |s| SEVERITY_LABELS.fetch(s.to_s, s.to_s) }}" if items.any?),
       ("種類別: #{count_line(types) { |t| RuleSetsHelper::ANOMALY_TYPE_LABELS.fetch(t, t) }}" if items.any?),

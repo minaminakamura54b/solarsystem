@@ -29,7 +29,7 @@ class AnomalyExplainerTest < ActiveSupport::TestCase
     assert_match "電気測定", @anomaly.recommended_action
     assert_equal [ "ストリング電流の測定" ], @anomaly.additional_checks
     assert_match "帯状", @anomaly.explanation
-    assert_equal "anomaly_explainer_v1", @anomaly.prompt_version
+    assert_equal "anomaly_explainer_v2", @anomaly.prompt_version
     assert @anomaly.explanation_input_digest.present?
     assert @anomaly.explained_at.present?
     assert_nil @anomaly.explanation_error
@@ -57,6 +57,7 @@ class AnomalyExplainerTest < ActiveSupport::TestCase
     input = request[:messages].first[:content]
     assert_kind_of String, input # 画像は送らない
     assert_includes input, "種類: substring_bypass（サブストリングのバイパス、帯 2 本。"
+    assert_includes input, "重大度（ルールで確定・人が確認済み。変更しない）: 注意（3 段階: 軽微 < 注意 < 重大）"
     assert_includes input, "ΔT: 8.4℃（高温領域の平均温度 − 基準温度） / 正規化ΔT: 11.3℃"
     assert_includes input, "日射量: 742 W/m²（POA）"
     assert_includes input, "モジュール: フルセル・サブストリング 3"
@@ -131,6 +132,30 @@ class AnomalyExplainerTest < ActiveSupport::TestCase
     assert @anomaly.explanation_error.present?
   end
 
+  test "重大度は修正後の値を渡す。プロンプトに重大度を評価・変更しないこと、緊急度を重大度と整合させることを書いている" do
+    @anomaly.update_columns(review_status: "corrected", final_severity: "critical")
+    client = FakeAnthropicClient.replying(explainer_json)
+
+    explain(client)
+
+    request = client.requests.first
+    assert_includes request[:messages].first[:content], "重大度（ルールで確定・人が確認済み。変更しない）: 重大（"
+    assert_includes request[:system_], "入力の「重大度」は、ルールで確定した事実として渡します"
+    assert_includes request[:system_], "重大度を評価・変更したり"
+    assert_includes request[:system_], "対応の緊急度は、入力の重大度と整合させる"
+  end
+
+  test "前の版（v1）のプロンプトで作った所見は、古い所見として扱い作り直す" do
+    client = FakeAnthropicClient.replying(explainer_json)
+    explain(client)
+    v1_digest = Digest::SHA256.hexdigest("anomaly_explainer_v1\n#{AnomalyExplainer.new(output: nil).input_text(@anomaly)}")
+    @anomaly.update_columns(prompt_version: "anomaly_explainer_v1", explanation_input_digest: v1_digest)
+
+    assert_not AnomalyExplainer.new(output: nil).current?(@anomaly.reload)
+    assert_equal :explained, explain(client)
+    assert_equal "anomaly_explainer_v2", @anomaly.reload.prompt_version
+  end
+
   test "確定していない異常の所見は作らない" do
     @anomaly.update_columns(review_status: "pending")
 
@@ -149,6 +174,7 @@ class AnomalyExplainerTest < ActiveSupport::TestCase
     input = client.requests.first[:messages].first[:content]
     assert_includes input, "種類: panel_row_group（隣接パネル群。"
     assert_includes input, "パネル数: 3"
+    assert_includes input, "重大度（ルールで確定・人が確認済み。変更しない）: 軽微（"
     assert_includes input, "正規化ΔT: なし（未正規化）"
     assert_includes input, "証拠レベル: C（サーモのみ）"
     group.reload

@@ -1,6 +1,6 @@
 # ARCHITECTURE（現状）
 
-Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜6（ブランチ `phase-6`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
+Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜6（ブランチ `phase-6b`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
 
 ---
 
@@ -180,11 +180,12 @@ InspectionReview（レビュー完了。2026-10-15 ユーザー承認）
 所見と総括文（Phase 6。2026-10-15 ユーザー承認）
   レビュー完了 → ExplainInspectionJob（「所見を作り直す」は force: true）
     対象: 確定・修正した異常（群の構成パネルを除く）と確定した群。却下・未確定には作らない
-  AnomalyExplainer（app/prompts/anomaly_explainer_v1.txt）
-    入力: 保存済みの構造化データの文字だけ（種類・ΔT と指標・正規化ΔT・面積比・日射量と種類・モジュール構成・
-          証拠レベル・電気測定・人が選んだ原因候補・パネル番号・フラグ）。画像・人のメモ・重大度は送らない
+  AnomalyExplainer（app/prompts/anomaly_explainer_v2.txt。v1 は保存済みの prompt_version の参照用に残す）
+    入力: 保存済みの構造化データの文字だけ（種類・重大度（ルールで確定した事実として。3 段階の並びを添える）・ΔT と指標・正規化ΔT・面積比・日射量と種類・モジュール構成・
+          証拠レベル・電気測定・人が選んだ原因候補・パネル番号・フラグ）。画像・人のメモは送らない
+    プロンプトに、重大度を評価・変更・示唆しないこと、推奨対応の緊急度を重大度と整合させることを明記（v2）
     出力: cause_candidates[]（cause・basis）、reasoning、additional_checks[]、recommended_action、report_text
-  InspectionSummaryWriter（app/prompts/inspection_summary_v1.txt）
+  InspectionSummaryWriter（app/prompts/inspection_summary_v2.txt）
     入力: 点検日・画像枚数（除外）・日射量・気象・モジュール構成・点検の重要度・確定した異常の件数と内訳と一覧・未確定の候補の件数
     出力: summary_text、priority_actions[]、additional_checks[]
   ClaudeStructuredOutput: モデルは CLAUDE_MODEL（未設定ならリクエストしない）、上限トークン数・タイムアウト・再試行は config/claude.yml
@@ -244,14 +245,15 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 | T | `csv` は Ruby 3.4 で標準の gem から外れる（Ruby 3.3.10 では警告のみ） | `app/services/dataset_exporter.rb` | Ruby 3.4 に上げるときに Gemfile へ追加（新しい gem の追加のため、そのとき確認） |
 | P | Dockerfile の `RUBY_VERSION` が 3.2.9 で、`.ruby-version`（3.3.10）と食い違っていた（Phase 0 以前から） | `Dockerfile` | **Phase 4 で修正**（3.3.10 に合わせた） |
 | Q | 解析エンジンの DJI Thermal SDK の呼び出しが未実装のため、実際の R-JPEG は `needs_review（sdk_unavailable）` になる | `analyzer/analyzer/thermal/dji_reader.py` | Phase S の後に実装（TODO） |
-| U | 開発環境はジョブが `:inline` のため、レビュー完了のリクエストの中で Claude API を呼ぶ（確定した異常の件数だけ待つ） | `ExplainInspectionJob` | 本番は Solid Queue で非同期。開発で困るようなら指示を受けて対応 |
+| U | 開発環境はジョブが `:inline` のため、レビュー完了のリクエストの中で Claude API を呼ぶ（確定した異常の件数だけ待つ） | `ExplainInspectionJob` | 本番は Solid Queue で非同期（2026-10-15 確認: 使い捨ての DB に solid_queue のテーブルを作り、5 秒待つ偽の Claude で、レビュー完了の応答は 0.24 秒・Claude の呼び出し 0 回、ジョブは queue default に登録され、ワーカーが後から所見と総括文を作った。重要度・状態は変わらない）。開発で困るようなら指示を受けて対応 |
 | V | 所見・総括文は、発電所のモジュール構成や気象データを後から変えても自動では作り直さない（画面に「古い所見」と表示する） | `AnomalyExplainer#current?` | 「所見を作り直す」で作り直す。報告書（Phase 7）の版の管理と合わせて検討 |
 | M | 温度データの有無はメタデータのタグによる仮判定。実際の R-JPEG でどのタグが出るかは未確認 | `config/image_quality.yml` の `radiometric_tags` | Phase S で実画像を確認して見直す。最終判定は Phase 3 の解析エンジン |
 
 ## 6. テスト
 
-- `bin/rails test`: 263件（Phase 6 時点。旧方式の Claude 判定のテスト 38件はコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
+- `bin/rails test`: 265件（Phase 6b 時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
 - **本物の解析エンジンを呼ぶテスト**（`test/integration/analyzer_end_to_end_test.rb`）: `analyzer/scripts/make_dev_scenes.py` で合成シーン（.npy）を作り、Rails から `uv run python -m analyzer` を実行する。uv と `cd analyzer && uv sync` が必要（CI の test ジョブも uv を入れている）
+- 解析エンジンのタイムアウトのテストは、子プロセスが片付くまで最大 5 秒待ってから確かめる（終了済みで回収待ちのゾンビは残っていないとみなす。Phase 6b）
 - 偽の解析エンジン: `AnalyzeInspectionImageJob.client` を `with_fake_analyzer` で差し替える（本番では常に `ThermalAnalyzerClient`）
 - 解析エンジン: `cd analyzer && uv run pytest`（60件）。合成の温度行列（`analyzer/tests/fixtures/make_synthetic.py`）だけを使う。CI の `analyzer-test` ジョブでも実行する
 - Claude API は呼ばない。`ClaudeStructuredOutput.default_client` に偽クライアント（`FakeAnthropicClient`。SDK の `Anthropic::Message` を返す）を渡し、`CLAUDE_MODEL` もテスト用の値にする（`with_fake_claude`）
