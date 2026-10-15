@@ -42,6 +42,13 @@
     </div>
   </div>
 
+  <% if !member && InspectionReview::CONFIRMED.include?(anomaly.review_status) %>
+    <details class="text-xs">
+      <summary style="cursor:pointer;">所見（Claude）</summary>
+      <div class="mt-1"><%= render "inspections/explanation", record: anomaly %></div>
+    </details>
+  <% end %>
+
   <% if member %>
     <div class="flex gap-2 items-center text-xs">
       <span class="text-gray-400">群の構成パネルは、群のカードでまとめて確定・却下します。</span>

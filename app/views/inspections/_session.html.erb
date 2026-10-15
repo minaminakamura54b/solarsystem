@@ -66,6 +66,11 @@
     <% end %>
   </div>
 
+  <%# ── 所見・総括（レビュー完了後） ─────────────────────────────── %>
+  <% if @inspection.completed? && @inspection.reviewed_at.present? %>
+    <%= render "findings" %>
+  <% end %>
+
   <%# ── 気象データ ─────────────────────────────── %>
   <div class="card p-4" id="weather">
     <p style="font-size:0.65rem; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.75rem;">気象データ</p>

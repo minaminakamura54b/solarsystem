@@ -1,6 +1,6 @@
 class InspectionsController < ApplicationController
   before_action :require_site
-  before_action :find_inspection, only: %i[show destroy rejudge review complete_review]
+  before_action :find_inspection, only: %i[show destroy rejudge review complete_review explain]
 
   def index
     @inspections = current_site.inspections.recent.includes(:site, :inspection_images, image_attachment: :blob)
@@ -14,6 +14,10 @@ class InspectionsController < ApplicationController
       @images = @inspection.inspection_images.includes(thermal_attachment: :blob, rgb_attachment: :blob)
       @new_reading = @inspection.weather_readings.build
       @capture_time_zone = ImageQualityConfig.current.capture_time_zone
+      @confirmed_anomalies = @inspection.anomalies.where(review_status: InspectionReview::CONFIRMED).countable
+                                        .includes(:panel, :inspection_image, inspection: :site).order(:inspection_image_id, :id)
+      @confirmed_groups = @inspection.anomaly_groups.where(review_status: InspectionReview::CONFIRMED)
+                                     .includes(:inspection_image, inspection: :site, anomalies: :panel).order(:inspection_image_id, :id)
     end
 
     respond_to do |format|
@@ -95,12 +99,23 @@ class InspectionsController < ApplicationController
       all_images_checked: params[:all_images_checked] == "1", acknowledge_pending: params[:acknowledge_pending] == "1"
     )
     if result.completed?
-      notice = "レビューを完了しました（重要度: #{@inspection.reload.severity_label}）"
+      ExplainInspectionJob.perform_later(@inspection.id)
+      notice = "レビューを完了しました（重要度: #{@inspection.reload.severity_label}）。確定した異常の所見と総括文を作成します"
       notice += "。#{result.warnings.join('。')}" if result.warnings.any?
       redirect_to inspection_path(@inspection), notice: notice
     else
       redirect_to review_inspection_path(@inspection, image: params[:image], anchor: "complete"),
                   alert: (result.warnings + result.errors).join("。")
+    end
+  end
+
+  # 確定した異常の所見と総括文を作り直す（入力が変わっていなくても作り直す）。レビューを完了した点検だけ
+  def explain
+    if @inspection.completed? && @inspection.reviewed_at.present?
+      ExplainInspectionJob.perform_later(@inspection.id, force: true)
+      redirect_to inspection_path(@inspection, anchor: "findings"), notice: "所見と総括文を作り直しています"
+    else
+      redirect_to inspection_path(@inspection), alert: "所見はレビューを完了した点検だけ作れます"
     end
   end
 

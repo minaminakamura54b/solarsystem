@@ -1,0 +1,36 @@
+<%# 確定した異常・群の Claude の所見（AnomalyExplainer）。record は Anomaly または AnomalyGroup %>
+<% state = explanation_state(record) %>
+<div class="text-xs space-y-1" style="border-left:3px solid #a78bfa; padding-left:0.5rem;">
+  <% if record.explanation_error.present? %>
+    <p style="color:#e24b4a;">所見を作れませんでした: <%= record.explanation_error %></p>
+  <% end %>
+  <% if state == :none %>
+    <% if record.explanation_error.blank? %>
+      <p class="text-gray-400">所見はまだありません（レビュー完了のときに作成します）</p>
+    <% end %>
+  <% else %>
+    <% if state == :stale %>
+      <p style="color:#ef9f27;">この所見を作った後に、異常のデータが変わっています。「所見を作り直す」で作り直してください。</p>
+    <% end %>
+    <p><span style="font-weight:600;">所見:</span> <%= record.report_text %></p>
+    <% if record.cause_candidates.present? %>
+      <p style="font-weight:600;">原因候補（可能性の高い順）</p>
+      <ol style="list-style:decimal; padding-left:1.25rem;">
+        <% record.cause_candidates.each do |c| %>
+          <li><%= c["cause"] %><span class="text-gray-400"> — <%= c["basis"] %></span></li>
+        <% end %>
+      </ol>
+    <% end %>
+    <p><span style="font-weight:600;">推奨対応:</span> <%= record.recommended_action %></p>
+    <% if record.additional_checks.present? %>
+      <p style="font-weight:600;">追加の確認</p>
+      <ul style="list-style:disc; padding-left:1.25rem;">
+        <% record.additional_checks.each do |check| %><li><%= check %></li><% end %>
+      </ul>
+    <% end %>
+    <% if record.explanation.present? %>
+      <details><summary class="text-gray-400" style="cursor:pointer;">考え方</summary><p><%= record.explanation %></p></details>
+    <% end %>
+    <p class="text-gray-400">Claude が確定済みの数値から作成（<%= record.prompt_version %>・<%= record.explained_at.strftime("%Y/%m/%d %H:%M") %>）。重大度の判定には使っていません。</p>
+  <% end %>
+</div>
