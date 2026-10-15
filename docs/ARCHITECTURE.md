@@ -1,6 +1,6 @@
 # ARCHITECTURE（現状）
 
-Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜5（ブランチ `phase-5`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
+Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜6（ブランチ `phase-6`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
 
 ---
 
@@ -20,9 +20,10 @@ Rails 8.1（Puma）
    │     ├─ GridProposalJob               品質チェック合格の画像に propose-grid を実行し、グリッドの提案を保存
    │     ├─ AnalyzeInspectionImageJob     グリッドを指定した画像を解析エンジンで解析し、異常・群を保存して重大度を付ける
    │     ├─ StaleAnalysisJob              長時間 analyzing・品質チェック待ちのまま残った画像を failed にする（本番は5分ごと）
-   │     └─ AnalyzePanelImageJob          旧方式（Claude の画像判定）。Phase 2 以降は新しい点検では登録しない
+   │     └─ ExplainInspectionJob          レビュー完了後に、確定した異常・群の所見と点検の総括文を Claude に書かせる
    ├─ 解析エンジン（コマンド） ThermalAnalyzerClient が python -m analyzer を Open3.popen3 で実行（タイムアウトでプロセスグループごと終了）
    ├─ exiftool（コマンド）     EXIF / XMP / メーカー独自タグの読み取り。gem は使わない
+   ├─ Claude API               公式 Ruby SDK（anthropic 1.x）。ClaudeStructuredOutput が structured outputs で固定スキーマの JSON をもらう。所見の作成だけで、判定はしない
    ├─ PostgreSQL               本番は primary / cache / queue / cable の4DB
    └─ Active Storage           開発: storage/、テスト: tmp/storage/（:test）、本番: storage/（Docker ボリューム）
 ```
@@ -45,7 +46,8 @@ Rails 8.1（Puma）
 | `/inspections/:id/grid_templates` | `grid_templates` | グリッドテンプレートの保存・一括適用（`apply`） |
 | `/inspections/:id/rejudge` | `inspections#rejudge` | 未確定の異常・群を現在の判定基準で判定し直す |
 | `/inspections/:id/review` | `inspections#review` | レビュー画面（画像ごと。`?image=番号`）。候補の確定・修正・却下・手動追加、レビュー完了 |
-| `/inspections/:id/complete_review` | `inspections#complete_review` | レビュー完了（completed にして重要度を付ける） |
+| `/inspections/:id/complete_review` | `inspections#complete_review` | レビュー完了（completed にして重要度を付ける）。所見のジョブを登録する |
+| `/inspections/:id/explain` | `inspections#explain` | 所見と総括文を作り直す（レビュー完了済みの点検だけ） |
 | `/inspections/:id/anomalies` | `anomalies` | 見逃しの手動追加（create）、確定・修正・却下・パネルの割り当て・電気測定・群から外す |
 | `/inspections/:id/anomaly_groups/:id` | `anomaly_groups` | 群の確定・却下（構成パネルにも反映） |
 | `/inspections/:id/weather_readings` | `weather_readings` | 気象データ（時刻付き）の登録・削除 |
@@ -73,12 +75,12 @@ RuleSet ──< SeverityRule（閾値。Anomaly / AnomalyGroup が判定時の�
 |---|---|
 | `Site` | name・location 必須、status。モジュール仕様: module_model、module_rated_w、cell_layout（full_cell / half_cut / other）、substring_count（既定 3）、bypass_pattern（JSON）。specific_yield_kwh_per_kw・fit_price_yen_per_kwh（任意、Phase 7 で使用） |
 | `Panel` | number（発電所内で一意）、position_x / position_y、status、last_inspected_at、row_number / string_number / position_in_string / GPS（任意）、**layout_source**（`auto` = 自動生成の仮配置 / `manual` = 実配置） |
-| `Inspection` | conducted_at、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed`）、severity（completed のときだけ必須。それ以外は NULL =「判定なし」）、error_message、weather_note、review_reason、reviewed_at、report_pdf（Phase 7）。旧方式の項目: legacy_anomalies（**旧 anomalies**。読み取り専用）、anomaly_count、result、report、image（画像1枚） |
+| `Inspection` | conducted_at、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed`）、severity（completed のときだけ必須。それ以外は NULL =「判定なし」）、error_message、weather_note、review_reason、reviewed_at、総括文（summary_text・summary_priority_actions・summary_additional_checks・summary_prompt_version・summary_input_digest・summary_generated_at・summary_error）、report_pdf（Phase 7）。旧方式の項目: legacy_anomalies（**旧 anomalies**。読み取り専用）、anomaly_count、result、report、image（画像1枚） |
 | `InspectionImage` | thermal（R-JPEG 原本。変換・縮小しない）、rgb（任意）、sequence、thermal_filename、メタデータ（captured_at、camera_model、width / height、GPS、altitude_m、gimbal_pitch / gimbal_yaw、metadata JSON）、is_radiometric（**メタデータによる仮判定**。NULL = 判定できない）、気象データ（irradiance_w_m2 / irradiance_type / wind / 気温 / 湿度）、quality_report、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed` / `excluded`）、review_reason、exclusion_note、panel_grids・grid_proposal・raw_analysis・analyzer_version（Phase 3〜4） |
 | `WeatherReading` | observed_at、irradiance_w_m2（入力したら irradiance_type = `poa` / `ghi` / `unknown` 必須）、wind_speed_m_s、air_temp_c、humidity |
 | `RuleSet` | version（一意）、active（全体で1つ。部分ユニークインデックス）、note、detection_params（JSON。必須キーあり）。**作成後は active 以外変更不可、削除不可** |
 | `SeverityRule` | anomaly_type（6種類すべて必須）、measure、normalized_mild / warning / critical、raw_mild / warning / critical（各系列で mild < warning < critical）。**作成後は読み取り専用** |
-| `Anomaly` / `AnomalyGroup` / `GridTemplate` | テーブルのみ（書き込みは Phase 4 以降）。項目は IMPROVEMENT_PLAN 4.2〜4.4 のとおり |
+| `Anomaly` / `AnomalyGroup` / `GridTemplate` | 項目は IMPROVEMENT_PLAN 4.2〜4.4 のとおり。所見（Claude）: cause_candidates・explanation（= reasoning）・additional_checks・recommended_action・report_text・prompt_version・explanation_input_digest・explained_at・explanation_error（群にも同じ列） |
 | `Alert` | title 必須、severity は `info` / `warning` / `critical`、read_at |
 | `Revenue` | year / month（発電所・年内で一意）、kwh、amount_yen |
 
@@ -155,7 +157,8 @@ RuleSet ──< SeverityRule（閾値。Anomaly / AnomalyGroup が判定時の�
   キーボード: j / k 移動、c 確定、x 却下（理由が未選択なら選択に案内）
 AnomalyReview（すべて locked にし、元の判定値は残す）
   確定: 原因候補（selected_causes）、「RGB で確認した」なら証拠レベル B
-  修正: final_anomaly_type / final_bbox（画像の上でドラッグ）。final_severity は判定時のルールセットで修正後の種類の閾値
+  修正: final_anomaly_type / final_bbox（画像の上でドラッグ）。final_severity は、修正後の種類の ΔT の指標（measure）が
+        保存されている値の指標と同じなら判定時のルールセットの閾値で付け直し、違えば人が選ぶ（選ばなければ修正しない）
   却下: 理由（グレア・影・汚れ・その他）必須
   群: 群単位で確定・却下し構成パネルにも反映。群から特定のパネルを外せる
   パネルの割り当て: 人がパネルを選ぶ（ロックしない。自動提案は未実装 → 既知の問題 R）
@@ -171,6 +174,25 @@ InspectionReview（レビュー完了。2026-10-15 ユーザー承認）
 学習データ（bin/rails "dataset:export[OUT_DIR]"、DatasetExporter）
   解析済みで未確定の候補が残っていない画像だけ。確定・修正した異常を YOLO 形式（修正後の種類・位置）、
   却下だけ・異常なしの画像は空のラベル（負例）。manifest.csv・labels_detail.csv。リポジトリ内（tmp/ 以外）には書き出さない
+```
+
+```
+所見と総括文（Phase 6。2026-10-15 ユーザー承認）
+  レビュー完了 → ExplainInspectionJob（「所見を作り直す」は force: true）
+    対象: 確定・修正した異常（群の構成パネルを除く）と確定した群。却下・未確定には作らない
+  AnomalyExplainer（app/prompts/anomaly_explainer_v1.txt）
+    入力: 保存済みの構造化データの文字だけ（種類・ΔT と指標・正規化ΔT・面積比・日射量と種類・モジュール構成・
+          証拠レベル・電気測定・人が選んだ原因候補・パネル番号・フラグ）。画像・人のメモ・重大度は送らない
+    出力: cause_candidates[]（cause・basis）、reasoning、additional_checks[]、recommended_action、report_text
+  InspectionSummaryWriter（app/prompts/inspection_summary_v1.txt）
+    入力: 点検日・画像枚数（除外）・日射量・気象・モジュール構成・点検の重要度・確定した異常の件数と内訳と一覧・未確定の候補の件数
+    出力: summary_text、priority_actions[]、additional_checks[]
+  ClaudeStructuredOutput: モデルは CLAUDE_MODEL（未設定ならリクエストしない）、上限トークン数・タイムアウト・再試行は config/claude.yml
+    出力の JSON スキーマに severity は無い（additionalProperties: false）。余計な項目が返っても保存しない
+    API エラー・拒否・途中で切れた応答・JSON でない応答・所見文が空 → explanation_error / summary_error に記録
+  入力（＋プロンプトの版）の SHA-256 を保存し、同じなら作り直さない。失敗時、入力が変わっていたら古い所見を消す
+  書き込むのは所見の列だけ。種類・重大度・状態・パネル・Site には触れない
+  画面: 点検詳細の「所見・総括」、レビュー画面のカードの「所見（Claude）」。作成後にデータが変わったら「古い所見」と表示
 ```
 
 ### 4.3 解析エンジン（`analyzer/`）
@@ -197,9 +219,9 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 
 ### 4.2 旧方式（Phase 1 までの点検。表示のみ）
 
-`inspection_images` を持たない点検は旧方式（`Inspection#legacy?`）として、`inspections/_legacy.html.erb` で従来どおり表示する（DB には書き込まない）。新しく作る手段は無い。`AnalyzePanelImageJob` / `ClaudePanelAnalyzer` はコードとして残っている（Phase 6 で `AnomalyExplainer` に置き換え）。結果は `legacy_anomalies` に保存する。
+`inspection_images` を持たない点検は旧方式（`Inspection#legacy?`）として、`inspections/_legacy.html.erb` で従来どおり表示する（DB には書き込まない）。新しく作る手段は無い。判定の処理（`AnalyzePanelImageJob` / `ClaudePanelAnalyzer`）は Phase 6 で削除した。結果は `legacy_anomalies` に残っている（読み取り専用）。
 
-**アラートの方針**（旧方式のジョブ）: 1つの点検につき1件。再解析で異常があれば更新し、重大度が warning → critical に上がったら未読に戻す。再解析の失敗・異常0件では既存のアラートを変更も削除もしない。
+**アラートの方針**（旧方式のジョブ。Phase 6 で削除）: 1つの点検につき1件だった。旧方式で作られたアラートはそのまま残る。
 
 ## 5. 既知の問題
 
@@ -209,7 +231,7 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 |---|---|---|---|
 | A〜E | show の DB 書き戻し、severity の常時必須、pending の自動更新、画像なしの点検作成、ジョブのトランザクション | — | **Phase 1 で対応済み** |
 | F | 発電所作成時にパネルを格子状に自動生成しており、位置は実配置と無関係 | `SitesController#generate_panels_for` | **Phase 2 で対応済み**（ユーザー承認: 仮配置として残す）。`panels.layout_source` を追加し、既存・新規とも `auto`。ダッシュボードとフォームに「仮配置」と表示。実配置の登録手段（CSV 取込など）は未実装で、後のフェーズで検討 |
-| G | モデル名 `claude-opus-4-7` がコード内に固定 | `ClaudePanelAnalyzer::MODEL` | Phase 6（`CLAUDE_MODEL`） |
+| G | モデル名 `claude-opus-4-7` がコード内に固定 | `ClaudePanelAnalyzer::MODEL` | **Phase 6 で対応済み**（旧方式の判定を削除し、所見の作成は `CLAUDE_MODEL` を使う） |
 | H | `PagesController` に存在しない `authenticate_user!` の skip が残っている（無害） | `PagesController` | Phase 8 の認証導入時に整理 |
 | I | ワーカーが途中で落ちると `analyzing`（または品質チェック待ち）のまま残り、自動更新が止まらない | `AnalyzePanelImageJob` / `ProcessInspectionImageJob` / `auto_refresh_controller.js` | **Phase 4 で対応済み**（`StaleAnalysisJob` が `stale_after_minutes` を超えた画像・旧方式の点検を failed に。自動更新の JS にも上限時間） |
 | J | Claude の応答の件数・重大度・異常一覧の食い違い | `ClaudePanelAnalyzer#parse_response` | **Phase 1 で対応済み** |
@@ -222,15 +244,17 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 | T | `csv` は Ruby 3.4 で標準の gem から外れる（Ruby 3.3.10 では警告のみ） | `app/services/dataset_exporter.rb` | Ruby 3.4 に上げるときに Gemfile へ追加（新しい gem の追加のため、そのとき確認） |
 | P | Dockerfile の `RUBY_VERSION` が 3.2.9 で、`.ruby-version`（3.3.10）と食い違っていた（Phase 0 以前から） | `Dockerfile` | **Phase 4 で修正**（3.3.10 に合わせた） |
 | Q | 解析エンジンの DJI Thermal SDK の呼び出しが未実装のため、実際の R-JPEG は `needs_review（sdk_unavailable）` になる | `analyzer/analyzer/thermal/dji_reader.py` | Phase S の後に実装（TODO） |
+| U | 開発環境はジョブが `:inline` のため、レビュー完了のリクエストの中で Claude API を呼ぶ（確定した異常の件数だけ待つ） | `ExplainInspectionJob` | 本番は Solid Queue で非同期。開発で困るようなら指示を受けて対応 |
+| V | 所見・総括文は、発電所のモジュール構成や気象データを後から変えても自動では作り直さない（画面に「古い所見」と表示する） | `AnomalyExplainer#current?` | 「所見を作り直す」で作り直す。報告書（Phase 7）の版の管理と合わせて検討 |
 | M | 温度データの有無はメタデータのタグによる仮判定。実際の R-JPEG でどのタグが出るかは未確認 | `config/image_quality.yml` の `radiometric_tags` | Phase S で実画像を確認して見直す。最終判定は Phase 3 の解析エンジン |
 
 ## 6. テスト
 
-- `bin/rails test`: 275件（Phase 5 時点）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
+- `bin/rails test`: 263件（Phase 6 時点。旧方式の Claude 判定のテスト 38件はコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
 - **本物の解析エンジンを呼ぶテスト**（`test/integration/analyzer_end_to_end_test.rb`）: `analyzer/scripts/make_dev_scenes.py` で合成シーン（.npy）を作り、Rails から `uv run python -m analyzer` を実行する。uv と `cd analyzer && uv sync` が必要（CI の test ジョブも uv を入れている）
 - 偽の解析エンジン: `AnalyzeInspectionImageJob.client` を `with_fake_analyzer` で差し替える（本番では常に `ThermalAnalyzerClient`）
 - 解析エンジン: `cd analyzer && uv run pytest`（60件）。合成の温度行列（`analyzer/tests/fixtures/make_synthetic.py`）だけを使う。CI の `analyzer-test` ジョブでも実行する
-- Claude API は呼ばない。`ClaudePanelAnalyzer.default_client` に偽クライアントを渡す（`with_fake_claude`）
+- Claude API は呼ばない。`ClaudeStructuredOutput.default_client` に偽クライアント（`FakeAnthropicClient`。SDK の `Anthropic::Message` を返す）を渡し、`CLAUDE_MODEL` もテスト用の値にする（`with_fake_claude`）
 - exiftool は**実際に動かす**テストと、**偽の読み取りクラスに差し替える**テストがある。本物の R-JPEG の熱画像タグは exiftool で書き込めないため、温度データありの場合は `ProcessInspectionImageJob.exif_reader` を `with_fake_exif(tags:)` で差し替える（本番では常に `ExifReader`）。開発機・CI とも exiftool が必要（CI は apt で導入）
 - テスト用画像はすべて合成: `panel.png`（8×8）、`thermal_plain_T.jpg`（640×512、EXIF あり・温度データなし）、`lowres_T.jpg`（320×256）、`rgb_V.jpg`、`memo.txt`（画像以外）。顧客画像は使わない
 - 受け入れ確認「温度データの無い JPEG が needs_review（no_radiometric）になり、理由が画面に表示される」は、実際の exiftool を使うジョブのテストと結合テストで確認している

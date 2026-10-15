@@ -2,7 +2,7 @@
 
 ドローンで撮影した太陽光パネルのサーモ（赤外線）画像から熱異常をスクリーニングし、発電所ごとの点検結果・アラート・売電実績を管理する Rails アプリケーションです。
 
-> **移行中です。** 現在の解析は「Claude に画像を見せて判定させる方式」で、温度を測っていないため精度に根本的な限界があります。これを「放射温度データ ＋ ルール判定 ＋ 人の確認」方式に作り替えています。計画と仕様は [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md) を参照してください。
+> **移行中です。** 以前の「Claude に画像を見せて判定させる方式」（温度を測っていないため精度に根本的な限界がある）を、「放射温度データ ＋ ルール判定 ＋ 人の確認」方式に作り替えています。Claude は、人が確定した異常の所見と総括文を書くだけで、判定はしません。計画と仕様は [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md) を参照してください。
 
 ---
 
@@ -14,6 +14,7 @@
 | パネルマップ | パネルの配置と状態を表示（現在は登録時に自動生成した**仮配置**） |
 | 点検 | サーモ画像（R-JPEG）と RGB 画像をまとめてアップロード。画像ごとにメタデータを読み取り、品質チェックを行う。気象データを入力すると撮影時刻に合わせて割り当てる |
 | 判定基準 | 重大度の閾値をバージョン管理（ルールセット）。作成後は編集できず、複製して新しいバージョンを作る |
+| レビュー・所見 | 異常の候補を人が確定・修正・却下し、レビュー完了で点検の重要度を付ける。確定した異常の所見（原因候補・推奨対応・所見文）と総括文を Claude が作成 |
 | アラート | 異常検出時にアラートを作成。既読管理 |
 | 売電実績 | 月別の発電量（kWh）と売電額を記録し、グラフ表示 |
 | ダッシュボード | 発電所ごとの状況をまとめて表示。画面上で発電所を切り替える |
@@ -22,7 +23,7 @@
 
 ## ワークフロー
 
-### 現在の点検フロー（Phase 5 時点）
+### 現在の点検フロー（Phase 6 時点）
 
 ```
 点検画面でサーモ画像と RGB 画像をまとめてアップロード
@@ -37,13 +38,15 @@
   → 要確認の画像は、理由を入力して除外できる
   → レビュー画面で候補を確定・修正・却下し、見逃しを追加する（j / k / c / x のキーボード操作）
   → 「レビュー完了」で点検を完了にし、確定した異常の最大重大度を点検の重要度にする
+  → 確定した異常・群の所見（原因候補・追加の確認・推奨対応・所見文）と点検の総括文を Claude が作成する
+       入力は確定済みの数値だけ（画像は送らない）。判定・重大度には使わない。「所見を作り直す」で作り直せる
 ```
 
 確定・修正済みの異常は `bin/rails "dataset:export[/path/to/out]"` で YOLO 形式の学習データとして書き出せます（顧客の画像を含むため、リポジトリの外か `tmp/` に書き出してください）。
 
 実際の R-JPEG の温度データの読み取り（DJI Thermal SDK）は Phase S の後に実装します。それまでは、開発用の合成データ（下の「開発用の合成点検」）で動作を確かめられます。
 
-旧方式（画像1枚を Claude に判定させる方式）で作った点検は、表示だけできます。新しい点検では Claude の判定は行いません。詳しい流れは [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を参照してください。
+旧方式（画像1枚を Claude に判定させる方式）で作った点検は、表示だけできます（判定の処理は Phase 6 で削除しました）。詳しい流れは [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を参照してください。
 
 ### 移行後の点検ワークフロー
 
@@ -91,7 +94,7 @@
 - フロントエンド: Propshaft、importmap、Turbo、Stimulus、Chartkick
 - ジョブ: 開発は `:inline`（同期実行）、本番は Solid Queue（Puma 内で実行）
 - キャッシュ・WebSocket: Solid Cache / Solid Cable（本番）
-- AI: Anthropic Claude（現在は非公式の `anthropic` gem 0.4.1。Phase 6 で公式 SDK へ移行予定）
+- AI: Anthropic Claude（公式 Ruby SDK `anthropic` 1.x。structured outputs で固定スキーマの所見を作成。モデルは `CLAUDE_MODEL`、呼び出し設定は `config/claude.yml`）
 - デプロイ: Kamal（Docker、linux/amd64）
 - 解析エンジン: Python 3.12・uv（numpy / OpenCV / pydantic）。`analyzer/`。DJI Thermal SDK の呼び出しは Phase S 後に実装
 
@@ -102,14 +105,16 @@ app/
   controllers/     dashboard, sites, inspections, alerts, revenues, pages
   models/          Site, Panel, Inspection, Alert, Revenue
   services/        メタデータ読み取り（exif_reader / image_metadata_extractor）、品質チェック（image_quality_checker）、
-                   気象データの補間（weather_interpolator）、ペアリング（image_pairing）、旧方式の claude_panel_analyzer
+                   気象データの補間（weather_interpolator）、ペアリング（image_pairing）、解析（thermal_analyzer_client ほか）、
+                   レビュー（anomaly_review / inspection_review）、所見（anomaly_explainer / inspection_summary_writer）
   jobs/            process_inspection_image_job.rb（画像ごとの品質チェック）、recheck_inspection_quality_job.rb、
-                   analyze_panel_image_job.rb（旧方式）
+                   analyze_inspection_image_job.rb（解析）、explain_inspection_job.rb（所見と総括文）
   javascript/controllers/
                    auto_refresh_controller.js（解析中の自動更新）
                    upload_form_controller.js（アップロードフォーム）
                    flash_controller.js
 config/            ルーティング、環境設定、image_quality.yml（品質チェックの閾値など）、deploy.yml（Kamal）、ci.rb
+app/prompts/       Claude のプロンプト（anomaly_explainer_v1.txt、inspection_summary_v1.txt）
 db/                schema.rb、migrate/、seeds.rb（サンプル発電所2件）
 docs/              改善指示書など
 test/              テスト（Claude API は偽クライアントに差し替えて実行）
@@ -122,11 +127,11 @@ analyzer/          Python 解析エンジン（使い方は analyzer/README.md�
 |---|---|
 | `sites` | 発電所名、所在地、容量（kW）、パネル枚数、状態、モジュール仕様 |
 | `panels` | 発電所、パネル番号、配置座標（x, y）、状態、最終点検日時、配置の種類（仮配置 / 実配置） |
-| `inspections` | 発電所、点検日時、解析ステータス、重大度（未判定は空）、天候メモ。旧方式の結果（`legacy_anomalies` など） |
+| `inspections` | 発電所、点検日時、解析ステータス、重大度（未判定は空）、天候メモ、レビュー完了日時、総括文（Claude）。旧方式の結果（`legacy_anomalies` など） |
 | `inspection_images` | 点検内の画像1枚ごと。サーモ画像（原本）・RGB、メタデータ、気象データ、品質チェック結果、ステータス |
 | `weather_readings` | 点検中の気象の観測値（時刻・日射量と種類・風速・気温・湿度） |
 | `rule_sets` / `severity_rules` | 重大度の閾値（ルールセット単位でバージョン管理） |
-| `anomalies` / `anomaly_groups` / `grid_templates` | 解析結果とグリッド（テーブルのみ。使うのは Phase 4 以降） |
+| `anomalies` / `anomaly_groups` / `grid_templates` | 異常の候補・レビュー結果・所見（Claude）、パネル群、グリッドのテンプレート |
 | `alerts` | 発電所、点検、パネル、タイトル、重大度、既読日時 |
 | `revenues` | 発電所、年月、発電量（kWh）、売電額（円） |
 
@@ -143,7 +148,7 @@ analyzer/          Python 解析エンジン（使い方は analyzer/README.md�
 - libvips（画像処理）
 - exiftool（画像のメタデータ読み取り。macOS: `brew install exiftool`、Debian/Ubuntu: `apt install libimage-exiftool-perl`）
 - uv（解析エンジンの Python 3.12 と依存関係。`cd analyzer && uv sync`。Rails のテストも解析エンジンを呼ぶ）
-- Anthropic API キー（旧方式の点検の再解析にのみ使用）
+- Anthropic API キー（確定した異常の所見と総括文の作成に使用。無くても判定・レビューはできる）
 
 ### 手順
 
@@ -165,8 +170,8 @@ bin/setup    # gem のインストール、DB の作成・マイグレーショ�
 
 | 変数 | 必須 | 用途 |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | ○ | Claude API キー。未設定だと解析が失敗します |
-| `CLAUDE_MODEL` | 予定 | 使用する Claude のモデル名（現在はコード内に固定。Phase 6 で環境変数化） |
+| `ANTHROPIC_API_KEY` | ○ | Claude API キー。未設定だと所見・総括文が作れません（判定・レビューには影響しません） |
+| `CLAUDE_MODEL` | ○ | 所見の作成に使う Claude のモデル名（例: `claude-opus-5-5`）。未設定なら所見を作らず、エラーとして表示します |
 | `DJI_IRP_PATH` | 予定 | DJI Thermal SDK の `dji_irp` のパス（Phase 3 以降） |
 | `DATABASE_URL` | 本番 | 本番 DB の接続先 |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` / `AWS_BUCKET` | 本番（予定） | S3 への画像保存（Phase 8） |
@@ -194,7 +199,7 @@ bin/rails dev:synthetic_inspection   # 開発環境だけ。SITE_ID=… で発�
 
 解析エンジンで合成シーン（.npy の温度行列と表示用のプレビュー）を4枚作り、品質チェックに合格した点検として登録します（ホットスポット、2/3 の帯 ＋ ホットスポット、隣接パネル群、グリッドの自動提案を試せる配列）。表示された URL を開き、グリッドを指定すると解析が動きます。.npy を登録できるのは開発・テスト環境だけです（`config/analyzer.yml` の `allow_npy_thermal`）。
 
-テストは Claude API を呼びません（偽クライアントに差し替え）。仕組みと、テスト名「現状: …」の意味は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) の「テスト」を参照してください。
+テストは Claude API を呼びません（`ClaudeStructuredOutput.default_client` を偽クライアントに差し替え）。仕組みと、テスト名「現状: …」の意味は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) の「テスト」を参照してください。
 
 GitHub Actions（`.github/workflows/ci.yml`）でも brakeman、bundler-audit、importmap audit、rubocop、テストを実行します。
 

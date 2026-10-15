@@ -16,6 +16,6 @@
 
 例:
 - 「Claude に画像を見せて判定させる方式」「Claude には判定させない」「Claude の役割は所見を書くこと」→ いずれもアプリ内で使う Claude API の話
-- `ClaudePanelAnalyzer`、`CLAUDE_MODEL`、`ANTHROPIC_API_KEY` → Claude API の呼び出しと設定
+- `AnomalyExplainer`、`ClaudeStructuredOutput`、`CLAUDE_MODEL`、`ANTHROPIC_API_KEY` → Claude API の呼び出しと設定
 
 CLAUDE.md というファイル名は、Claude Code（コーディングエージェント）が読む設定ファイルの名前です。中身の規律はどのエージェントにも当てはまります。
