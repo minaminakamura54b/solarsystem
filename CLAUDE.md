@@ -73,4 +73,6 @@ bin/rails dev:synthetic_inspection   # 開発用: 合成シーン（.npy）の�
 - `app/services/thermal_analyzer_client.rb` — 解析エンジンの呼び出し（タイムアウト・出力の検証）。設定は `config/analyzer.yml`
 - `app/jobs/analyze_inspection_image_job.rb` / `app/services/analysis_result_importer.rb` / `app/services/severity_rule_engine.rb` — 解析・異常の保存・重大度
 - `app/javascript/controllers/grid_editor_controller.js` — グリッド入力画面（canvas）
+- `app/services/anomaly_review.rb` / `app/services/inspection_review.rb` / `app/javascript/controllers/review_controller.js` — レビュー操作・レビュー完了・レビュー画面
+- `app/services/dataset_exporter.rb` — 学習データの書き出し（`bin/rails "dataset:export[OUT_DIR]"`。顧客の画像を含むのでリポジトリに書き出さない）
 - `docs/IMPROVEMENT_PLAN.md` — 改善指示書（仕様の正本）
