@@ -134,6 +134,34 @@ class AnomalyReviewTest < ActiveSupport::TestCase
     assert_raises(AnomalyReview::Error) { AnomalyReview.new(record).assign_panel!(other) }
   end
 
+  test "完了済みの点検でパネルを割り当て直しても、レビュー待ちに戻さず、変更前・変更後のパネル番号と日時を履歴に残す" do
+    record = candidate(review_status: "confirmed", locked: true, panel: panels(:p001))
+    @inspection.refresh_status!
+    assert InspectionReview.new(@inspection).complete!(all_images_checked: true).completed?
+    before = @inspection.reload.attributes.slice("analysis_status", "severity", "reviewed_at")
+
+    travel_to Time.zone.parse("2026-10-19 10:00:00") do
+      AnomalyReview.new(record).assign_panel!(panels(:p002))
+    end
+    AnomalyReview.new(record.reload).assign_panel!(nil)
+
+    assert_equal before, @inspection.reload.attributes.slice("analysis_status", "severity", "reviewed_at")
+    history = record.reload.panel_assignment_history
+    assert_equal({ "reason" => "assigned", "from_panel_number" => "P001", "to_panel_number" => "P002",
+                   "changed_at" => Time.zone.parse("2026-10-19 10:00:00").iso8601 }, history.first)
+    assert_equal [ "P002", nil ], history.last.values_at("from_panel_number", "to_panel_number")
+    assert_nil record.panel
+    assert_equal [ "confirmed", "warning", true ], [ record.review_status, record.severity, record.locked ]
+  end
+
+  test "同じパネルを割り当てても履歴を増やさない" do
+    record = candidate(panel: panels(:p001))
+
+    AnomalyReview.new(record).assign_panel!(panels(:p001))
+
+    assert_empty record.reload.panel_assignment_history
+  end
+
   test "見逃しを手動で追加すると、人が判断した異常（確定・locked・detection manual）になる" do
     anomaly = AnomalyReview.add_manual!(@image, anomaly_type: "hotspot", severity: "critical",
                                         bbox: { "x1" => 0.5, "y1" => 0.5, "x2" => 0.52, "y2" => 0.53 }, panel_index: "12")

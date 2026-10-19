@@ -185,7 +185,10 @@ class PanelLayoutImportTest < ActiveSupport::TestCase
     target.reload
     assert_not target.panel_reassignment_required
     assert_equal "A-01-01", target.panel.number
-    assert_equal "P001", target.panel_assignment_history.last["panel_number"]
+    assert_equal [ "layout_replaced", "assigned" ], target.panel_assignment_history.map { |e| e["reason"] }
+    assert_equal "P001", target.last_layout_unassignment["panel_number"]
+    assert_equal({ "from_panel_number" => nil, "to_panel_number" => "A-01-01" },
+                 target.panel_assignment_history.last.slice("from_panel_number", "to_panel_number"))
   end
 
   test "異常が紐付いたパネルは、紐付けを外さずには削除できない" do

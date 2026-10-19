@@ -26,7 +26,7 @@
         <thead><tr><th>点検日</th><th>画像</th><th>種類</th><th>重大度</th><th>状態</th><th>元のパネル</th><th></th></tr></thead>
         <tbody>
           <% @anomalies.each do |anomaly| %>
-            <% last = anomaly.panel_assignment_history.last || {} %>
+            <% last = anomaly.last_layout_unassignment %>
             <tr id="reassign_anomaly_<%= anomaly.id %>">
               <td><%= anomaly.inspection.conducted_at.strftime("%Y/%m/%d") %></td>
               <td><%= anomaly.inspection_image.sequence %>（パネル <%= anomaly.panel_index_in_image || "-" %>）</td>
