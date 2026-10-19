@@ -1,6 +1,6 @@
 # ARCHITECTURE（現状）
 
-Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜6・5b（ブランチ `phase-5b`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
+Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜6・5b・5c（ブランチ `phase-5c`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
 
 ---
 
@@ -162,16 +162,17 @@ AnomalyReview（すべて locked にし、元の判定値は残す）
         保存されている値の指標と同じなら判定時のルールセットの閾値で付け直し、違えば人が選ぶ（選ばなければ修正しない）
   却下: 理由（グレア・影・汚れ・その他）必須
   群: 群単位で確定・却下し構成パネルにも反映。群から特定のパネルを外せる
-  パネルの割り当て: 人がパネルを選ぶ（ロックしない。自動提案は未実装 → 既知の問題 R）
+  パネルの割り当て: 人がパネルを選ぶ（ロックしない。自動提案は未実装 → 既知の問題 R）。変更前・変更後のパネル番号と日時を
+    panel_assignment_history に残す。完了済みの点検でもレビュー待ちに戻さない（Phase 5c。所見は入力が変わるので「古い所見」になる）
   電気測定: 方法・結果・日付 → 証拠レベル A
   見逃しの手動追加: 画像の上で範囲を指定、種類・重大度は人が選ぶ（detection manual、確定・locked）
-  確定・修正した critical → ConfirmedAnomalyAlert。完了済みの点検で操作したらレビュー待ちに戻す
+  確定・修正した critical → ConfirmedAnomalyAlert。完了済みの点検で操作したらレビュー待ちに戻す（パネルの割り当てを除く）
 InspectionReview（レビュー完了。2026-10-15 ユーザー承認）
   解析待ち・解析中・要確認・失敗の画像が残っていれば完了できない（除外するか解析を終える）
   「すべての画像を確認し、見逃しがない」ことの確認が必須（候補0件でも）
   未確定の候補が残っていれば警告し、確認のチェックがあるときだけ完了。残った候補は重要度に入れない
   completed・重要度（確定・修正した異常・群の最大重大度。点検の重要度に mild を追加。無ければ normal）・reviewed_at
-  完了後に画像のステータスが変わる・レビュー操作をすると、重要度とレビュー完了を取り消してレビュー待ちに戻る
+  完了後に画像のステータスが変わる・レビュー操作（パネルの割り当てを除く）をすると、重要度とレビュー完了を取り消してレビュー待ちに戻る
 学習データ（bin/rails "dataset:export[OUT_DIR]"、DatasetExporter）
   解析済みで未確定の候補が残っていない画像だけ。確定・修正した異常を YOLO 形式（修正後の種類・位置）、
   却下だけ・異常なしの画像は空のラベル（負例）。manifest.csv・labels_detail.csv。リポジトリ内（tmp/ 以外）には書き出さない
@@ -190,7 +191,7 @@ InspectionReview（レビュー完了。2026-10-15 ユーザー承認）
     アラートはパネルの紐付けだけ外す。sites.panel_count を CSV の件数に。新しいパネルは manual・normal・最終点検日時なし
     確認画面の後にパネルか紐付けが変わっていたら置き換えない（plan の digest。409 で確認画面を出し直す）
   割り当て直し: 一覧（/sites/:id/panel_layout）・点検詳細・レビュー画面のカード・ダッシュボードに表示。
-    レビュー画面のパネル選択で割り当てると印が外れる（履歴は残す。割り当ては今までどおりレビュー操作なので、完了済みの点検はレビュー待ちに戻る）
+    レビュー画面のパネル選択で割り当てると印が外れる（変更の履歴を足す。完了済みの点検もレビュー待ちに戻さない。Phase 5c）
   start_panel_ref: panel_grids の各要素に {"panel_number": "..."}（グリッドの左上のパネル）。入力欄は無い。
     グリッドを入力したときだけ、実配置に存在するかを確かめる（StartPanelRef）。自動提案は範囲外
 ```
@@ -271,7 +272,7 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 
 ## 6. テスト
 
-- `bin/rails test`: 287件（Phase 5b 時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
+- `bin/rails test`: 290件（Phase 5c 時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
 - **本物の解析エンジンを呼ぶテスト**（`test/integration/analyzer_end_to_end_test.rb`）: `analyzer/scripts/make_dev_scenes.py` で合成シーン（.npy）を作り、Rails から `uv run python -m analyzer` を実行する。uv と `cd analyzer && uv sync` が必要（CI の test ジョブも uv を入れている）
 - 解析エンジンのタイムアウトのテストは、子プロセスが片付くまで最大 5 秒待ってから確かめる（終了済みで回収待ちのゾンビは残っていないとみなす。Phase 6b）
 - 偽の解析エンジン: `AnalyzeInspectionImageJob.client` を `with_fake_analyzer` で差し替える（本番では常に `ThermalAnalyzerClient`）

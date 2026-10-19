@@ -26,4 +26,9 @@ class Anomaly < ApplicationRecord
   def effective_type = final_anomaly_type.presence || anomaly_type
   def effective_bbox = final_bbox.presence || bbox
   def effective_severity = final_severity.presence || severity
+
+  # 実配置の置き換えで外れた、最後のパネルの紐付け（panel_assignment_history の reason layout_replaced）
+  def last_layout_unassignment
+    panel_assignment_history.reverse.find { |entry| entry["reason"] == "layout_replaced" } || {}
+  end
 end

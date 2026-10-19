@@ -34,12 +34,26 @@
       <% flags = Array(anomaly.flags).map { |f| { "glare_suspect" => "グレア疑い", "unnormalized" => "未正規化", "edge_adjacent" => "パネル端" }.fetch(f, f) } %>
       <% if flags.any? %><p class="text-xs" style="color:#ef9f27;">フラグ: <%= flags.join("・") %></p><% end %>
       <% if anomaly.panel_reassignment_required? %>
-        <% last = anomaly.panel_assignment_history.last || {} %>
+        <% last = anomaly.last_layout_unassignment %>
         <p class="text-xs" style="color:#ef9f27;">配置の置き換えでパネルの割り当てが外れました（元: <%= last["panel_number"] %><%= "・仮配置" if last["layout_source"] == "auto" %>）。パネルを割り当て直してください。</p>
       <% end %>
       <p class="text-xs">割り当てたパネル: <%= anomaly.panel ? "#{anomaly.panel.number}#{'（仮配置）' if anomaly.panel.placeholder_layout?}" : "未割り当て" %>
         <% if anomaly.selected_causes.any? %>／ 原因候補: <%= anomaly.selected_causes.map { |c| AnomalyReview::CAUSES[c] }.join("・") %><% end %>
       </p>
+      <% if anomaly.panel_assignment_history.any? %>
+        <details class="text-xs text-gray-500">
+          <summary style="cursor:pointer;">パネルの割り当ての履歴（<%= anomaly.panel_assignment_history.size %> 件）</summary>
+          <ul style="list-style:disc; padding-left:1.25rem;">
+            <% anomaly.panel_assignment_history.each do |entry| %>
+              <% if entry["reason"] == "layout_replaced" %>
+                <li><%= Time.zone.parse(entry["unassigned_at"].to_s)&.strftime("%Y/%m/%d %H:%M") %> 配置の置き換えで外れた（<%= entry["panel_number"] %><%= "・仮配置" if entry["layout_source"] == "auto" %>）</li>
+              <% else %>
+                <li><%= Time.zone.parse(entry["changed_at"].to_s)&.strftime("%Y/%m/%d %H:%M") %> <%= entry["from_panel_number"] || "未割り当て" %> → <%= entry["to_panel_number"] || "未割り当て" %></li>
+              <% end %>
+            <% end %>
+          </ul>
+        </details>
+      <% end %>
       <% if anomaly.electrical_evidence.present? %>
         <p class="text-xs">電気測定: <%= AnomalyReview::ELECTRICAL_METHODS[anomaly.electrical_evidence["method"]] %> — <%= anomaly.electrical_evidence["result"] %></p>
       <% end %>

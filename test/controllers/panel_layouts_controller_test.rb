@@ -91,7 +91,16 @@ class PanelLayoutsControllerTest < ActionDispatch::IntegrationTest
     get review_inspection_path(inspection, image: image.sequence, site_id: @site.id)
     assert_match "元: P002・仮配置", response.body
 
+
     get dashboard_path(site_id: @site.id)
     assert_match "割り当てが外れた異常が 1 件あります", response.body
+
+    patch assign_panel_inspection_anomaly_path(inspection, target, site_id: @site.id), params: { panel_id: @site.panels.find_by!(number: "A-01").id }
+    get review_inspection_path(inspection, image: image.sequence, site_id: @site.id)
+    assert_match "パネルの割り当ての履歴（2 件）", response.body
+    assert_match "未割り当て → A-01", response.body
+    assert_no_match "元: P002・仮配置", response.body
+    get dashboard_path(site_id: @site.id)
+    assert_no_match "割り当てが外れた異常", response.body
   end
 end

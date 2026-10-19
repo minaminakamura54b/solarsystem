@@ -50,6 +50,21 @@ class ExplainInspectionJobTest < ActiveJob::TestCase
     assert_equal 3, client.requests.size
   end
 
+  test "完了後にパネルを割り当て直すと、点検はレビュー待ちに戻らず、所見と総括文は「古い所見」になる" do
+    complete!
+    with_fake_claude(fake_claude_for_findings) { ExplainInspectionJob.perform_now(@inspection.id) }
+    assert AnomalyExplainer.new(output: nil).current?(@confirmed.reload)
+    assert InspectionSummaryWriter.new(output: nil).current?(@inspection.reload)
+    panel = @inspection.site.panels.create!(number: "A-01", position_x: 9, position_y: 9, layout_source: "manual")
+
+    AnomalyReview.new(@confirmed).assign_panel!(panel)
+
+    assert_equal "completed", @inspection.reload.analysis_status
+    assert_not AnomalyExplainer.new(output: nil).current?(@confirmed.reload)
+    assert_not InspectionSummaryWriter.new(output: nil).current?(@inspection)
+    assert AnomalyExplainer.new(output: nil).current?(@group.reload), "パネル番号が入力に無い群の所見は古くならない"
+  end
+
   test "レビューを完了していない点検では何もしない" do
     client = fake_claude_for_findings
 

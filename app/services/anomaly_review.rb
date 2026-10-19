@@ -3,7 +3,8 @@
 # - 証拠レベル: RGB を確認して確定・修正したとき B、電気測定を入力したとき A（検出時点はすべて C）
 # - 群は群単位で確定・却下し、構成パネルの異常にも反映する
 # - 確定・修正した critical の異常・群には ConfirmedAnomalyAlert でアラートを1件作る
-# - 完了済みの点検でレビュー操作をしたら、点検をレビュー待ちに戻す（重要度を付け直すため）
+# - 完了済みの点検でレビュー操作をしたら、点検をレビュー待ちに戻す（重要度を付け直すため）。
+#   ただしパネルの割り当ては戻さない（重大度・異常の有無に影響しないため。2026-10-19 ユーザー指示）
 class AnomalyReview
   REJECTION_REASONS = { "glare" => "グレア（反射）", "shadow" => "影", "soiling" => "汚れ", "other" => "その他" }.freeze
   CAUSES = {
@@ -52,9 +53,14 @@ class AnomalyReview
     raise Error, "異常群にはパネルを割り当てられません" if group?
     raise Error, "この発電所のパネルではありません" if panel && panel.site_id != @record.inspection.site_id
 
-    # 人がパネルを割り当てたら、配置の置き換えで外れた紐付けの割り当て直しは済んだものとする（履歴は残す）
-    @record.update!(panel: panel, panel_reassignment_required: panel ? false : @record.panel_reassignment_required)
-    reopen_inspection
+    return if @record.panel_id == panel&.id
+
+    # 変更前・変更後のパネル番号と日時を履歴に残す。人がパネルを割り当てたら、配置の置き換えで外れた紐付けの
+    # 割り当て直しは済んだものとする。完了済みの点検でもレビュー待ちに戻さない（所見は入力が変わるので「古い所見」になる）
+    entry = { "reason" => "assigned", "from_panel_number" => @record.panel&.number, "to_panel_number" => panel&.number,
+              "changed_at" => Time.current.iso8601 }
+    @record.update!(panel: panel, panel_assignment_history: @record.panel_assignment_history + [ entry ],
+                    panel_reassignment_required: panel ? false : @record.panel_reassignment_required)
   end
 
   # 電気測定の結果を入力する。入力があれば証拠レベル A
