@@ -52,7 +52,8 @@ class AnomalyReview
     raise Error, "異常群にはパネルを割り当てられません" if group?
     raise Error, "この発電所のパネルではありません" if panel && panel.site_id != @record.inspection.site_id
 
-    @record.update!(panel: panel)
+    # 人がパネルを割り当てたら、配置の置き換えで外れた紐付けの割り当て直しは済んだものとする（履歴は残す）
+    @record.update!(panel: panel, panel_reassignment_required: panel ? false : @record.panel_reassignment_required)
     reopen_inspection
   end
 
