@@ -44,7 +44,7 @@ class InspectionImagesController < ApplicationController
 
   # グリッドを保存し、品質チェックに合格していれば解析ジョブを登録する
   def grids
-    grids = InspectionImage.normalize_grids(JSON.parse(params.require(:panel_grids)))
+    grids = InspectionImage.normalize_grids(JSON.parse(params.require(:panel_grids)), site: @inspection.site)
     @image.update!(panel_grids: grids)
     if !@image.ready_for_analysis?
       notice = "グリッドを保存しました（品質チェックに合格していないため、解析はしません）"

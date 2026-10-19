@@ -84,8 +84,10 @@ class InspectionImage < ApplicationRecord
 
   GRID_ORIENTATIONS = %w[portrait landscape].freeze
 
-  # グリッド入力画面から受け取ったグリッドを正規化する（不正なら ArgumentError）
-  def self.normalize_grids(grids)
+  # グリッド入力画面から受け取ったグリッドを正規化する（不正なら ArgumentError）。
+  # start_panel_ref（任意）は形式を確かめ、site を渡したときは実配置に存在するかも確かめる（入力のときだけ。
+  # 保存のたびに確かめると、配置を置き換えた後に画像を保存できなくなるため）
+  def self.normalize_grids(grids, site: nil)
     raise ArgumentError, "グリッドは配列で指定してください" unless grids.is_a?(Array)
 
     grids.map.with_index(1) do |grid, n|
@@ -99,10 +101,13 @@ class InspectionImage < ApplicationRecord
       end
       orientation = grid["panel_orientation"].presence || "landscape"
       raise ArgumentError, "グリッド #{n}: パネルの向きが不正です" unless GRID_ORIENTATIONS.include?(orientation)
+      start_panel_ref = StartPanelRef.normalize(grid["start_panel_ref"])
+      StartPanelRef.verify!(site, start_panel_ref) if site
 
       {
         "rows" => rows, "cols" => cols, "corners" => corners.map { |x, y| [ x.round(6), y.round(6) ] },
-        "panel_orientation" => orientation, "grid_template_id" => grid["grid_template_id"].presence&.to_i
+        "panel_orientation" => orientation, "grid_template_id" => grid["grid_template_id"].presence&.to_i,
+        "start_panel_ref" => start_panel_ref
       }.compact
     end
   end

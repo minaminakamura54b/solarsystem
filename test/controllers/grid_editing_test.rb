@@ -56,6 +56,31 @@ class GridEditingTest < ActionDispatch::IntegrationTest
     assert_match "4隅の座標が不正です", flash[:alert]
   end
 
+  test "start_panel_ref は実配置のパネル番号の形式で保存し、無いパネル・仮配置・形式の誤りは保存しない（Phase 5b）" do
+    @site.panels.create!(number: "A-01-01", position_x: 5, position_y: 5, layout_source: "manual")
+    with_ref = ->(ref) { SAMPLE_GRID.merge("start_panel_ref" => ref) }
+
+    patch grids_inspection_inspection_image_path(@inspection, @first, site_id: @site.id), params: { panel_grids: grids_json(with_ref.({ "panel_number" => " A-01-01 " })) }
+    assert_equal({ "panel_number" => "A-01-01" }, @first.reload.panel_grids.first["start_panel_ref"])
+
+    {
+      { "panel_number" => "Z-99" } => "実配置のパネルにありません",
+      { "panel_number" => "P001" } => "実配置のパネルにありません", # 仮配置のパネル
+      { "panel_number" => "A-01-01", "row" => 0 } => "の形で指定してください",
+      "A-01-01" => "の形で指定してください"
+    }.each do |ref, message|
+      patch grids_inspection_inspection_image_path(@inspection, @second, site_id: @site.id), params: { panel_grids: grids_json(with_ref.(ref)) }
+      assert_empty @second.reload.panel_grids, ref.inspect
+      assert_match message, flash[:alert]
+    end
+  end
+
+  test "保存済みの start_panel_ref は、実配置を置き換えてパネルが無くなっても、画像の保存を妨げない" do
+    @first.update_columns(panel_grids: [ SAMPLE_GRID.merge("start_panel_ref" => { "panel_number" => "GONE" }) ])
+
+    assert @first.reload.update(analysis_status: "pending")
+  end
+
   test "グリッドを空にすると needs_review（grid_required）に戻す" do
     @first.update_columns(panel_grids: [ SAMPLE_GRID ])
 
