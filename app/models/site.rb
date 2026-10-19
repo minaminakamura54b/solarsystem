@@ -55,6 +55,11 @@ class Site < ApplicationRecord
     inspections.order(conducted_at: :desc).first
   end
 
+  # 配置の置き換えでパネルの割り当てが外れ、割り当て直しが必要な異常の件数（Phase 5b）
+  def reassignment_required_count
+    Anomaly.joins(:inspection).where(inspections: { site_id: id }, panel_reassignment_required: true).count
+  end
+
   def unread_alerts_count
     alerts.where(read_at: nil).count
   end
