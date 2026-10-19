@@ -1,0 +1,72 @@
+<% content_for :title, "実配置の登録 - #{@site.name}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🗺 実配置の登録</h2>
+    <p class="text-sm text-gray-500 mt-1"><%= @site.name %></p>
+  </div>
+  <div class="flex gap-2">
+    <%= link_to "割り当て直しの一覧", site_panel_layout_path(@site), class: "btn btn-secondary" %>
+    <%= link_to "← 発電所一覧に戻る", sites_path, class: "btn btn-secondary" %>
+  </div>
+</div>
+
+<div class="p-6 space-y-6">
+  <% if @errors.present? %>
+    <div class="card p-4" id="errors">
+      <p class="form-label" style="color:#e24b4a;">CSV を登録できませんでした（何も変更していません）</p>
+      <ul class="text-sm" style="list-style:disc; padding-left:1.25rem; color:#e24b4a;">
+        <% @errors.each do |error| %><li><%= error %></li><% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <div class="card p-4 space-y-3">
+    <p class="form-label">配置図から作った CSV を選ぶ</p>
+    <% counts = @site.panels.group(:layout_source).count %>
+    <p class="text-sm">
+      現在のパネル: 実配置 <%= counts["manual"].to_i %> 枚／仮配置 <%= counts["auto"].to_i %> 枚
+    </p>
+    <ul class="text-xs text-gray-500" style="list-style:disc; padding-left:1.25rem;">
+      <li>CSV は発電所の配置の<strong>全体</strong>です。登録すると、この発電所のパネルを CSV の内容に置き換え、パネル枚数を CSV の件数にします。</li>
+      <li>実配置のパネルは、パネル番号が同じなら同じパネルとして更新します（状態・最終点検日時・異常との紐付けは残ります）。仮配置のパネルは、番号が同じでも引き継ぎません。</li>
+      <li>消えるパネル（仮配置と、CSV に無い実配置）に紐付いた異常は、パネルの割り当てを外し、元のパネル番号を履歴に残して「割り当て直しの一覧」に出します。確定・重大度は変わりません。</li>
+      <li>文字コードは UTF-8 か Shift_JIS。1 行目は列名です。1 行でもエラーがあれば何も登録しません。確定の前に確認画面を表示します。</li>
+    </ul>
+    <%= form_with url: preview_site_panel_layout_path(@site), multipart: true, class: "flex items-center gap-3" do %>
+      <%= file_field_tag :file, accept: ".csv,text/csv", class: "form-input" %>
+      <%= submit_tag "内容を確認する", class: "btn btn-primary" %>
+    <% end %>
+  </div>
+
+  <div class="card p-4 space-y-2">
+    <div class="flex items-center justify-between">
+      <p class="form-label">列名（英語・日本語のどちらでも可）</p>
+      <%= link_to "雛形の CSV をダウンロード", template_site_panel_layout_path(@site, format: :csv), class: "btn btn-sm btn-secondary" %>
+    </div>
+    <table class="table text-sm">
+      <thead><tr><th>英語</th><th>日本語</th><th>必須</th><th>内容</th></tr></thead>
+      <tbody>
+        <% [
+             [ "panel_number", true, "パネル番号。発電所の中で重複不可（例: A-01-07）。50 文字まで" ],
+             [ "position_x", true, "パネルマップ上の横の位置。0 始まりの整数で、右に増える" ],
+             [ "position_y", true, "パネルマップ上の縦の位置。0 始まりの整数で、下に増える。同じ位置（x, y）の重複は不可" ],
+             [ "row_number", false, "アレイ（列）番号" ],
+             [ "string_number", false, "ストリング番号" ],
+             [ "position_in_string", false, "ストリング内の位置（1 以上の整数）" ],
+             [ "pcs_number", false, "パワコン番号（発電量・電気測定データとの紐付け用）" ],
+             [ "gps_lat", false, "緯度（-90〜90）" ],
+             [ "gps_lng", false, "経度（-180〜180）" ]
+           ].each do |key, required, description| %>
+          <tr>
+            <td><code><%= key %></code></td>
+            <td><%= PanelLayoutImport::COLUMNS[key].last %></td>
+            <td><%= required ? "○" : "" %></td>
+            <td><%= description %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+    <p class="text-xs text-gray-400">雛形の列名は英語です。日本語の列名（全角の英数字も可）に置き換えても読み込めます。知らない列名があるとエラーになります。</p>
+  </div>
+</div>

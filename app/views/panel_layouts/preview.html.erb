@@ -1,0 +1,55 @@
+<% content_for :title, "実配置の登録（確認） - #{@site.name}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🗺 実配置の登録（確認）</h2>
+    <p class="text-sm text-gray-500 mt-1"><%= @site.name %> — まだ何も変更していません</p>
+  </div>
+  <%= link_to "← CSV を選び直す", new_site_panel_layout_path(@site), class: "btn btn-secondary" %>
+</div>
+
+<div class="p-6 space-y-6">
+  <div class="card p-4 space-y-2" id="plan">
+    <p class="form-label">置き換えの内容</p>
+    <table class="table text-sm">
+      <tbody>
+        <tr><th>CSV のパネル</th><td><%= @import.rows.size %> 枚（パネル枚数を <%= @site.panel_count %> 枚 → <%= @import.rows.size %> 枚にします）</td></tr>
+        <tr><th>新しく登録する実配置のパネル</th><td><%= @plan.creates.size %> 枚</td></tr>
+        <tr><th>更新する実配置のパネル（番号が同じ）</th><td><%= @plan.updates.size %> 枚</td></tr>
+        <tr><th>削除する仮配置のパネル</th><td><%= @plan.placeholder_deletes %> 枚</td></tr>
+        <tr><th>削除する実配置のパネル（CSV に無い）</th><td><%= @plan.manual_deletes %> 枚</td></tr>
+        <tr><th>パネルの割り当てを外す異常</th>
+          <td>
+            <%= @plan.anomalies.size %> 件（仮配置のパネル <%= @plan.anomalies_from("auto").size %> 件・CSV に無い実配置のパネル <%= @plan.anomalies_from("manual").size %> 件）
+            <br><span class="text-xs text-gray-500">うち割り当て直しの一覧に出すもの <%= @plan.reassignment_anomalies.size %> 件（却下した異常は履歴だけ残し、一覧には出しません）</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <% if @plan.anomalies.any? %>
+      <p class="text-xs" style="color:#ef9f27;">
+        割り当てを外した異常は、元のパネル番号を履歴に残し、レビュー画面のパネル選択で割り当て直します。
+        確定・重大度は変わらず、レビュー完了済みの点検もレビュー待ちには戻りません（未割り当ての異常があることを表示します）。
+      </p>
+    <% end %>
+  </div>
+
+  <div class="card p-4 space-y-2">
+    <p class="form-label">CSV の内容（先頭 20 行）</p>
+    <table class="table text-xs">
+      <thead><tr><% PanelLayoutImport::COLUMNS.each_value do |names| %><th><%= names.last %></th><% end %></tr></thead>
+      <tbody>
+        <% @import.rows.first(20).each do |row| %>
+          <tr><% PanelLayoutImport::COLUMNS.each_key do |key| %><td><%= row[key] %></td><% end %></tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+
+  <%= form_with url: site_panel_layout_path(@site), class: "card p-4 space-y-2" do %>
+    <%= hidden_field_tag :csv_text, @csv_text %>
+    <%= hidden_field_tag :plan_digest, @plan.digest %>
+    <p class="text-sm">この内容でパネルを置き換えます。元には戻せません。</p>
+    <%= submit_tag "この内容で登録する", class: "btn btn-primary", data: { turbo_confirm: "パネルを CSV の内容に置き換えます。よろしいですか？" } %>
+  <% end %>
+</div>

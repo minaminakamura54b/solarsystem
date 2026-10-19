@@ -4,7 +4,13 @@ Rails.application.routes.draw do
   get  "dashboard",   to: "dashboard#show", as: :dashboard
   get  "switch_site", to: "dashboard#show", as: :switch_site
 
-  resources :sites
+  resources :sites do
+    # 実配置の登録（CSV）と、割り当て直しが必要な異常の一覧（show）
+    resource :panel_layout, only: %i[new create show] do
+      post :preview
+      get :template
+    end
+  end
   resources :inspections, only: %i[index show new create destroy] do
     member do
       post :rejudge

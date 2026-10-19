@@ -1,0 +1,44 @@
+<% content_for :title, "割り当て直しの一覧 - #{@site.name}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🗺 パネルの割り当て直しが必要な異常</h2>
+    <p class="text-sm text-gray-500 mt-1">
+      <%= @site.name %> — 実配置 <%= @layout_counts["manual"].to_i %> 枚／仮配置 <%= @layout_counts["auto"].to_i %> 枚
+    </p>
+  </div>
+  <div class="flex gap-2">
+    <%= link_to "実配置を登録", new_site_panel_layout_path(@site), class: "btn btn-primary" %>
+    <%= link_to "← 発電所一覧に戻る", sites_path, class: "btn btn-secondary" %>
+  </div>
+</div>
+
+<div class="p-6">
+  <div class="card" id="reassignment">
+    <% if @anomalies.empty? %>
+      <p class="p-4 text-sm text-gray-500">割り当て直しが必要な異常はありません。</p>
+    <% else %>
+      <p class="p-4 text-xs text-gray-500">
+        配置の置き換えでパネルの割り当てが外れた異常です（<%= @anomalies.size %> 件）。レビュー画面のパネル選択で割り当て直すと、一覧から消えます。
+        確定・重大度は変わっていません。
+      </p>
+      <table class="table text-sm">
+        <thead><tr><th>点検日</th><th>画像</th><th>種類</th><th>重大度</th><th>状態</th><th>元のパネル</th><th></th></tr></thead>
+        <tbody>
+          <% @anomalies.each do |anomaly| %>
+            <% last = anomaly.panel_assignment_history.last || {} %>
+            <tr id="reassign_anomaly_<%= anomaly.id %>">
+              <td><%= anomaly.inspection.conducted_at.strftime("%Y/%m/%d") %></td>
+              <td><%= anomaly.inspection_image.sequence %>（パネル <%= anomaly.panel_index_in_image || "-" %>）</td>
+              <td><%= anomaly_type_label(anomaly.effective_type) %></td>
+              <td><%= anomaly_severity_label(anomaly.effective_severity) %></td>
+              <td><%= { "pending" => "候補", "confirmed" => "確定", "corrected" => "修正して確定" }.fetch(anomaly.review_status, anomaly.review_status) %></td>
+              <td><%= last["panel_number"] %><%= "（仮配置）" if last["layout_source"] == "auto" %></td>
+              <td><%= link_to "割り当て直す", review_inspection_path(anomaly.inspection, image: anomaly.inspection_image.sequence, site_id: @site.id, anchor: "anomaly_#{anomaly.id}"), class: "btn btn-sm btn-secondary" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  </div>
+</div>

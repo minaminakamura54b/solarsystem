@@ -75,5 +75,6 @@ bin/rails dev:synthetic_inspection   # 開発用: 合成シーン（.npy）の�
 - `app/services/anomaly_review.rb` / `app/services/inspection_review.rb` — レビュー操作とレビュー完了（重要度）
 - `app/services/anomaly_explainer.rb` / `app/services/inspection_summary_writer.rb` / `app/jobs/explain_inspection_job.rb` — 確定した異常の所見と点検の総括文（Claude。判定には使わない）。プロンプトは `app/prompts/`（変えるときは新しい版のファイルを作り、`PROMPT_VERSION` を上げる）
 - `app/services/anomaly_review.rb` / `app/services/inspection_review.rb` / `app/javascript/controllers/review_controller.js` — レビュー操作・レビュー完了・レビュー画面
+- `app/services/panel_layout_import.rb` / `app/controllers/panel_layouts_controller.rb` — 配置図の CSV による実配置の登録（全部の置き換え）と割り当て直しの一覧。`app/services/start_panel_ref.rb` — グリッドの左上のパネルの形式
 - `app/services/dataset_exporter.rb` — 学習データの書き出し（`bin/rails "dataset:export[OUT_DIR]"`。顧客の画像を含むのでリポジトリに書き出さない）
 - `docs/IMPROVEMENT_PLAN.md` — 改善指示書（仕様の正本）

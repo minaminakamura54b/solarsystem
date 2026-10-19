@@ -58,6 +58,12 @@
         <span class="text-xs text-gray-400">確定済みのものは変わりません。mild を下げた場合、新しい候補を出すには画像の再解析が必要です。</span>
       </div>
     <% end %>
+    <% if (unassigned = @inspection.anomalies.where(panel_reassignment_required: true).count).positive? %>
+      <p style="font-size:0.8rem; color:#ef9f27; margin-top:0.75rem;">
+        配置の置き換えでパネルの割り当てが外れた異常が <%= unassigned %> 件あります（重大度・レビューの結果は変わっていません）。
+        <%= link_to "割り当て直しの一覧", site_panel_layout_path(@inspection.site) %>
+      </p>
+    <% end %>
     <% if @inspection.weather_note.present? %>
       <p style="font-size:0.8rem; color:var(--gray-400); margin-top:0.75rem;">天候メモ: <%= @inspection.weather_note %></p>
     <% end %>

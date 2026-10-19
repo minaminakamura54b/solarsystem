@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_15_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_19_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -114,6 +114,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_15_120000) do
     t.string "explanation_input_digest"
     t.datetime "explained_at"
     t.text "explanation_error"
+    t.jsonb "panel_assignment_history", default: [], null: false
+    t.boolean "panel_reassignment_required", default: false, null: false
     t.index ["anomaly_group_id"], name: "index_anomalies_on_anomaly_group_id"
     t.index ["inspection_id"], name: "index_anomalies_on_inspection_id"
     t.index ["inspection_image_id"], name: "index_anomalies_on_inspection_image_id"
@@ -254,6 +256,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_15_120000) do
     t.decimal "gps_lat", precision: 10, scale: 7
     t.decimal "gps_lng", precision: 10, scale: 7
     t.string "layout_source", default: "auto", null: false
+    t.string "pcs_number"
     t.index ["site_id", "number"], name: "index_panels_on_site_id_and_number", unique: true
     t.index ["site_id"], name: "index_panels_on_site_id"
     t.index ["status"], name: "index_panels_on_status"
