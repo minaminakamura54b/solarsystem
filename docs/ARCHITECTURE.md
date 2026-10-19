@@ -1,6 +1,6 @@
 # ARCHITECTURE（現状）
 
-Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜6（ブランチ `phase-6b`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
+Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜6・5b（ブランチ `phase-5b`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
 
 ---
 
@@ -41,6 +41,7 @@ Rails 8.1（Puma）
 | `/dashboard` | `dashboard#show` | パネルマップ（仮配置なら注記）、状態別件数、未読アラート、直近の点検、グラフ |
 | `/switch_site` | `dashboard#show` | 発電所の切り替え（`site_id` を渡す） |
 | `/sites` | `sites` | 発電所の登録・編集・削除（モジュール仕様を含む）。作成時にパネルを**仮配置**で自動生成する。詳細画面（show）のビューは無い |
+| `/sites/:id/panel_layout` | `panel_layouts` | 実配置の登録（`new` → `preview`（確認画面）→ `create`）、雛形の CSV（`template`）、割り当て直しが必要な異常の一覧（`show`） |
 | `/inspections` | `inspections` | 点検の一覧・詳細・新規（複数画像）・削除。詳細は JSON でステータス（`in_progress` を含む）も返す |
 | `/inspections/:id/images/:id` | `inspection_images` | RGB の手動添付・差し替え・削除、画像の除外・除外の取り消し、グリッド入力画面（`grid`）・グリッドの保存（`grids`）・再解析（`reanalyze`） |
 | `/inspections/:id/grid_templates` | `grid_templates` | グリッドテンプレートの保存・一括適用（`apply`） |
@@ -74,13 +75,13 @@ RuleSet ──< SeverityRule（閾値。Anomaly / AnomalyGroup が判定時の�
 | モデル | 主な項目・制約 |
 |---|---|
 | `Site` | name・location 必須、status。モジュール仕様: module_model、module_rated_w、cell_layout（full_cell / half_cut / other）、substring_count（既定 3）、bypass_pattern（JSON）。specific_yield_kwh_per_kw・fit_price_yen_per_kwh（任意、Phase 7 で使用） |
-| `Panel` | number（発電所内で一意）、position_x / position_y、status、last_inspected_at、row_number / string_number / position_in_string / GPS（任意）、**layout_source**（`auto` = 自動生成の仮配置 / `manual` = 実配置） |
+| `Panel` | number（発電所内で一意）、position_x / position_y、status、last_inspected_at、row_number / string_number / position_in_string / pcs_number（パワコン番号）/ GPS（任意）、**layout_source**（`auto` = 自動生成の仮配置 / `manual` = 実配置）。異常が紐付いたパネルは削除できない（`restrict_with_exception`） |
 | `Inspection` | conducted_at、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed`）、severity（completed のときだけ必須。それ以外は NULL =「判定なし」）、error_message、weather_note、review_reason、reviewed_at、総括文（summary_text・summary_priority_actions・summary_additional_checks・summary_prompt_version・summary_input_digest・summary_generated_at・summary_error）、report_pdf（Phase 7）。旧方式の項目: legacy_anomalies（**旧 anomalies**。読み取り専用）、anomaly_count、result、report、image（画像1枚） |
 | `InspectionImage` | thermal（R-JPEG 原本。変換・縮小しない）、rgb（任意）、sequence、thermal_filename、メタデータ（captured_at、camera_model、width / height、GPS、altitude_m、gimbal_pitch / gimbal_yaw、metadata JSON）、is_radiometric（**メタデータによる仮判定**。NULL = 判定できない）、気象データ（irradiance_w_m2 / irradiance_type / wind / 気温 / 湿度）、quality_report、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed` / `excluded`）、review_reason、exclusion_note、panel_grids・grid_proposal・raw_analysis・analyzer_version（Phase 3〜4） |
 | `WeatherReading` | observed_at、irradiance_w_m2（入力したら irradiance_type = `poa` / `ghi` / `unknown` 必須）、wind_speed_m_s、air_temp_c、humidity |
 | `RuleSet` | version（一意）、active（全体で1つ。部分ユニークインデックス）、note、detection_params（JSON。必須キーあり）。**作成後は active 以外変更不可、削除不可** |
 | `SeverityRule` | anomaly_type（6種類すべて必須）、measure、normalized_mild / warning / critical、raw_mild / warning / critical（各系列で mild < warning < critical）。**作成後は読み取り専用** |
-| `Anomaly` / `AnomalyGroup` / `GridTemplate` | 項目は IMPROVEMENT_PLAN 4.2〜4.4 のとおり。所見（Claude）: cause_candidates・explanation（= reasoning）・additional_checks・recommended_action・report_text・prompt_version・explanation_input_digest・explained_at・explanation_error（群にも同じ列） |
+| `Anomaly` / `AnomalyGroup` / `GridTemplate` | 項目は IMPROVEMENT_PLAN 4.2〜4.4 のとおり。所見（Claude）: cause_candidates・explanation（= reasoning）・additional_checks・recommended_action・report_text・prompt_version・explanation_input_digest・explained_at・explanation_error（群にも同じ列）。パネルの紐付けの履歴: panel_assignment_history（配置の置き換えで外れた元のパネル番号など）・panel_reassignment_required（割り当て直しが必要） |
 | `Alert` | title 必須、severity は `info` / `warning` / `critical`、read_at |
 | `Revenue` | year / month（発電所・年内で一意）、kwh、amount_yen |
 
@@ -177,6 +178,24 @@ InspectionReview（レビュー完了。2026-10-15 ユーザー承認）
 ```
 
 ```
+実配置の登録（Phase 5b。2026-10-19 ユーザー承認）
+  発電所一覧「実配置を登録」→ CSV を選ぶ → 確認画面（件数・割り当てを外す異常の件数）→ 確定
+  PanelLayoutImport
+    列: 英語・日本語の列名（README の対応表）。UTF-8 / Shift_JIS。知らない列名・必須の列の不足・重複はエラー
+    1 行でもエラーがあれば何も登録しない。CSV は配置の全体（全部の置き換え）
+    実配置どうしは番号が同じなら更新（id・状態・最終点検日時・紐付けを残す）。仮配置は番号が同じでも引き継がない
+    消えるパネル（仮配置・CSV に無い実配置）に紐付いた異常: panel_id を外し、panel_assignment_history に
+      元のパネル番号・配置の種類・日時を残し、panel_reassignment_required を立てる（却下した異常は履歴だけ）
+      確定・重大度・locked・点検の状態は変えない（レビュー完了済みでも戻さない）
+    アラートはパネルの紐付けだけ外す。sites.panel_count を CSV の件数に。新しいパネルは manual・normal・最終点検日時なし
+    確認画面の後にパネルか紐付けが変わっていたら置き換えない（plan の digest。409 で確認画面を出し直す）
+  割り当て直し: 一覧（/sites/:id/panel_layout）・点検詳細・レビュー画面のカード・ダッシュボードに表示。
+    レビュー画面のパネル選択で割り当てると印が外れる（履歴は残す。割り当ては今までどおりレビュー操作なので、完了済みの点検はレビュー待ちに戻る）
+  start_panel_ref: panel_grids の各要素に {"panel_number": "..."}（グリッドの左上のパネル）。入力欄は無い。
+    グリッドを入力したときだけ、実配置に存在するかを確かめる（StartPanelRef）。自動提案は範囲外
+```
+
+```
 所見と総括文（Phase 6。2026-10-15 ユーザー承認）
   レビュー完了 → ExplainInspectionJob（「所見を作り直す」は force: true）
     対象: 確定・修正した異常（群の構成パネルを除く）と確定した群。却下・未確定には作らない
@@ -231,7 +250,7 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 | # | 問題 | 場所 | 対応 |
 |---|---|---|---|
 | A〜E | show の DB 書き戻し、severity の常時必須、pending の自動更新、画像なしの点検作成、ジョブのトランザクション | — | **Phase 1 で対応済み** |
-| F | 発電所作成時にパネルを格子状に自動生成しており、位置は実配置と無関係 | `SitesController#generate_panels_for` | **Phase 2 で対応済み**（ユーザー承認: 仮配置として残す）。`panels.layout_source` を追加し、既存・新規とも `auto`。ダッシュボードとフォームに「仮配置」と表示。実配置の登録手段（CSV 取込など）は未実装で、後のフェーズで検討 |
+| F | 発電所作成時にパネルを格子状に自動生成しており、位置は実配置と無関係 | `SitesController#generate_panels_for` | **Phase 2 で対応済み、Phase 5b で実配置の登録（CSV）を追加**（ユーザー承認: 仮配置として残す）。`panels.layout_source` を追加し、既存・新規とも `auto`。ダッシュボードとフォームに「仮配置」と表示。実配置の登録手段（CSV 取込など）は未実装で、後のフェーズで検討 |
 | G | モデル名 `claude-opus-4-7` がコード内に固定 | `ClaudePanelAnalyzer::MODEL` | **Phase 6 で対応済み**（旧方式の判定を削除し、所見の作成は `CLAUDE_MODEL` を使う） |
 | H | `PagesController` に存在しない `authenticate_user!` の skip が残っている（無害） | `PagesController` | Phase 8 の認証導入時に整理 |
 | I | ワーカーが途中で落ちると `analyzing`（または品質チェック待ち）のまま残り、自動更新が止まらない | `AnalyzePanelImageJob` / `ProcessInspectionImageJob` / `auto_refresh_controller.js` | **Phase 4 で対応済み**（`StaleAnalysisJob` が `stale_after_minutes` を超えた画像・旧方式の点検を failed に。自動更新の JS にも上限時間） |
@@ -240,18 +259,19 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 | L | 発電所の詳細画面（`sites/show`）のビューが無く、更新後の `site_path` へのリダイレクトでエラーになっていた | `SitesController#update` | **Phase 2 で最小限の修正**（更新後は発電所一覧に戻す）。詳細画面は未作成 |
 | N | 発電所フォームの `defined?(method)` が Ruby 組み込みの `method` メソッドを指し、**新規登録画面が開けなかった**（Phase 2 以前から） | `sites/_form.html.erb` | **Phase 2 で修正**（`local_assigns.fetch(:method, :post)`） |
 | O | 解析エンジンが、パネルの 50〜80% が温まったケースを検出できない（仕様のすき間） | `analyzer/analyzer/pipeline.py` | **Phase 3b で対応済み**（ユーザー承認: 基準温度からの判定を追加。指示書 5.6） |
-| R | レビューのパネルの割り当てで、`panel_grids` の `start_panel_ref` からの自動提案が未実装。`start_panel_ref` の形式が決まっておらず、登録済みのパネルがすべて仮配置のため | `AnomalyReview#assign_panel!` | 人がパネルを選ぶ割り当てだけ。形式と実配置の登録方法を決めてから実装（ユーザーの判断待ち） |
+| R | レビューのパネルの割り当てで、`panel_grids` の `start_panel_ref` からの自動提案が未実装。`start_panel_ref` の形式が決まっておらず、登録済みのパネルがすべて仮配置のため | `AnomalyReview#assign_panel!` | 人がパネルを選ぶ割り当てだけ。**Phase 5b で形式（`{"panel_number": ...}`）と実配置の登録を決めた**。自動提案は範囲外（実案件で必要になってから） |
 | S | レビュー画面の RGB の切り出しは、サーモと同じ正規化座標の「おおよその位置」 | `review_controller.js` | Phase S でサーモと RGB の変換を決めてから対応 |
 | T | `csv` は Ruby 3.4 で標準の gem から外れる（Ruby 3.3.10 では警告のみ） | `app/services/dataset_exporter.rb` | Ruby 3.4 に上げるときに Gemfile へ追加（新しい gem の追加のため、そのとき確認） |
 | P | Dockerfile の `RUBY_VERSION` が 3.2.9 で、`.ruby-version`（3.3.10）と食い違っていた（Phase 0 以前から） | `Dockerfile` | **Phase 4 で修正**（3.3.10 に合わせた） |
 | Q | 解析エンジンの DJI Thermal SDK の呼び出しが未実装のため、実際の R-JPEG は `needs_review（sdk_unavailable）` になる | `analyzer/analyzer/thermal/dji_reader.py` | Phase S の後に実装（TODO） |
 | U | 開発環境はジョブが `:inline` のため、レビュー完了のリクエストの中で Claude API を呼ぶ（確定した異常の件数だけ待つ） | `ExplainInspectionJob` | 本番は Solid Queue で非同期（2026-10-15 確認: 使い捨ての DB に solid_queue のテーブルを作り、5 秒待つ偽の Claude で、レビュー完了の応答は 0.24 秒・Claude の呼び出し 0 回、ジョブは queue default に登録され、ワーカーが後から所見と総括文を作った。重要度・状態は変わらない）。開発で困るようなら指示を受けて対応 |
 | V | 所見・総括文は、発電所のモジュール構成や気象データを後から変えても自動では作り直さない（画面に「古い所見」と表示する） | `AnomalyExplainer#current?` | 「所見を作り直す」で作り直す。報告書（Phase 7）の版の管理と合わせて検討 |
+| W | 群の構成パネルの異常には、レビュー画面でパネルを割り当てる操作が無い（群から外せば割り当てられる）。今は構成パネルにパネルが割り当てられることは無いので、配置の置き換えで割り当て直しの対象になることも無い | `inspections/review/_anomaly.html.erb` | 群の構成パネルにパネルを割り当てる必要が出たら対応 |
 | M | 温度データの有無はメタデータのタグによる仮判定。実際の R-JPEG でどのタグが出るかは未確認 | `config/image_quality.yml` の `radiometric_tags` | Phase S で実画像を確認して見直す。最終判定は Phase 3 の解析エンジン |
 
 ## 6. テスト
 
-- `bin/rails test`: 265件（Phase 6b 時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
+- `bin/rails test`: 287件（Phase 5b 時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
 - **本物の解析エンジンを呼ぶテスト**（`test/integration/analyzer_end_to_end_test.rb`）: `analyzer/scripts/make_dev_scenes.py` で合成シーン（.npy）を作り、Rails から `uv run python -m analyzer` を実行する。uv と `cd analyzer && uv sync` が必要（CI の test ジョブも uv を入れている）
 - 解析エンジンのタイムアウトのテストは、子プロセスが片付くまで最大 5 秒待ってから確かめる（終了済みで回収待ちのゾンビは残っていないとみなす。Phase 6b）
 - 偽の解析エンジン: `AnalyzeInspectionImageJob.client` を `with_fake_analyzer` で差し替える（本番では常に `ThermalAnalyzerClient`）
