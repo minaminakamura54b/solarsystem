@@ -26,12 +26,15 @@ class AnalyzeInspectionImageJob < ApplicationJob
     rule_set = RuleSet.active_set
     return mark_failed(image, "有効な判定基準（ルールセット）がありません", "no_rule_set") unless rule_set
 
-    image.update!(analysis_status: "analyzing", review_reason: nil, error_message: nil)
+    measurement = ThermalMeasurement.new(image)
+    # 解析エンジンに渡した測定パラメータを残す（結果の成否に関係なく、渡した値の記録）
+    image.update!(analysis_status: "analyzing", review_reason: nil, error_message: nil, measurement_params: measurement.record)
     image.inspection.refresh_status!
     result = image.thermal.open do |file|
       self.class.client.analyze(
         thermal_path: file.path, panel_grids: image.panel_grids, module_spec: image.inspection.site.analyzer_module_spec,
-        rules: rule_set.to_analyzer_rules, irradiance: image.irradiance_w_m2&.to_f, irradiance_type: image.irradiance_type
+        rules: rule_set.to_analyzer_rules, irradiance: image.irradiance_w_m2&.to_f, irradiance_type: image.irradiance_type,
+        measurement: measurement.params
       )
     end
     handle(image, result, rule_set)

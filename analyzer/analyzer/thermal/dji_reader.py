@@ -10,12 +10,12 @@ SDK のオプション名・出力形式・測定パラメータの渡し方は 
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import numpy as np
 
 from analyzer.errors import AnalyzerError, NoTemperatureDataError
+from analyzer.thermal import sdk
 
 JPEG_MAGIC = b"\xff\xd8\xff"
 
@@ -24,8 +24,8 @@ def read(path: Path, thermal_params: dict, irp_path: str | None = None) -> np.nd
     if not is_jpeg(path):
         raise NoTemperatureDataError("no_radiometric", f"JPEG（R-JPEG）ではありません: {path.name}")
 
-    irp = irp_path if irp_path is not None else os.environ.get("DJI_IRP_PATH")
-    if not irp or not Path(irp).is_file() or not os.access(irp, os.X_OK):
+    irp = irp_path if irp_path is not None else sdk.irp_path()
+    if not sdk.available(irp):
         raise NoTemperatureDataError(
             "sdk_unavailable",
             "DJI Thermal SDK（dji_irp）が見つからないため、温度データを取得できません。環境変数 DJI_IRP_PATH を設定してください",
@@ -34,7 +34,9 @@ def read(path: Path, thermal_params: dict, irp_path: str | None = None) -> np.nd
     # TODO(Phase S): dji_irp を subprocess で呼び、float32 の温度行列を得る。
     #   - オプション名（測定モード・出力形式など）と出力ファイルの形式は、SDK 同梱の README と
     #     docs/spike_dji_sdk.md（Phase S の記録）で確認してから実装する
-    #   - thermal_params（放射率・反射温度・湿度・距離）の渡し方も Phase S で決める
+    #   - thermal_params（emissivity / reflected_temperature_c / humidity_percent / distance_m。null は渡さない）の
+    #     SDK への渡し方と、SDK が受け付ける範囲も Phase S で決める
+    #   - 呼び出すときの環境変数は sdk.subprocess_env(irp)（LD_LIBRARY_PATH に SDK のライブラリの場所を足す）
     #   - SDK が失敗した・R-JPEG でなかった場合は NoTemperatureDataError（終了コード 2）にする
     raise AnalyzerError(
         "dji_reader_not_implemented",

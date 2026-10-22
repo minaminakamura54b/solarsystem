@@ -1,6 +1,6 @@
 class InspectionsController < ApplicationController
   before_action :require_site
-  before_action :find_inspection, only: %i[show destroy rejudge review complete_review explain]
+  before_action :find_inspection, only: %i[show destroy rejudge review complete_review explain measurement]
 
   def index
     @inspections = current_site.inspections.recent.includes(:site, :inspection_images, image_attachment: :blob)
@@ -116,6 +116,16 @@ class InspectionsController < ApplicationController
       redirect_to inspection_path(@inspection, anchor: "findings"), notice: "所見と総括文を作り直しています"
     else
       redirect_to inspection_path(@inspection), alert: "所見はレビューを完了した点検だけ作れます"
+    end
+  end
+
+  # 測定パラメータ（放射率・反射温度・距離）を保存する。解析済みの画像に反映するには再解析が必要（自動では解析し直さない）
+  def measurement
+    if @inspection.update(params.require(:inspection).permit(:emissivity, :reflected_temperature_c, :object_distance_m))
+      redirect_to inspection_path(@inspection, anchor: "measurement"),
+                  notice: "測定パラメータを保存しました。解析済みの画像に反映するには、画像ごとに再解析してください"
+    else
+      redirect_to inspection_path(@inspection, anchor: "measurement"), alert: @inspection.errors.map(&:message).join("。")
     end
   end
 

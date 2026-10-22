@@ -77,6 +77,21 @@
     <%= render "findings" %>
   <% end %>
 
+  <%# ── 測定パラメータ ─────────────────────────────── %>
+  <div class="card p-4" id="measurement">
+    <p style="font-size:0.65rem; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.75rem;">測定パラメータ（任意）</p>
+    <p class="text-xs text-gray-400 mb-3">
+      R-JPEG から温度を求めるときに使う値です。未入力の項目は渡さず、SDK・画像に記録された既定の値のままになります（どの値が使われるかは SDK の検証で確定します）。
+      湿度は気象データの値を使います。値を変えたら、解析済みの画像は再解析で反映してください。.npy の合成データでは使いません。
+    </p>
+    <%= form_with model: @inspection, url: measurement_inspection_path(@inspection), method: :patch, class: "flex flex-wrap items-end gap-3" do |f| %>
+      <label class="text-sm">放射率<br><%= f.number_field :emissivity, step: 0.001, min: 0.001, max: 1, class: "form-input", style: "width:7rem;" %></label>
+      <label class="text-sm">反射温度（℃）<br><%= f.number_field :reflected_temperature_c, step: 0.1, class: "form-input", style: "width:7rem;" %></label>
+      <label class="text-sm">距離（m）<br><%= f.number_field :object_distance_m, step: 0.1, min: 0.1, class: "form-input", style: "width:7rem;" %></label>
+      <%= f.submit "保存", class: "btn btn-sm btn-secondary" %>
+    <% end %>
+  </div>
+
   <%# ── 気象データ ─────────────────────────────── %>
   <div class="card p-4" id="weather">
     <p style="font-size:0.65rem; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.75rem;">気象データ</p>
@@ -204,6 +219,9 @@
                 <% end %>
               </div>
 
+              <% unless ThermalMeasurement.new(image).current? %>
+                <p class="text-xs mt-1" style="color:#ef9f27;">解析した後に測定パラメータ（または湿度）が変わっています。反映するには再解析してください。</p>
+              <% end %>
               <% if image.raw_analysis.present? && image.completed? %>
                 <details class="mt-1">
                   <summary class="text-xs text-gray-400" style="cursor:pointer;">解析結果（基準温度 <%= image.raw_analysis.dig("baseline", "temp") %>℃・パネル <%= Array(image.raw_analysis["panels"]).size %> 枚・候補 <%= image.anomalies.size %> 件）</summary>

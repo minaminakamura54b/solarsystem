@@ -120,6 +120,27 @@ class IrradianceInput(BaseModel):
         return self.type == "poa" and self.value is not None and self.value > 0
 
 
+class MeasurementInput(BaseModel):
+    """--measurement で渡す測定パラメータ（DJI Thermal SDK に渡す。2026-10-22 ユーザー指示で受け皿だけ先に作る）。
+
+    値を渡さない項目は null（SDK・R-JPEG の既定のまま。どの値が使われるかは Phase S で確認する）。
+    範囲の確認は物理的にありえる値かどうかだけ。SDK が受け付ける範囲は Phase S で確認する（TODO）。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    emissivity: float | None = Field(default=None, gt=0, le=1)
+    reflected_temperature_c: float | None = Field(default=None, gt=-273.15)
+    humidity_percent: float | None = Field(default=None, ge=0, le=100)
+    distance_m: float | None = Field(default=None, gt=0)
+
+    def merged_over(self, defaults: dict) -> dict:
+        """解析パラメータの既定値（dji_thermal_params）に、渡された値を上書きした測定パラメータ。"""
+        merged = {k: v for k, v in defaults.items() if not k.startswith("_")}
+        merged.update({k: v for k, v in self.model_dump().items() if v is not None})
+        return merged
+
+
 # ── 出力 ─────────────────────────────────────────────
 
 

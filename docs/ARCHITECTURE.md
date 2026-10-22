@@ -1,6 +1,6 @@
 # ARCHITECTURE（現状）
 
-Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜6・5b・5c（ブランチ `phase-5c`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
+Phase 0 時点（2026-09-27）のコードを読んでまとめ、Phase 1〜6・5b・5c と実画像への対応の準備（ブランチ `phase-s-prep`）の変更を反映した、**現在の**構成です。移行後の設計は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) を参照してください。
 
 ---
 
@@ -49,6 +49,7 @@ Rails 8.1（Puma）
 | `/inspections/:id/review` | `inspections#review` | レビュー画面（画像ごと。`?image=番号`）。候補の確定・修正・却下・手動追加、レビュー完了 |
 | `/inspections/:id/complete_review` | `inspections#complete_review` | レビュー完了（completed にして重要度を付ける）。所見のジョブを登録する |
 | `/inspections/:id/explain` | `inspections#explain` | 所見と総括文を作り直す（レビュー完了済みの点検だけ） |
+| `/inspections/:id/measurement` | `inspections#measurement` | 測定パラメータ（放射率・反射温度・距離）の保存。解析済みの画像は再解析で反映 |
 | `/inspections/:id/anomalies` | `anomalies` | 見逃しの手動追加（create）、確定・修正・却下・パネルの割り当て・電気測定・群から外す |
 | `/inspections/:id/anomaly_groups/:id` | `anomaly_groups` | 群の確定・却下（構成パネルにも反映） |
 | `/inspections/:id/weather_readings` | `weather_readings` | 気象データ（時刻付き）の登録・削除 |
@@ -76,8 +77,8 @@ RuleSet ──< SeverityRule（閾値。Anomaly / AnomalyGroup が判定時の�
 |---|---|
 | `Site` | name・location 必須、status。モジュール仕様: module_model、module_rated_w、cell_layout（full_cell / half_cut / other）、substring_count（既定 3）、bypass_pattern（JSON）。specific_yield_kwh_per_kw・fit_price_yen_per_kwh（任意、Phase 7 で使用） |
 | `Panel` | number（発電所内で一意）、position_x / position_y、status、last_inspected_at、row_number / string_number / position_in_string / pcs_number（パワコン番号）/ GPS（任意）、**layout_source**（`auto` = 自動生成の仮配置 / `manual` = 実配置）。異常が紐付いたパネルは削除できない（`restrict_with_exception`） |
-| `Inspection` | conducted_at、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed`）、severity（completed のときだけ必須。それ以外は NULL =「判定なし」）、error_message、weather_note、review_reason、reviewed_at、総括文（summary_text・summary_priority_actions・summary_additional_checks・summary_prompt_version・summary_input_digest・summary_generated_at・summary_error）、report_pdf（Phase 7）。旧方式の項目: legacy_anomalies（**旧 anomalies**。読み取り専用）、anomaly_count、result、report、image（画像1枚） |
-| `InspectionImage` | thermal（R-JPEG 原本。変換・縮小しない）、rgb（任意）、sequence、thermal_filename、メタデータ（captured_at、camera_model、width / height、GPS、altitude_m、gimbal_pitch / gimbal_yaw、metadata JSON）、is_radiometric（**メタデータによる仮判定**。NULL = 判定できない）、気象データ（irradiance_w_m2 / irradiance_type / wind / 気温 / 湿度）、quality_report、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed` / `excluded`）、review_reason、exclusion_note、panel_grids・grid_proposal・raw_analysis・analyzer_version（Phase 3〜4） |
+| `Inspection` | conducted_at、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed`）、severity（completed のときだけ必須。それ以外は NULL =「判定なし」）、error_message、weather_note、review_reason、reviewed_at、総括文（summary_text・summary_priority_actions・summary_additional_checks・summary_prompt_version・summary_input_digest・summary_generated_at・summary_error）、測定パラメータ（emissivity・reflected_temperature_c・object_distance_m。任意）、report_pdf（Phase 7）。旧方式の項目: legacy_anomalies（**旧 anomalies**。読み取り専用）、anomaly_count、result、report、image（画像1枚） |
+| `InspectionImage` | thermal（R-JPEG 原本。変換・縮小しない）、rgb（任意）、sequence、thermal_filename、メタデータ（captured_at、camera_model、width / height、GPS、altitude_m、gimbal_pitch / gimbal_yaw、metadata JSON）、is_radiometric（**メタデータによる仮判定**。NULL = 判定できない）、気象データ（irradiance_w_m2 / irradiance_type / wind / 気温 / 湿度）、quality_report、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed` / `excluded`）、review_reason、exclusion_note、measurement_params（解析エンジンに渡した測定パラメータと出どころ）、panel_grids・grid_proposal・raw_analysis・analyzer_version（Phase 3〜4） |
 | `WeatherReading` | observed_at、irradiance_w_m2（入力したら irradiance_type = `poa` / `ghi` / `unknown` 必須）、wind_speed_m_s、air_temp_c、humidity |
 | `RuleSet` | version（一意）、active（全体で1つ。部分ユニークインデックス）、note、detection_params（JSON。必須キーあり）。**作成後は active 以外変更不可、削除不可** |
 | `SeverityRule` | anomaly_type（6種類すべて必須）、measure、normalized_mild / warning / critical、raw_mild / warning / critical（各系列で mild < warning < critical）。**作成後は読み取り専用** |
@@ -197,6 +198,19 @@ InspectionReview（レビュー完了。2026-10-15 ユーザー承認）
 ```
 
 ```
+測定パラメータと SDK の置き場所（実画像への対応の準備。2026-10-22 ユーザー指示）
+  点検詳細で放射率・反射温度・距離を入力（任意）。湿度は気象データ（inspection_images.humidity）
+  AnalyzeInspectionImageJob → ThermalMeasurement: 値がある項目だけを --measurement で渡す（未入力は渡さない）。
+    渡した値と出どころ（inspection / weather / not_set）を inspection_images.measurement_params に残す
+    解析した後に値が変わった画像は「再解析で反映」と表示（自動では解析し直さない）
+  解析エンジン: MeasurementInput（物理的にありえる範囲だけ確かめる）→ dji_thermal_params に上書きして dji_reader へ
+    （dji_reader の SDK 呼び出しは Phase S の後。.npy では使わない）
+  SDK の置き場所: DJI_IRP_PATH・DJI_IRP_LIB_DIR（省略時は dji_irp と同じ場所。LD_LIBRARY_PATH の先頭に足す）。
+    本番はサーバーの /opt/dji_thermal_sdk を読み取り専用でマウント（deploy.yml はコメントのまま）。check-sdk で確認
+  Phase S の手順書: docs/PHASE_S_RUNBOOK.md、記録: docs/spike_dji_sdk.md、位置合わせ: analyzer/scripts/fit_rgb_alignment.py
+```
+
+```
 所見と総括文（Phase 6。2026-10-15 ユーザー承認）
   レビュー完了 → ExplainInspectionJob（「所見を作り直す」は force: true）
     対象: 確定・修正した異常（群の構成パネルを除く）と確定した群。却下・未確定には作らない
@@ -264,7 +278,7 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 | S | レビュー画面の RGB の切り出しは、サーモと同じ正規化座標の「おおよその位置」 | `review_controller.js` | Phase S でサーモと RGB の変換を決めてから対応 |
 | T | `csv` は Ruby 3.4 で標準の gem から外れる（Ruby 3.3.10 では警告のみ） | `app/services/dataset_exporter.rb` | Ruby 3.4 に上げるときに Gemfile へ追加（新しい gem の追加のため、そのとき確認） |
 | P | Dockerfile の `RUBY_VERSION` が 3.2.9 で、`.ruby-version`（3.3.10）と食い違っていた（Phase 0 以前から） | `Dockerfile` | **Phase 4 で修正**（3.3.10 に合わせた） |
-| Q | 解析エンジンの DJI Thermal SDK の呼び出しが未実装のため、実際の R-JPEG は `needs_review（sdk_unavailable）` になる | `analyzer/analyzer/thermal/dji_reader.py` | Phase S の後に実装（TODO） |
+| Q | 解析エンジンの DJI Thermal SDK の呼び出しが未実装のため、実際の R-JPEG は `needs_review（sdk_unavailable）` になる | `analyzer/analyzer/thermal/dji_reader.py` | Phase S の後に実装（TODO）。測定パラメータの受け皿・SDK の置き場所・手順書（docs/PHASE_S_RUNBOOK.md）は準備済み（2026-10-22） |
 | U | 開発環境はジョブが `:inline` のため、レビュー完了のリクエストの中で Claude API を呼ぶ（確定した異常の件数だけ待つ） | `ExplainInspectionJob` | 本番は Solid Queue で非同期（2026-10-15 確認: 使い捨ての DB に solid_queue のテーブルを作り、5 秒待つ偽の Claude で、レビュー完了の応答は 0.24 秒・Claude の呼び出し 0 回、ジョブは queue default に登録され、ワーカーが後から所見と総括文を作った。重要度・状態は変わらない）。開発で困るようなら指示を受けて対応 |
 | V | 所見・総括文は、発電所のモジュール構成や気象データを後から変えても自動では作り直さない（画面に「古い所見」と表示する） | `AnomalyExplainer#current?` | 「所見を作り直す」で作り直す。報告書（Phase 7）の版の管理と合わせて検討 |
 | W | 群の構成パネルの異常には、レビュー画面でパネルを割り当てる操作が無い（群から外せば割り当てられる）。今は構成パネルにパネルが割り当てられることは無いので、配置の置き換えで割り当て直しの対象になることも無い | `inspections/review/_anomaly.html.erb` | 群の構成パネルにパネルを割り当てる必要が出たら対応 |
@@ -272,11 +286,11 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 
 ## 6. テスト
 
-- `bin/rails test`: 290件（Phase 5c 時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
+- `bin/rails test`: 298件（実画像への対応の準備の時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
 - **本物の解析エンジンを呼ぶテスト**（`test/integration/analyzer_end_to_end_test.rb`）: `analyzer/scripts/make_dev_scenes.py` で合成シーン（.npy）を作り、Rails から `uv run python -m analyzer` を実行する。uv と `cd analyzer && uv sync` が必要（CI の test ジョブも uv を入れている）
 - 解析エンジンのタイムアウトのテストは、子プロセスが片付くまで最大 5 秒待ってから確かめる（終了済みで回収待ちのゾンビは残っていないとみなす。Phase 6b）
 - 偽の解析エンジン: `AnalyzeInspectionImageJob.client` を `with_fake_analyzer` で差し替える（本番では常に `ThermalAnalyzerClient`）
-- 解析エンジン: `cd analyzer && uv run pytest`（60件）。合成の温度行列（`analyzer/tests/fixtures/make_synthetic.py`）だけを使う。CI の `analyzer-test` ジョブでも実行する
+- 解析エンジン: `cd analyzer && uv run pytest`（82件）。合成の温度行列（`analyzer/tests/fixtures/make_synthetic.py`）だけを使う。CI の `analyzer-test` ジョブでも実行する
 - Claude API は呼ばない。`ClaudeStructuredOutput.default_client` に偽クライアント（`FakeAnthropicClient`。SDK の `Anthropic::Message` を返す）を渡し、`CLAUDE_MODEL` もテスト用の値にする（`with_fake_claude`）
 - exiftool は**実際に動かす**テストと、**偽の読み取りクラスに差し替える**テストがある。本物の R-JPEG の熱画像タグは exiftool で書き込めないため、温度データありの場合は `ProcessInspectionImageJob.exif_reader` を `with_fake_exif(tags:)` で差し替える（本番では常に `ExifReader`）。開発機・CI とも exiftool が必要（CI は apt で導入）
 - テスト用画像はすべて合成: `panel.png`（8×8）、`thermal_plain_T.jpg`（640×512、EXIF あり・温度データなし）、`lowres_T.jpg`（320×256）、`rgb_V.jpg`、`memo.txt`（画像以外）。顧客画像は使わない

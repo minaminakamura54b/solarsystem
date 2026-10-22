@@ -25,13 +25,14 @@ class ThermalAnalyzerClient
     @config = config
   end
 
-  def analyze(thermal_path:, panel_grids:, module_spec:, rules:, irradiance: nil, irradiance_type: nil)
+  def analyze(thermal_path:, panel_grids:, module_spec:, rules:, irradiance: nil, irradiance_type: nil, measurement: {})
     Dir.mktmpdir("analyzer") do |dir|
       rules_path = File.join(dir, "rules.json")
       File.write(rules_path, rules.to_json)
       args = [ "analyze", "--thermal", thermal_path.to_s, "--panel-grids", panel_grids.to_json,
                "--module", module_spec.to_json, "--rules", rules_path ]
       args += [ "--irradiance", irradiance.to_s, "--irradiance-type", irradiance_type.to_s ] if irradiance && irradiance_type
+      args += [ "--measurement", measurement.to_json ] if measurement.present?
       run("analyze", args, dir)
     end
   end

@@ -17,6 +17,7 @@ Rails.application.routes.draw do
       get :review
       post :complete_review
       post :explain
+      patch :measurement
     end
     resources :anomalies, only: %i[create] do
       member do

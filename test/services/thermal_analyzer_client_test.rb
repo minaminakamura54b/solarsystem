@@ -66,6 +66,23 @@ class ThermalAnalyzerClientTest < ActiveSupport::TestCase
     assert_equal "invalid_output", result.error
   end
 
+  test "測定パラメータは値があるときだけ --measurement で渡す" do
+    args_file = Rails.root.join("tmp", "analyzer_args_#{Process.pid}.txt")
+    script = "printf '%s\\n' \"$@\" > #{args_file}; eval out=\\${$#}; printf %s \"$OUTPUT\" > \"$out\""
+    ENV["OUTPUT"] = analyzer_output.to_json
+    client = ThermalAnalyzerClient.new(config: config(script))
+    base = { thermal_path: "x.npy", panel_grids: [ SAMPLE_GRID ], module_spec: {}, rules: { "version" => "v" } }
+
+    client.analyze(**base, measurement: { "emissivity" => 0.9 })
+    args = File.read(args_file).split("\n")
+    assert_equal '{"emissivity":0.9}', args[args.index("--measurement") + 1]
+
+    client.analyze(**base, measurement: {})
+    assert_not_includes File.read(args_file).split("\n"), "--measurement"
+  ensure
+    File.delete(args_file) if args_file && File.exist?(args_file)
+  end
+
   test "JSON でなければ invalid_output" do
     assert_equal "invalid_output", analyze(client_writing("not json")).error
   end

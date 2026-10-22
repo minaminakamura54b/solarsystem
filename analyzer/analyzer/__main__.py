@@ -2,23 +2,34 @@
 
   python -m analyzer analyze --thermal X --panel-grids '[...]' --module '{...}' --rules rules.json --out result.json
   python -m analyzer propose-grid --thermal X --out proposal.json
+  python -m analyzer check-sdk     （DJI Thermal SDK の置き場所の確認。結果の JSON を標準出力に出す）
 
-終了コード: 0=成功（提案あり）、1=その他エラー、2=温度データなし、3=グリッドなし（提案できない）、4=基準パネル不足。
+終了コード: 0=成功（提案あり）、1=その他エラー、2=温度データなし（check-sdk では SDK が使えない）、3=グリッドなし（提案できない）、4=基準パネル不足。
 どの終了コードでも、可能なかぎり --out に結果の JSON を書き、理由を stderr に出す。
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
 
-from analyzer.contract import AnalysisResult, GridSpec, IrradianceInput, ModuleSpec, ProposalResult, RulesInput
-from analyzer.errors import EXIT_ERROR, EXIT_OK, AnalyzerError
+from analyzer.contract import (
+    AnalysisResult,
+    GridSpec,
+    IrradianceInput,
+    MeasurementInput,
+    ModuleSpec,
+    ProposalResult,
+    RulesInput,
+)
+from analyzer.errors import EXIT_ERROR, EXIT_NO_TEMPERATURE, EXIT_OK, AnalyzerError
 from analyzer.params import AnalyzerParams
 from analyzer.pipeline import analyze, image_info
+from analyzer.thermal import sdk
 from analyzer.thermal.reader import read_thermal
 from analyzer.vision.panel_segmenter import propose_grid
 
@@ -36,12 +47,16 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--module", default="{}", help="モジュール構成（JSON）")
     a.add_argument("--rules", required=True, help="ルールセット（JSON ファイル）")
     a.add_argument("--params", help="解析パラメータ（JSON ファイル。省略時は analyzer/config/default_params.json）")
+    a.add_argument("--measurement", default="{}", help="測定パラメータ（JSON。放射率・反射温度・湿度・距離。省略した項目は渡さない）")
     a.add_argument("--out", required=True, help="結果の JSON を書くファイル")
 
     p = sub.add_parser("propose-grid", help="パネル配列を自動で見つけてグリッドを提案する（解析はしない）")
     p.add_argument("--thermal", required=True)
     p.add_argument("--params")
+    p.add_argument("--measurement", default="{}", help="測定パラメータ（JSON）")
     p.add_argument("--out", required=True)
+
+    sub.add_parser("check-sdk", help="DJI Thermal SDK（DJI_IRP_PATH）が使える状態かを確かめる（SDK の機能は呼ばない）")
     return parser
 
 
@@ -52,6 +67,7 @@ def run_analyze(args) -> tuple[AnalysisResult, int]:
         rules = RulesInput.model_validate_json(Path(args.rules).read_text(encoding="utf-8"))
         irradiance = IrradianceInput(value=args.irradiance, type=args.irradiance_type)
         params = AnalyzerParams.load(args.params)
+        measurement = MeasurementInput.model_validate_json(args.measurement)
     except (ValidationError, ValueError, OSError) as e:
         raise AnalyzerError("invalid_input", f"入力が不正です: {e}") from e
 
@@ -59,13 +75,17 @@ def run_analyze(args) -> tuple[AnalysisResult, int]:
         # グリッドが無ければ画像を読まずに終了コード 3
         return analyze(None, "", grids, module, rules, irradiance, params)
 
-    thermal = read_thermal(args.thermal, params.dji_thermal_params)
+    thermal = read_thermal(args.thermal, measurement.merged_over(params.dji_thermal_params))
     return analyze(thermal.temps, thermal.source, grids, module, rules, irradiance, params)
 
 
 def run_propose(args) -> tuple[ProposalResult, int]:
     params = AnalyzerParams.load(args.params)
-    thermal = read_thermal(args.thermal, params.dji_thermal_params)
+    try:
+        measurement = MeasurementInput.model_validate_json(args.measurement)
+    except ValidationError as e:
+        raise AnalyzerError("invalid_input", f"入力が不正です: {e}") from e
+    thermal = read_thermal(args.thermal, measurement.merged_over(params.dji_thermal_params))
     info = image_info(thermal.temps, thermal.source)
     try:
         proposal = propose_grid(thermal.temps, params)
@@ -75,8 +95,16 @@ def run_propose(args) -> tuple[ProposalResult, int]:
     return ProposalResult(status="proposed", image=info, grid_proposal=proposal), EXIT_OK
 
 
+def run_check_sdk() -> int:
+    report = sdk.check()
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return EXIT_OK if report["ok"] else EXIT_NO_TEMPERATURE
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "check-sdk":
+        return run_check_sdk()
     result_class = AnalysisResult if args.command == "analyze" else ProposalResult
     try:
         result, code = run_analyze(args) if args.command == "analyze" else run_propose(args)

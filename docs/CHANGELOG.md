@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-10-22 — 実画像への対応の準備（ブランチ `phase-s-prep`）
+
+11 月半ばに実際の赤外線画像を解析できるようにするための準備（ユーザー指示。Phase 7 は実画像への対応の後に回す）。
+
+### 追加
+- **Phase S の手順書** `docs/PHASE_S_RUNBOOK.md` と、記録のひな形 `docs/spike_dji_sdk.md`（R-JPEG と SDK が届いたらすぐ着手できる形。SDK のオプションは推測で書かず、同梱の README で確かめて記録する）
+- **測定パラメータの受け皿**: 点検詳細で放射率・反射温度・距離を入力（任意）、湿度は気象データ。値がある項目だけを解析エンジンの `--measurement` に渡し、渡した値と出どころを `inspection_images.measurement_params` に残す。値が変わった解析済みの画像には「再解析で反映」と表示
+- **SDK の置き場所の設計**: `DJI_IRP_PATH` と `DJI_IRP_LIB_DIR`（省略時は `dji_irp` と同じ場所。呼び出すときに `LD_LIBRARY_PATH` の先頭に足す）。本番はサーバーの `/opt/dji_thermal_sdk` を読み取り専用でマウント（`config/deploy.yml` はコメントのまま）。置き場所を確かめる `python -m analyzer check-sdk`（SDK の機能は呼ばない）
+- RGB の位置合わせを確かめる補助スクリプト `analyzer/scripts/fit_rgb_alignment.py`（対応点から「拡大率＋ずれ」とアフィン変換を求め、誤差を出す。合否は人が決める）
+
+### 記録した方針（ユーザー指示）
+- SDK の呼び出し本体は Phase S で確定させる（推測で実装しない）
+- 規格（IEC TS 62446-3）は「参考」のまま
+- 品質チェックの追加（風速・視野角・パネル当たり画素数）は Phase S の後。閾値は `config/image_quality.yml`、規格の原文で確認するまでは「警告」。撮影条件に雲量の記録欄を加える
+- Phase 7 の決定事項（版の管理・モジュール仕様が未登録のとき・RGB の切り出し・ferrum_pdf・屋号の設定「（屋号）」・会社名と資格の種別の欄（氏名の欄は作らない）・測定パラメータの記載・免責の文面は着手時に提示・古い所見の扱い）を指示書に記録
+
+### 確認したこと
+- テスト 298 件、pytest 82 件、system test 6 件、rubocop、brakeman
+- ferrum_pdf: MIT、最新 3.2.0（2026-09-14）、リポジトリは 2026-10-20 にも更新、開いている issue・PR 4 件。依存は actionpack と ferrum（MIT、最新 0.19.1（2026-10-16）、活発に更新）。Node.js は不要（Chrome / Chromium は必要）
+
 ## 2026-10-19 — Phase 5c: パネルの割り当て直しの扱い（ブランチ `phase-5c`）
 
 ### 変更（ユーザー指示）

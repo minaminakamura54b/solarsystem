@@ -12,7 +12,7 @@
   "segmenter_min_rectangularity": 0.80,
   "segmenter_size_tolerance": 0.5,
   "dji_thermal_params": {
-    "_comment": "DJI Thermal SDK に渡す測定パラメータ。値と渡し方は Phase S で決める（TODO）",
+    "_comment": "DJI Thermal SDK に渡す測定パラメータの既定値。null は渡さない（SDK・R-JPEG の既定のまま）。Rails から --measurement で渡した値が優先する。渡し方と SDK が受け付ける範囲は Phase S で決める（TODO）",
     "emissivity": null,
     "reflected_temperature_c": null,
     "humidity_percent": null,
