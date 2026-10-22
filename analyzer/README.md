@@ -28,15 +28,20 @@ uv run python -m analyzer analyze \
   --panel-grids '[{"rows":4,"cols":12,"corners":[[x,y],[x,y],[x,y],[x,y]],"panel_orientation":"landscape"}]' \
   --module '{"cell_layout":"full_cell","substring_count":3,"bypass_pattern":{"bands":3,"band_axis":"short_side","band_area_ratio":0.333,"tolerance":0.12}}' \
   --rules rules.json \
+  [--measurement '{"emissivity":0.9,"reflected_temperature_c":5,"humidity_percent":55,"distance_m":30}'] \
   --out result.json
 
 # グリッドの提案（解析はしない）
 uv run python -m analyzer propose-grid --thermal DJI_0001_T.JPG --out proposal.json
+
+# DJI Thermal SDK の置き場所の確認（SDK の機能は呼ばない。結果の JSON を標準出力に出し、使えなければ終了コード 2）
+DJI_IRP_PATH=/path/to/dji_irp uv run python -m analyzer check-sdk
 ```
 
 - `corners` は**左上・右上・右下・左下**の順で、画像サイズで正規化した 0〜1 の座標です
 - `--rules` は Rails が有効なルールセットから書き出す JSON です（`version`・`detection_params`・`severity_rules`）。解析エンジンが使うのは、検出の最小値（mild）と検出パラメータだけです
 - `--thermal` には、開発・テスト用に `.npy`（float32 の温度行列、単位 ℃）も指定できます
+- `--measurement`（任意）は測定パラメータです。値がある項目だけを渡し、省略した項目は SDK・R-JPEG の既定のままにします（`config/default_params.json` の `dji_thermal_params` に上書き）。範囲は物理的にありえる値かだけを確かめます。SDK への渡し方は Phase S で確定します。`.npy` では使いません
 - 解析パラメータのうちルールセットに含まれないもの（hotspot の面積比・縦横比、module_wide の面積比、グレア疑いの面積比など）は `analyzer/config/default_params.json` にあり、`--params` で差し替えられます
 
 ### 終了コード
@@ -56,9 +61,12 @@ uv run python -m analyzer propose-grid --thermal DJI_0001_T.JPG --out proposal.j
 R-JPEG から温度行列を得るには、DJI Thermal SDK の `dji_irp` が必要です。
 
 - **SDK はリポジトリにコミットしません**（ライセンス上）。`analyzer/bin/` に置くと `.gitignore` で除外されます
-- 環境変数 `DJI_IRP_PATH` で `dji_irp` のパスを指定します
+- 環境変数 `DJI_IRP_PATH` で `dji_irp` のパスを指定します。共有ライブラリが `dji_irp` と別の場所にあるときは `DJI_IRP_LIB_DIR` で指定します（呼び出すときに `LD_LIBRARY_PATH` の先頭に足す。`thermal/sdk.py`）
+- 置き場所は `check-sdk` で確かめられます（ファイルの有無・実行権限・x86_64 か・ライブラリの場所）
 - SDK は x86_64 Linux 向けです。Apple Silicon の Mac では Docker（linux/amd64）で動かします
 - 入手方法: DJI の開発者サイトから DJI Thermal SDK をダウンロードし、利用規約を確認してください
+
+Phase S の手順は [docs/PHASE_S_RUNBOOK.md](../docs/PHASE_S_RUNBOOK.md)、記録は [docs/spike_dji_sdk.md](../docs/spike_dji_sdk.md) です。サーモと RGB の位置合わせは `scripts/fit_rgb_alignment.py`（対応点から変換と誤差を出す）で確かめます。
 
 **現在の実装状況（Phase S 未実施）**: `thermal/dji_reader.py` は「JPEG でない（終了コード 2、`no_radiometric`）」「SDK が無い（終了コード 2、`sdk_unavailable`）」の判定までです。SDK のオプション名・出力形式・測定パラメータ（放射率・反射温度・湿度・距離）の渡し方は、Phase S で SDK 同梱の README と実画像を確認してから実装します（TODO）。それまでは、SDK があっても終了コード 1（`dji_reader_not_implemented`）を返します。
 
@@ -77,7 +85,7 @@ docker build --platform linux/amd64 -t solarsystem-analyzer analyzer
 docker run --rm -v "$PWD/work:/work" solarsystem-analyzer analyze --thermal /work/x.npy --panel-grids '[...]' --rules /work/rules.json --out /work/result.json
 ```
 
-イメージに SDK は含めません。SDK を使うときのマウント方法は Phase S・Phase 4 で決めます。
+イメージに SDK は含めません。本番ではサーバーの `/opt/dji_thermal_sdk` を読み取り専用でマウントします（設計は docs/PHASE_S_RUNBOOK.md の付録、設定は `config/deploy.yml` のコメント）。
 
 ## 構成
 
@@ -89,6 +97,7 @@ analyzer/
   errors.py                 終了コードに対応する例外
   thermal/reader.py         拡張子で読み込み方法を選ぶ
   thermal/dji_reader.py     R-JPEG（DJI Thermal SDK。呼び出し部分は TODO）
+  thermal/sdk.py            SDK の置き場所（DJI_IRP_PATH・DJI_IRP_LIB_DIR）と check-sdk
   thermal/tiff_reader.py    radiometric TIFF（未対応）
   thermal/npy_reader.py     .npy（テスト・開発用）
   thermal/quality.py        温度レンジ・ブレの指標（記録のみ）

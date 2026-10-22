@@ -62,7 +62,7 @@
 
 確定・修正済みの異常は `bin/rails "dataset:export[/path/to/out]"` で YOLO 形式の学習データとして書き出せます（顧客の画像を含むため、リポジトリの外か `tmp/` に書き出してください）。
 
-実際の R-JPEG の温度データの読み取り（DJI Thermal SDK）は Phase S の後に実装します。それまでは、開発用の合成データ（下の「開発用の合成点検」）で動作を確かめられます。
+実際の R-JPEG の温度データの読み取り（DJI Thermal SDK）は Phase S の後に実装します（手順書は [docs/PHASE_S_RUNBOOK.md](docs/PHASE_S_RUNBOOK.md)）。点検詳細で、測定パラメータ（放射率・反射温度・距離。任意）を入力できます（湿度は気象データを使う）。それまでは、開発用の合成データ（下の「開発用の合成点検」）で動作を確かめられます。
 
 旧方式（画像1枚を Claude に判定させる方式）で作った点検は、表示だけできます（判定の処理は Phase 6 で削除しました）。詳しい流れは [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を参照してください。
 
@@ -190,7 +190,8 @@ bin/setup    # gem のインストール、DB の作成・マイグレーショ�
 |---|---|---|
 | `ANTHROPIC_API_KEY` | ○ | Claude API キー。未設定だと所見・総括文が作れません（判定・レビューには影響しません） |
 | `CLAUDE_MODEL` | ○ | 所見の作成に使う Claude のモデル名（例: `claude-opus-5-5`）。未設定なら所見を作らず、エラーとして表示します |
-| `DJI_IRP_PATH` | 予定 | DJI Thermal SDK の `dji_irp` のパス（Phase 3 以降） |
+| `DJI_IRP_PATH` | 実画像の解析 | DJI Thermal SDK の `dji_irp` のパス（[docs/PHASE_S_RUNBOOK.md](docs/PHASE_S_RUNBOOK.md)）。SDK の呼び出し本体は Phase S の後に実装 |
+| `DJI_IRP_LIB_DIR` | 任意 | SDK の共有ライブラリのディレクトリ（`dji_irp` と同じ場所なら不要） |
 | `DATABASE_URL` | 本番 | 本番 DB の接続先 |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` / `AWS_BUCKET` | 本番（予定） | S3 への画像保存（Phase 8） |
 
@@ -259,7 +260,9 @@ bin/kamal deploy   # 更新
 | Phase 4 | グリッド入力 UI、Rails と解析エンジンの接続 |
 | Phase 5 | レビュー UI、学習データの書き出し |
 | Phase 6 | Claude の役割を所見作成に限定、公式 SDK へ移行 |
-| Phase 7 | 影響容量の算出、PDF 報告書 |
+| Phase 5b / 5c | 実配置の登録（CSV）、パネルの割り当て直し |
+| 実画像への対応 | Phase S の後。SDK の呼び出し、品質チェックの追加（警告）、雲量の記録、実画像での調整（11 月半ばの目標） |
+| Phase 7 | 影響容量の算出、PDF 報告書（実画像への対応の後） |
 | Phase 8 | 顧客公開前の対応（認証・S3・バックアップ） |
 
 詳細は [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md) を参照してください。
