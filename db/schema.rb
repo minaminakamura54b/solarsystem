@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_19_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_22_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -208,6 +208,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_090000) do
     t.text "error_message"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "measurement_params"
     t.index ["analysis_status"], name: "index_inspection_images_on_analysis_status"
     t.index ["inspection_id", "sequence"], name: "index_inspection_images_on_inspection_id_and_sequence", unique: true
     t.index ["inspection_id"], name: "index_inspection_images_on_inspection_id"
@@ -235,6 +236,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_090000) do
     t.string "summary_input_digest"
     t.datetime "summary_generated_at"
     t.text "summary_error"
+    t.decimal "emissivity", precision: 4, scale: 3
+    t.decimal "reflected_temperature_c", precision: 5, scale: 1
+    t.decimal "object_distance_m", precision: 6, scale: 1
     t.index ["analysis_status"], name: "index_inspections_on_analysis_status"
     t.index ["conducted_at"], name: "index_inspections_on_conducted_at"
     t.index ["severity"], name: "index_inspections_on_severity"

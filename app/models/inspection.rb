@@ -18,6 +18,7 @@ class Inspection < ApplicationRecord
   validates :severity, presence: true, if: :completed?
   validates :analysis_status, inclusion: { in: ANALYSIS_STATUSES }
   validate :images_must_be_present, on: :create
+  validate :measurement_params_range
 
   scope :completed, -> { where(analysis_status: "completed") }
   scope :recent, -> { order(conducted_at: :desc) }
@@ -139,6 +140,13 @@ class Inspection < ApplicationRecord
   end
 
   private
+
+  # 測定パラメータ（任意）。物理的にありえる値かだけを確かめる（SDK が受け付ける範囲は Phase S で確認する）
+  def measurement_params_range
+    errors.add(:emissivity, "放射率は 0 より大きく 1 以下にしてください") if emissivity && !(emissivity > 0 && emissivity <= 1)
+    errors.add(:reflected_temperature_c, "反射温度は -273.15℃ より高くしてください") if reflected_temperature_c && reflected_temperature_c <= -273.15
+    errors.add(:object_distance_m, "距離は 0 より大きくしてください") if object_distance_m && object_distance_m <= 0
+  end
 
   def images_must_be_present
     errors.add(:base, "サーモ画像を1枚以上選択してください") if inspection_images.empty? && !image.attached?

@@ -30,6 +30,22 @@ class AnalyzeInspectionImageJobTest < ActiveSupport::TestCase
     assert_equal "C", anomaly.evidence_level, "RGB が無ければ証拠レベル C"
   end
 
+  test "測定パラメータを解析エンジンに渡し、渡した値と出どころを画像に残す（失敗しても残す）" do
+    @inspection.update!(emissivity: 0.9)
+    @image.update_columns(humidity: 60)
+
+    with_fake_analyzer(analyze: analyzer_result(exit_code: 1, error: "invalid_output")) do |client|
+      AnalyzeInspectionImageJob.perform_now(@image.id)
+
+      assert_equal({ "emissivity" => 0.9, "humidity_percent" => 60.0 }, client.calls.sole.last[:measurement])
+    end
+
+    @image.reload
+    assert_equal "failed", @image.analysis_status
+    assert_equal({ "value" => 0.9, "source" => "inspection" }, @image.measurement_params["emissivity"])
+    assert_equal({ "value" => nil, "source" => "not_set" }, @image.measurement_params["distance_m"])
+  end
+
   test "すべての画像の解析が終わっても、点検は completed にせずレビュー待ち（候補0件でも）" do
     with_fake_analyzer(analyze: analyzer_result(output: analyzer_output(anomalies: []))) do
       AnalyzeInspectionImageJob.perform_now(@image.id)
