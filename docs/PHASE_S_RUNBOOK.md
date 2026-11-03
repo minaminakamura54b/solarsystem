@@ -145,7 +145,7 @@ cd analyzer && uv run python scripts/fit_rgb_alignment.py ../tmp/spike/points_00
 1. `analyzer/analyzer/thermal/dji_reader.py` の SDK 呼び出しを、spike_dji_sdk.md の記録どおりに実装する（`sdk.subprocess_env` を使う。測定パラメータの渡し方と範囲も）
 2. `config/image_quality.yml` の `radiometric_tags` を実際のタグ名に直す（既知の問題 M）
 3. 品質チェックの追加（風速・視野角・パネル当たり画素数）。閾値は `config/image_quality.yml` に置き、**規格の原文で確認するまでは「警告」**（不合格にしない）
-4. 撮影条件に雲量の記録欄を加える
+4. 雲量を品質チェックに反映する（記録欄は 2026-11-03 に実装済み。気象データの雲量（オクタ）を画像に割り当て、規格の原文で確認するまでは「警告」）
 5. RGB の位置合わせを固定値にできた場合は、その値を設定に置き、レビュー画面の「おおよその位置」の表示を切り替える（既知の問題 S）
 6. 実画像で `min_region_pixels`・`band_axis` の解釈・閾値の初期値を見直し、Phase 4 の受け入れ確認（実画像が要るもの）を行う
 7. 本番サーバーに SDK を置く（付録）

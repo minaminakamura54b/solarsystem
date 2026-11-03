@@ -79,7 +79,7 @@ RuleSet ──< SeverityRule（閾値。Anomaly / AnomalyGroup が判定時の�
 | `Panel` | number（発電所内で一意）、position_x / position_y、status、last_inspected_at、row_number / string_number / position_in_string / pcs_number（パワコン番号）/ GPS（任意）、**layout_source**（`auto` = 自動生成の仮配置 / `manual` = 実配置）。異常が紐付いたパネルは削除できない（`restrict_with_exception`） |
 | `Inspection` | conducted_at、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed`）、severity（completed のときだけ必須。それ以外は NULL =「判定なし」）、error_message、weather_note、review_reason、reviewed_at、総括文（summary_text・summary_priority_actions・summary_additional_checks・summary_prompt_version・summary_input_digest・summary_generated_at・summary_error）、測定パラメータ（emissivity・reflected_temperature_c・object_distance_m。任意）、report_pdf（Phase 7）。旧方式の項目: legacy_anomalies（**旧 anomalies**。読み取り専用）、anomaly_count、result、report、image（画像1枚） |
 | `InspectionImage` | thermal（R-JPEG 原本。変換・縮小しない）、rgb（任意）、sequence、thermal_filename、メタデータ（captured_at、camera_model、width / height、GPS、altitude_m、gimbal_pitch / gimbal_yaw、metadata JSON）、is_radiometric（**メタデータによる仮判定**。NULL = 判定できない）、気象データ（irradiance_w_m2 / irradiance_type / wind / 気温 / 湿度）、quality_report、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed` / `excluded`）、review_reason、exclusion_note、measurement_params（解析エンジンに渡した測定パラメータと出どころ）、panel_grids・grid_proposal・raw_analysis・analyzer_version（Phase 3〜4） |
-| `WeatherReading` | observed_at、irradiance_w_m2（入力したら irradiance_type = `poa` / `ghi` / `unknown` 必須）、wind_speed_m_s、air_temp_c、humidity |
+| `WeatherReading` | observed_at、irradiance_w_m2（入力したら irradiance_type = `poa` / `ghi` / `unknown` 必須）、wind_speed_m_s、air_temp_c、humidity、cloud_cover_okta（雲量 0〜8。記録のみで画像には割り当てない。雲量だけの記録では品質チェックをやり直さない） |
 | `RuleSet` | version（一意）、active（全体で1つ。部分ユニークインデックス）、note、detection_params（JSON。必須キーあり）。**作成後は active 以外変更不可、削除不可** |
 | `SeverityRule` | anomaly_type（6種類すべて必須）、measure、normalized_mild / warning / critical、raw_mild / warning / critical（各系列で mild < warning < critical）。**作成後は読み取り専用** |
 | `Anomaly` / `AnomalyGroup` / `GridTemplate` | 項目は IMPROVEMENT_PLAN 4.2〜4.4 のとおり。所見（Claude）: cause_candidates・explanation（= reasoning）・additional_checks・recommended_action・report_text・prompt_version・explanation_input_digest・explained_at・explanation_error（群にも同じ列）。パネルの紐付けの履歴: panel_assignment_history（配置の置き換えで外れた元のパネル番号など）・panel_reassignment_required（割り当て直しが必要） |
@@ -286,7 +286,7 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 
 ## 6. テスト
 
-- `bin/rails test`: 298件（実画像への対応の準備の時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
+- `bin/rails test`: 300件（雲量の記録欄の追加の時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
 - **本物の解析エンジンを呼ぶテスト**（`test/integration/analyzer_end_to_end_test.rb`）: `analyzer/scripts/make_dev_scenes.py` で合成シーン（.npy）を作り、Rails から `uv run python -m analyzer` を実行する。uv と `cd analyzer && uv sync` が必要（CI の test ジョブも uv を入れている）
 - 解析エンジンのタイムアウトのテストは、子プロセスが片付くまで最大 5 秒待ってから確かめる（終了済みで回収待ちのゾンビは残っていないとみなす。Phase 6b）
 - 偽の解析エンジン: `AnalyzeInspectionImageJob.client` を `with_fake_analyzer` で差し替える（本番では常に `ThermalAnalyzerClient`）
