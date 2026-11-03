@@ -98,13 +98,14 @@
     <p class="text-xs text-gray-400 mb-3">
       時刻付きで入力すると、各画像の撮影時刻に合わせて補間して割り当てます（前後 <%= ImageQualityConfig.current.weather_max_gap_minutes %> 分以内の値のみ使用）。
       時刻は <%= @capture_time_zone.name %> の現地時刻として扱います。日射量はモジュール面（POA）か水平面（GHI）かを必ず選んでください。
+      雲量（オクタ。0 = 雲なし 〜 8 = 全天が雲）は撮影条件の記録で、画像の判定にはまだ使いません。
     </p>
 
     <% readings = @inspection.weather_readings.select(&:persisted?) %>
     <% if readings.any? %>
       <table class="table mb-4">
         <thead>
-          <tr><th>時刻</th><th>日射量</th><th>種類</th><th>風速</th><th>気温</th><th>湿度</th><th></th></tr>
+          <tr><th>時刻</th><th>日射量</th><th>種類</th><th>風速</th><th>気温</th><th>湿度</th><th>雲量</th><th></th></tr>
         </thead>
         <tbody>
           <% readings.each do |r| %>
@@ -115,6 +116,7 @@
               <td><%= r.wind_speed_m_s ? "#{r.wind_speed_m_s.to_f} m/s" : "-" %></td>
               <td><%= r.air_temp_c ? "#{r.air_temp_c.to_f} ℃" : "-" %></td>
               <td><%= r.humidity ? "#{r.humidity.to_f} %" : "-" %></td>
+              <td><%= r.cloud_cover_okta ? "#{r.cloud_cover_okta}/8" : "-" %></td>
               <td>
                 <%= button_to "削除", inspection_weather_reading_path(@inspection, r), method: :delete,
                     class: "btn btn-sm btn-danger", data: { turbo_confirm: "この気象データを削除しますか？" } %>
@@ -150,6 +152,10 @@
       <div>
         <label class="form-label">湿度（%）</label>
         <%= f.number_field :humidity, class: "form-input", step: 1, min: 0, max: 100 %>
+      </div>
+      <div>
+        <label class="form-label">雲量（オクタ）</label>
+        <%= f.select :cloud_cover_okta, [ [ "未記録", "" ] ] + (0..8).map { |n| [ "#{n}/8#{ { 0 => '（雲なし）', 8 => '（全天が雲）' }[n] }", n ] }, {}, class: "form-select" %>
       </div>
       <div>
         <%= f.submit "気象データを追加", class: "btn btn-primary" %>

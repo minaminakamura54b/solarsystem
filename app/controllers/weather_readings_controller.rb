@@ -6,7 +6,9 @@ class WeatherReadingsController < ApplicationController
   def create
     @reading = @inspection.weather_readings.build(reading_params)
     @reading.observed_at = parse_local_time(params.dig(:weather_reading, :observed_at))
-    if @reading.save
+    if @reading.save && !@reading.affects_images?
+      redirect_to inspection_path(@inspection, anchor: "weather"), notice: "雲量を記録しました"
+    elsif @reading.persisted?
       RecheckInspectionQualityJob.perform_later(@inspection.id)
       redirect_to inspection_path(@inspection, anchor: "weather"), notice: "気象データを登録しました。画像の品質チェックをやり直します"
     else
@@ -15,7 +17,12 @@ class WeatherReadingsController < ApplicationController
   end
 
   def destroy
-    @inspection.weather_readings.find(params[:id]).destroy
+    reading = @inspection.weather_readings.find(params[:id])
+    reading.destroy
+    unless reading.affects_images?
+      return redirect_to inspection_path(@inspection, anchor: "weather"), notice: "雲量の記録を削除しました"
+    end
+
     RecheckInspectionQualityJob.perform_later(@inspection.id)
     redirect_to inspection_path(@inspection, anchor: "weather"), notice: "気象データを削除しました。画像の品質チェックをやり直します"
   end
@@ -31,7 +38,7 @@ class WeatherReadingsController < ApplicationController
   end
 
   def reading_params
-    params.require(:weather_reading).permit(:irradiance_w_m2, :irradiance_type, :wind_speed_m_s, :air_temp_c, :humidity)
+    params.require(:weather_reading).permit(:irradiance_w_m2, :irradiance_type, :wind_speed_m_s, :air_temp_c, :humidity, :cloud_cover_okta)
   end
 
   # 入力された時刻は、撮影時刻と同じタイムゾーン（config/image_quality.yml の capture_time_zone）の現地時刻として解釈する
