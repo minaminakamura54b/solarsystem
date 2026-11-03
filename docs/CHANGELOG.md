@@ -9,8 +9,12 @@
 ### 記録した方針
 - Phase 7 の報告書の表紙の屋号は「リブレメア」（設定ファイルの値。Phase 7 で作る）
 
+### CI の修正
+- GitHub Actions の `ubuntu-latest` が ubuntu-26.04 に変わり Ruby 3.3.10 を用意できなくなったため、実行環境を `ubuntu-24.04` に固定
+- 新しく公開された脆弱性の報告に合わせ、addressable・crass・loofah・net-ssh・nokogiri・rack・rails-html-sanitizer をパッチ版に更新（新しい gem は追加していない）
+
 ### 確認したこと
-- テスト 300 件、rubocop、brakeman
+- テスト 300 件、system test 6 件、rubocop、brakeman、bundler-audit
 
 ## 2026-10-22 — 実画像への対応の準備（ブランチ `phase-s-prep`）
 
