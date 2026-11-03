@@ -128,6 +128,27 @@ class InspectionSessionsTest < ActionDispatch::IntegrationTest
     assert_equal jst("2026-09-20 10:15"), inspection.weather_readings.sole.observed_at
   end
 
+  test "雲量だけの記録は、品質チェックをやり直さない（画像に割り当てる値が変わらないため）。一覧に表示する" do
+    inspection = create_session_inspection
+
+    assert_no_enqueued_jobs only: RecheckInspectionQualityJob do
+      post inspection_weather_readings_path(inspection, site_id: @site.id), params: {
+        weather_reading: { observed_at: "2026-09-20T10:15", cloud_cover_okta: "1" }
+      }
+    end
+    assert_equal "雲量を記録しました", flash[:notice]
+    reading = inspection.weather_readings.sole
+    assert_equal 1, reading.cloud_cover_okta
+
+    get inspection_path(inspection, site_id: @site.id)
+    assert_select "#weather td", text: "1/8"
+
+    assert_no_enqueued_jobs only: RecheckInspectionQualityJob do
+      delete inspection_weather_reading_path(inspection, reading, site_id: @site.id)
+    end
+    assert_not WeatherReading.exists?(reading.id)
+  end
+
   test "日射量の種類が無い気象データは登録しない" do
     inspection = create_session_inspection
 
