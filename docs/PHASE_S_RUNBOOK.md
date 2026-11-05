@@ -64,12 +64,16 @@ grep -i -E "altitude|gimbal|pitch|yaw|gps|datetime|focal|fov" tmp/spike/DJI_0001
 SDK は x86_64 Linux 向け。Mac では Docker の linux/amd64 で動かす（エミュレーションのため遅いが検証には足りる）。
 
 ```bash
-docker run --rm -it --platform linux/amd64 \
-  -v "$PWD/analyzer:/work/analyzer" -v "$PWD/tmp/spike:/work/spike" \
+# SDK の実行ファイルは展開しただけでは実行権限が無い（Mac 側で一度だけ）
+chmod +x analyzer/bin/dji_thermal_sdk/*/utility/bin/linux/release_x64/dji_*
+
+# UV_PROJECT_ENVIRONMENT を付けないと、マウントした analyzer/.venv（Mac 用）を Linux 用で上書きしてしまう
+docker run --rm -it --platform linux/amd64 -e UV_PROJECT_ENVIRONMENT=/opt/venv \
+  -v "$PWD/analyzer:/work/analyzer:ro" -v "$PWD/tmp/spike:/work/spike" \
   -w /work/analyzer python:3.12-slim bash
 
-# コンテナの中で
-apt-get update && apt-get install -y --no-install-recommends file && rm -rf /var/lib/apt/lists/*
+# コンテナの中で（libgomp1 は dji_irp が使う OpenMP。無いと起動しない）
+apt-get update && apt-get install -y --no-install-recommends file libgomp1 && rm -rf /var/lib/apt/lists/*
 pip install uv && uv sync --frozen
 file bin/dji_thermal_sdk/**/dji_irp 2>/dev/null || find bin/dji_thermal_sdk -name 'dji_irp*'
 ```
@@ -175,7 +179,7 @@ cd analyzer && uv run python scripts/fit_rgb_alignment.py ../tmp/spike/points_00
 4. 雲量を品質チェックに反映する（記録欄は 2026-11-03 に実装済み。気象データの雲量（オクタ）を画像に割り当て、規格の原文で確認するまでは「警告」）
 5. RGB の位置合わせを固定値にできた場合は、その値を設定に置き、レビュー画面の「おおよその位置」の表示を切り替える（既知の問題 S）
 6. 実画像で `min_region_pixels`・`band_axis` の解釈・閾値の初期値を見直し、Phase 4 の受け入れ確認（実画像が要るもの）を行う。グリッドの自動提案は手順 7 の評価の結果に合わせて改善する（改善案は実装前に提示）
-7. 本番サーバーに SDK を置く（付録）
+7. 本番サーバーに SDK を置く（付録）。**本番の Dockerfile に `libgomp1` を追加する**（Phase S で必要と判明。2026-11-06）
 
 ## 付録: SDK の置き場所（設計。2026-10-22）
 
