@@ -112,6 +112,23 @@ class InspectionImage < ApplicationRecord
     end
   end
 
+  # 解析エンジンに渡すため、元のファイルの拡張子が付いたパスでサーモ画像を開く（解析エンジンは拡張子で読み込み方法を選ぶ）。
+  # Rails 8.1.4.1 から、一時ファイルの拡張子は内容の種類と一致するときだけ付く（.npy などは付かない）。
+  # 拡張子が無ければ、同じ一時ディレクトリに拡張子付きのシンボリックリンクを作る（原本は変えない）
+  def open_thermal
+    extension = thermal.filename.extension_with_delimiter
+    Dir.mktmpdir("thermal") do |dir|
+      thermal.open(tmpdir: dir) do |file|
+        path = file.path
+        if extension.present? && !File.extname(path).casecmp?(extension)
+          path = File.join(dir, "thermal#{extension}")
+          File.symlink(file.path, path)
+        end
+        yield path
+      end
+    end
+  end
+
   private
 
   def thermal_must_be_attached
