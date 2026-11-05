@@ -7,7 +7,7 @@ class GridProposalJob < ApplicationJob
     image = InspectionImage.find_by(id: image_id)
     return unless image&.ready_for_analysis?
 
-    result = image.thermal.open { |file| AnalyzeInspectionImageJob.client.propose_grid(thermal_path: file.path) }
+    result = image.open_thermal { |path| AnalyzeInspectionImageJob.client.propose_grid(thermal_path: path) }
     proposal = result.ok? ? result.output["grid_proposal"] : nil
     image.update_columns(grid_proposal: proposal, updated_at: Time.current)
   rescue => e

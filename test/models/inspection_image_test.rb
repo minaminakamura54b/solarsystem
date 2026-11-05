@@ -6,6 +6,24 @@ class InspectionImageTest < ActiveSupport::TestCase
     @image = @inspection.inspection_images.first
   end
 
+  test "解析エンジンには元の拡張子が付いたパスで渡す（Rails が一時ファイルに拡張子を付けない .npy でも）" do
+    inspection = analyzable_inspection
+    image = inspection.inspection_images.first
+    data = "\x93NUMPY synthetic".b
+    image.thermal.attach(io: StringIO.new(data), filename: "scene.npy", content_type: "application/octet-stream")
+
+    paths = []
+    image.reload.open_thermal do |path|
+      paths << path
+      assert_equal ".npy", File.extname(path)
+      assert_equal data, File.binread(path)
+    end
+    assert_not File.exist?(paths.sole), "使い終わった一時ファイルは消える"
+
+    image.thermal.attach(io: file_fixture("thermal_plain_T.jpg").open, filename: "DJI_0001_T.JPG", content_type: "image/jpeg")
+    image.reload.open_thermal { |path| assert_equal ".jpg", File.extname(path).downcase }
+  end
+
   test "画像ファイル以外はサーモ画像として登録できない" do
     image = @inspection.inspection_images.build(sequence: 9, thermal_filename: "memo.txt")
     image.thermal.attach(io: StringIO.new("hello"), filename: "memo.txt", content_type: "text/plain")
