@@ -11,6 +11,11 @@ SDK なしでできる範囲の確認（ユーザー指示）。温度への変�
 - 手順 7 の候補 41 枚と位置合わせ用の RGB 10 枚を `tmp/spike/` に用意（コミットしない）
 - 結果と検討事項を `docs/spike_dji_sdk.md` の 6b 章に記録
 
+### CI の修正（このブランチで発生）
+- Rails 8.1.4 に新しい脆弱性の報告（High を含む）が出たため、Rails を 8.1.4.1 に更新
+- Rails 8.1.4.1 から Active Storage の一時ファイルに拡張子が付かない場合（.npy など）があり、解析エンジンが合成データを R-JPEG として読んでいた。`InspectionImage#open_thermal` で元の拡張子付きのパスを渡すように修正（R-JPEG は影響なし）
+- テスト 301 件、system test 6 件、rubocop、brakeman、bundler-audit
+
 ## 2026-11-03 — Phase S の事前確認（実画像 1 枚のメタデータ。ブランチ `phase-s-notes`）
 
 ### 確認したこと（SDK は未入手）
