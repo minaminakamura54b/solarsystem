@@ -90,6 +90,15 @@ class AnomalyReviewTest < ActiveSupport::TestCase
     assert_equal [ "rejected", "glare", true ], [ record.reload.review_status, record.rejection_reason, record.locked ]
   end
 
+  test "却下の理由に「他の画像と重複」を選べる（誤検出と区別して残す）" do
+    record = candidate
+
+    AnomalyReview.new(record).reject!(reason: "duplicate")
+
+    assert_equal [ "rejected", "duplicate", true ], [ record.reload.review_status, record.rejection_reason, record.locked ]
+    assert_equal "他の画像と重複", AnomalyReview::REJECTION_REASONS["duplicate"]
+  end
+
   test "確定・修正した critical の異常にはアラートを作り、却下では作らない" do
     assert_difference -> { Alert.count }, 1 do
       AnomalyReview.new(candidate(severity: "critical")).confirm!
