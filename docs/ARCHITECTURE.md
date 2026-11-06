@@ -288,7 +288,7 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 
 ## 6. テスト
 
-- `bin/rails test`: 314件（SDK の呼び出しと組み合わせ方の修正の時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 7件（グリッド入力画面・レビュー画面・登録画面のペアの一覧の JS をヘッドレス Chrome で確認）
+- `bin/rails test`: 316件（却下の理由「他の画像と重複」の追加の時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 7件（グリッド入力画面・レビュー画面・登録画面のペアの一覧の JS をヘッドレス Chrome で確認）
 - **本物の解析エンジンを呼ぶテスト**（`test/integration/analyzer_end_to_end_test.rb`）: `analyzer/scripts/make_dev_scenes.py` で合成シーン（.npy）を作り、Rails から `uv run python -m analyzer` を実行する。uv と `cd analyzer && uv sync` が必要（CI の test ジョブも uv を入れている）
 - 解析エンジンのタイムアウトのテストは、子プロセスが片付くまで最大 5 秒待ってから確かめる（終了済みで回収待ちのゾンビは残っていないとみなす。Phase 6b）
 - 偽の解析エンジン: `AnalyzeInspectionImageJob.client` を `with_fake_analyzer` で差し替える（本番では常に `ThermalAnalyzerClient`）

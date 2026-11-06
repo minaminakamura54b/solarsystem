@@ -6,7 +6,10 @@
 # - 完了済みの点検でレビュー操作をしたら、点検をレビュー待ちに戻す（重要度を付け直すため）。
 #   ただしパネルの割り当ては戻さない（重大度・異常の有無に影響しないため。2026-10-19 ユーザー指示）
 class AnomalyReview
-  REJECTION_REASONS = { "glare" => "グレア（反射）", "shadow" => "影", "soiling" => "汚れ", "other" => "その他" }.freeze
+  # duplicate: 同じ異常を別の画像でも検出したもの（誤検出ではない）。学習データで誤検出と区別するために分ける（2026-11-06 ユーザー指示）
+  REJECTION_REASONS = {
+    "glare" => "グレア（反射）", "shadow" => "影", "soiling" => "汚れ", "duplicate" => "他の画像と重複", "other" => "その他"
+  }.freeze
   CAUSES = {
     "cell_crack" => "セルの割れ・欠け", "solder" => "はんだ・セル間接続の不良", "bypass_diode" => "バイパスダイオードの故障",
     "junction_box" => "ジャンクションボックスの不良", "string_open" => "ストリングの開放・接続不良",

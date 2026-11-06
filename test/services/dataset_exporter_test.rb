@@ -47,6 +47,16 @@ class DatasetExporterTest < ActiveSupport::TestCase
     assert_equal "shadow", detail.find { |r| r["review_status"] == "rejected" }["rejection_reason"]
   end
 
+  test "「他の画像と重複」で却下した候補は、labels_detail.csv で誤検出の却下と区別できる" do
+    anomaly(@first, review_status: "rejected", locked: true, rejection_reason: "duplicate")
+    anomaly(@second, review_status: "rejected", locked: true, rejection_reason: "glare")
+
+    DatasetExporter.new(@out).export!
+
+    detail = CSV.read(@out.join("labels_detail.csv"), headers: true)
+    assert_equal %w[duplicate glare], detail.map { |r| r["rejection_reason"] }.sort
+  end
+
   test "未確定の候補が残っている画像・解析が終わっていない画像は含めない" do
     anomaly(@first, review_status: "pending")
     @second.update_columns(analysis_status: "needs_review")
