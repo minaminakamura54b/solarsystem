@@ -84,6 +84,18 @@ Phase S の手順は [docs/PHASE_S_RUNBOOK.md](../docs/PHASE_S_RUNBOOK.md)、記
 DJI_IRP_PATH=$PWD/bin/dji_thermal_sdk/<版>/utility/bin/linux/release_x64/dji_irp uv run python -m analyzer propose-grid --thermal ../tmp/spike/DJI_0001_T.JPG --out /tmp/proposal.json
 ```
 
+## エリア撮影の画像を間引く（11 月の案件の手順）
+
+写真測量の飛び方では同じパネルが多くの画像に写るため、解析する画像を撮影位置で間引きます（判定には関係しない補助）。
+飛行ラインを原則 2 本おき、ライン内の撮影を原則 3 枚おきに選びます（ラインの間隔が広い所は詰める）。
+
+```bash
+exiftool -n -csv -FileName -GPSLatitude -GPSLongitude <撮影フォルダ>/*_T.JPG > meta.csv
+uv run python scripts/select_images.py meta.csv --out selected.csv   # 間隔は --max-line-gap-m（13.5）・--max-shot-gap-m（11.0）
+```
+
+顧客の画像の一覧なので、出力はリポジトリに置かないでください（`tmp/spike/` など）。
+
 ## Docker
 
 ```bash
