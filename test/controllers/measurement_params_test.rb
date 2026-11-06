@@ -25,10 +25,10 @@ class MeasurementParamsTest < ActionDispatch::IntegrationTest
     assert_match "解析した後に測定パラメータ（または湿度）が変わっています", response.body
   end
 
-  test "ありえない値は保存しない" do
+  test "SDK が受け付ける範囲の外の値は保存しない" do
     patch measurement_inspection_path(@inspection, site_id: @site.id), params: { inspection: { emissivity: "1.5" } }
 
-    assert_equal "放射率は 0 より大きく 1 以下にしてください", flash[:alert]
+    assert_equal "放射率は 0.1〜1 の範囲で入力してください（DJI Thermal SDK が受け付ける範囲）", flash[:alert]
     assert_nil @inspection.reload.emissivity
   end
 end

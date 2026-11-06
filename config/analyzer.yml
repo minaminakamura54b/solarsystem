@@ -17,6 +17,13 @@ shared:
   # 再解析で作り直した候補が、人が判断した異常（確定・修正・却下・手動追加 = locked）と
   # 同じ画像の中で bbox の IoU がこの値以上で重なる場合は、候補を作らない（種類は問わない。2026-10-15 ユーザー承認）
   locked_overlap_iou: 0.5
+  # DJI Thermal SDK が受け付ける測定パラメータの範囲 [最小, 最大]（Phase S で M4T・SDK v1.9 で確認。docs/spike_dji_sdk.md 5 章）。
+  # 点検の入力の確認と、解析エンジンに渡す値の選別に使う。analyzer/analyzer/config/default_params.json の measurement_ranges と同じ値にする
+  measurement_ranges:
+    emissivity: [0.1, 1.0]
+    reflected_temperature_c: [-40.0, 100.0]
+    humidity_percent: [1.0, 100.0]
+    distance_m: [1.0, 300.0]
   # 開発・テスト用: .npy（合成の温度行列）をサーモ画像として登録できるか。本番では false
   allow_npy_thermal: false
 
