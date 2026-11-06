@@ -10,7 +10,7 @@
 
 <div class="p-6 max-w-3xl">
   <div class="card p-6">
-    <%= form_with model: @inspection, url: inspections_path, data: { controller: "upload-form" } do |f| %>
+    <%= form_with model: @inspection, url: inspections_path, data: { controller: "upload-form", upload_form_max_gap_seconds_value: ImageQualityConfig.current.pairing_max_time_gap_seconds } do |f| %>
       <% messages = @inspection.display_error_messages %>
       <% if messages.any? %>
         <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
@@ -45,6 +45,8 @@
             <p class="text-xs text-gray-400 mt-2">
               ファイル名の末尾が <code>_T</code> の画像をサーモ画像、<code>_V</code> の画像を同時撮影の RGB としてペアにします
               （例: DJI_0001_T.JPG と DJI_0001_V.JPG）。末尾に _T / _V が無い画像はサーモ画像として扱います。
+              DJI の名前（DJI_撮影時刻_番号_T）は、番号が同じで撮影時刻の差が <%= ImageQualityConfig.current.pairing_max_time_gap_seconds.to_i %> 秒以内ならペアにします。
+              名前の末尾が「 (2)」などの複製と思われるファイルは登録しません。
             </p>
           </div>
           <div class="mt-3 hidden" data-upload-form-target="summary">

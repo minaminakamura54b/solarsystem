@@ -26,7 +26,17 @@ class InspectionSessionsTest < ActionDispatch::IntegrationTest
     images = inspection.inspection_images.to_a
     assert_equal %w[lowres_T.jpg thermal_plain_T.jpg], images.map(&:thermal_filename)
     assert images.none? { |i| i.rgb.attached? }, "rgb_V は thermal_plain と名前が対にならない"
-    assert_match "対になるサーモ画像が無い RGB 画像は登録していません: rgb_V.jpg", flash[:notice]
+    assert_match "対になるサーモ画像が無い RGB 画像は登録していません: rgb_V.jpg", flash[:alert]
+  end
+
+  test "複製と思われるファイルは登録せず、警告に名前を出す" do
+    duplicate = Rack::Test::UploadedFile.new(file_fixture("thermal_plain_T.jpg"), "image/jpeg", original_filename: "thermal_plain_T (2).jpg")
+
+    assert_difference -> { InspectionImage.count }, 1 do
+      post inspections_path(site_id: @site.id), params: { inspection: { files: [ upload("thermal_plain_T.jpg"), duplicate ] } }
+    end
+
+    assert_match "複製と思われるファイル（名前の末尾が「 (2)」など）は登録していません: thermal_plain_T (2).jpg", flash[:alert]
   end
 
   test "登録時のジョブは画像ごとの処理だけ（旧方式の Claude 判定は無い）" do

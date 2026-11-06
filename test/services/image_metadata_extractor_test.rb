@@ -15,6 +15,13 @@ class ImageMetadataExtractorTest < ActiveSupport::TestCase
     assert_not attrs[:metadata].key?("ThermalData"), "バイナリのタグは保存しない"
   end
 
+  test "レーザー距離計の距離と状態を残す（測定距離に使う）" do
+    attrs = ImageMetadataExtractor.new(dji_thermal_tags(LRFTargetDistance: 41.486, LRFStatus: "Normal")).attributes
+
+    assert_equal 41.486, attrs[:metadata]["LRFTargetDistance"]
+    assert_equal "Normal", attrs[:metadata]["LRFStatus"]
+  end
+
   test "撮影時刻はタイムゾーンが無ければ設定のタイムゾーン（Asia/Tokyo）の現地時刻として解釈する" do
     attrs = ImageMetadataExtractor.new(dji_thermal_tags).attributes
 

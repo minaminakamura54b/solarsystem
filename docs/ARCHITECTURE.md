@@ -31,7 +31,7 @@ Rails 8.1（Puma）
 - 認証なし。どの発電所のデータも誰でも閲覧・操作できる
 - 画面の選択中の発電所は session に保持。未選択なら `Site.first`
 - 解析エンジン（`analyzer/`、Python 3.12・uv）は Phase 4 で Rails に接続した。呼び出し方は `config/analyzer.yml`（開発・テストは `uv run`、本番は Docker イメージ内の `/rails/analyzer/.venv/bin/python`）
-- DJI Thermal SDK の呼び出しは Phase S の後に実装する（TODO）。それまで実際の R-JPEG は解析エンジンで `needs_review（sdk_unavailable）` になる。開発・テストは .npy の合成データを使う
+- R-JPEG は解析エンジンが DJI Thermal SDK の `dji_irp` で温度行列（float32・℃）に変換する（2026-11-06。Phase S の記録どおり）。SDK はリポジトリ・イメージに含めず、`DJI_IRP_PATH` で場所を指定する。SDK が無ければ `needs_review（sdk_unavailable）`、SDK の失敗は `needs_review（sdk_failed）`。開発・テストは .npy の合成データと偽の `dji_irp` を使う
 
 ## 2. 画面とルーティング
 
@@ -95,7 +95,9 @@ RuleSet ──< SeverityRule（閾値。Anomaly / AnomalyGroup が判定時の�
      upload_form_controller.js がサーバーと同じ規則でペアを一覧表示する
 2. InspectionsController#create
      ImagePairing: ファイル名末尾の _T（サーモ）/ _V（RGB）でペアにする（大文字小文字は区別しない）。
-       末尾に _T / _V が無いファイルはサーモ画像。対になるサーモ画像が無い RGB は登録しない（通知に表示）
+       DJI の名前（DJI_<撮影時刻 14 桁>_<番号>）は、番号が同じで時刻の差が pairing_max_time_gap_seconds（config/image_quality.yml）以内なら組にする。
+       末尾に _T / _V が無いファイルはサーモ画像。対になるサーモ画像が無い RGB・時刻が設定を超えてずれた RGB・
+       名前の末尾が「 (2)」などの複製は登録しない（警告に表示）
      画像ファイル以外・画像0枚は 422。Inspection と InspectionImage を保存
      → 画像ごとに ProcessInspectionImageJob を登録（旧方式の Claude 判定は行わない）
 3. ProcessInspectionImageJob（画像1枚ごと）
@@ -278,7 +280,7 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 | S | レビュー画面の RGB の切り出しは、サーモと同じ正規化座標の「おおよその位置」 | `review_controller.js` | Phase S でサーモと RGB の変換を決めてから対応 |
 | T | `csv` は Ruby 3.4 で標準の gem から外れる（Ruby 3.3.10 では警告のみ） | `app/services/dataset_exporter.rb` | Ruby 3.4 に上げるときに Gemfile へ追加（新しい gem の追加のため、そのとき確認） |
 | P | Dockerfile の `RUBY_VERSION` が 3.2.9 で、`.ruby-version`（3.3.10）と食い違っていた（Phase 0 以前から） | `Dockerfile` | **Phase 4 で修正**（3.3.10 に合わせた） |
-| Q | 解析エンジンの DJI Thermal SDK の呼び出しが未実装のため、実際の R-JPEG は `needs_review（sdk_unavailable）` になる | `analyzer/analyzer/thermal/dji_reader.py` | Phase S の後に実装（TODO）。測定パラメータの受け皿・SDK の置き場所・手順書（docs/PHASE_S_RUNBOOK.md）は準備済み（2026-10-22） |
+| Q | 解析エンジンの DJI Thermal SDK の呼び出しが未実装のため、実際の R-JPEG は `needs_review（sdk_unavailable）` になる | `analyzer/analyzer/thermal/dji_reader.py` | **2026-11-06 に実装済み**（Phase S の記録どおり。本番サーバーへの SDK の配置はユーザーの確認を得てから） |
 | U | 開発環境はジョブが `:inline` のため、レビュー完了のリクエストの中で Claude API を呼ぶ（確定した異常の件数だけ待つ） | `ExplainInspectionJob` | 本番は Solid Queue で非同期（2026-10-15 確認: 使い捨ての DB に solid_queue のテーブルを作り、5 秒待つ偽の Claude で、レビュー完了の応答は 0.24 秒・Claude の呼び出し 0 回、ジョブは queue default に登録され、ワーカーが後から所見と総括文を作った。重要度・状態は変わらない）。開発で困るようなら指示を受けて対応 |
 | V | 所見・総括文は、発電所のモジュール構成や気象データを後から変えても自動では作り直さない（画面に「古い所見」と表示する） | `AnomalyExplainer#current?` | 「所見を作り直す」で作り直す。報告書（Phase 7）の版の管理と合わせて検討 |
 | W | 群の構成パネルの異常には、レビュー画面でパネルを割り当てる操作が無い（群から外せば割り当てられる）。今は構成パネルにパネルが割り当てられることは無いので、配置の置き換えで割り当て直しの対象になることも無い | `inspections/review/_anomaly.html.erb` | 群の構成パネルにパネルを割り当てる必要が出たら対応 |
@@ -286,7 +288,7 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 
 ## 6. テスト
 
-- `bin/rails test`: 300件（雲量の記録欄の追加の時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 6件（グリッド入力画面とレビュー画面の JS をヘッドレス Chrome で確認）
+- `bin/rails test`: 314件（SDK の呼び出しと組み合わせ方の修正の時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 7件（グリッド入力画面・レビュー画面・登録画面のペアの一覧の JS をヘッドレス Chrome で確認）
 - **本物の解析エンジンを呼ぶテスト**（`test/integration/analyzer_end_to_end_test.rb`）: `analyzer/scripts/make_dev_scenes.py` で合成シーン（.npy）を作り、Rails から `uv run python -m analyzer` を実行する。uv と `cd analyzer && uv sync` が必要（CI の test ジョブも uv を入れている）
 - 解析エンジンのタイムアウトのテストは、子プロセスが片付くまで最大 5 秒待ってから確かめる（終了済みで回収待ちのゾンビは残っていないとみなす。Phase 6b）
 - 偽の解析エンジン: `AnalyzeInspectionImageJob.client` を `with_fake_analyzer` で差し替える（本番では常に `ThermalAnalyzerClient`）

@@ -78,6 +78,6 @@ cd analyzer && uv run python -m analyzer check-sdk   # DJI Thermal SDK の置き
 - `app/services/anomaly_review.rb` / `app/services/inspection_review.rb` / `app/javascript/controllers/review_controller.js` — レビュー操作・レビュー完了・レビュー画面
 - `app/services/panel_layout_import.rb` / `app/controllers/panel_layouts_controller.rb` — 配置図の CSV による実配置の登録（全部の置き換え）と割り当て直しの一覧。`app/services/start_panel_ref.rb` — グリッドの左上のパネルの形式
 - `app/services/dataset_exporter.rb` — 学習データの書き出し（`bin/rails "dataset:export[OUT_DIR]"`。顧客の画像を含むのでリポジトリに書き出さない）
-- `app/services/thermal_measurement.rb` / `analyzer/analyzer/thermal/sdk.py` — 測定パラメータの受け渡しと、DJI Thermal SDK の置き場所（SDK の呼び出し本体は Phase S の後）
+- `app/services/thermal_measurement.rb` / `analyzer/analyzer/thermal/dji_reader.py` / `analyzer/analyzer/thermal/sdk.py` — 測定パラメータ（距離は画像ごとのレーザー距離を優先。出どころを記録）、DJI Thermal SDK の呼び出しと置き場所
 - `docs/PHASE_S_RUNBOOK.md` / `docs/spike_dji_sdk.md` — Phase S の手順書と記録
 - `docs/IMPROVEMENT_PLAN.md` — 改善指示書（仕様の正本）

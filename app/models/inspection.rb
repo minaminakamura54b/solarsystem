@@ -141,11 +141,26 @@ class Inspection < ApplicationRecord
 
   private
 
-  # 測定パラメータ（任意）。物理的にありえる値かだけを確かめる（SDK が受け付ける範囲は Phase S で確認する）
+  MEASUREMENT_FIELDS = {
+    emissivity: [ "emissivity", "放射率", "" ],
+    reflected_temperature_c: [ "reflected_temperature_c", "反射温度", "℃" ],
+    object_distance_m: [ "distance_m", "距離", " m" ]
+  }.freeze
+
+  # 測定パラメータ（任意）。DJI Thermal SDK が受け付ける範囲（config/analyzer.yml の measurement_ranges）だけを保存する
   def measurement_params_range
-    errors.add(:emissivity, "放射率は 0 より大きく 1 以下にしてください") if emissivity && !(emissivity > 0 && emissivity <= 1)
-    errors.add(:reflected_temperature_c, "反射温度は -273.15℃ より高くしてください") if reflected_temperature_c && reflected_temperature_c <= -273.15
-    errors.add(:object_distance_m, "距離は 0 より大きくしてください") if object_distance_m && object_distance_m <= 0
+    config = AnalyzerConfig.current
+    MEASUREMENT_FIELDS.each do |attribute, (key, label, unit)|
+      value = self[attribute]
+      next if value.nil? || config.measurement_in_range?(key, value)
+
+      low, high = config.measurement_ranges.fetch(key)
+      errors.add(attribute, "#{label}は #{plain_number(low)}#{unit}〜#{plain_number(high)}#{unit} の範囲で入力してください（DJI Thermal SDK が受け付ける範囲）")
+    end
+  end
+
+  def plain_number(value)
+    value == value.to_i ? value.to_i.to_s : value.to_s
   end
 
   def images_must_be_present

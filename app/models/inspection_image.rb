@@ -49,6 +49,16 @@ class InspectionImage < ApplicationRecord
     [ width || raw_analysis&.dig("image", "width"), height || raw_analysis&.dig("image", "height") ]
   end
 
+  # レーザー距離計（DJI の XMP の LRFTargetDistance）で測った、画像中心の対象までの距離（m）。
+  # 状態（LRFStatus）が記録されていて Normal でなければ使わない
+  def lrf_distance_m
+    status = metadata["LRFStatus"]
+    return nil if status.present? && status.to_s != "Normal"
+
+    value = Float(metadata["LRFTargetDistance"], exception: false)
+    value if value&.positive?
+  end
+
   def anomaly_candidates_count
     anomalies.where(review_status: "pending").count
   end
@@ -129,6 +139,11 @@ class InspectionImage < ApplicationRecord
     end
   end
 
+  # 開発・テスト用の合成の温度行列（.npy）か
+  def npy_thermal?
+    thermal.attached? && thermal.blob.filename.extension.to_s.casecmp?("npy")
+  end
+
   private
 
   def thermal_must_be_attached
@@ -142,9 +157,6 @@ class InspectionImage < ApplicationRecord
   end
 
   # 合成の温度行列（.npy）。開発・テスト用（config/analyzer.yml の allow_npy_thermal）
-  def npy_thermal?
-    thermal.attached? && thermal.blob.filename.extension.to_s.casecmp?("npy")
-  end
 
   def panel_grids_format
     return if panel_grids.blank?

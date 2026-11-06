@@ -15,8 +15,9 @@ FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 WORKDIR /rails
 
 # Install base packages
+# libgomp1 は DJI Thermal SDK の dji_irp が使う OpenMP（無いと起動しない。Phase S で確認。SDK 本体はイメージに含めない）
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y curl libjemalloc2 libvips sqlite3 libimage-exiftool-perl && \
+    apt-get install --no-install-recommends -y curl libjemalloc2 libvips sqlite3 libimage-exiftool-perl libgomp1 && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 

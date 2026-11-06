@@ -17,7 +17,7 @@ class ThermalImage:
     source: str  # 読み込み方法（dji_rjpeg / npy / tiff）
 
 
-def read_thermal(path: str | Path, dji_thermal_params: dict | None = None) -> ThermalImage:
+def read_thermal(path: str | Path, dji_thermal_params: dict | None = None, dji_irp_timeout_seconds: float = 60) -> ThermalImage:
     path = Path(path)
     if not path.is_file():
         raise AnalyzerError("file_not_found", f"サーモ画像が見つかりません: {path}")
@@ -30,7 +30,7 @@ def read_thermal(path: str | Path, dji_thermal_params: dict | None = None) -> Th
         temps = tiff_reader.read(path)
         source = "tiff"
     else:
-        temps = dji_reader.read(path, dji_thermal_params or {})
+        temps = dji_reader.read(path, dji_thermal_params or {}, timeout_seconds=dji_irp_timeout_seconds)
         source = "dji_rjpeg"
 
     temps = np.asarray(temps, dtype=np.float32)

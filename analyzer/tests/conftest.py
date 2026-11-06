@@ -49,12 +49,13 @@ def cli(tmp_path):
     rules_path = tmp_path / "rules.json"
     rules_path.write_text(json.dumps(DEFAULT_RULES), encoding="utf-8")
 
-    def _run(*args, rules=True):
+    def _run(*args, rules=True, env=None):
         out = tmp_path / "out.json"
         command = [sys.executable, "-m", "analyzer", *args, "--out", str(out)]
         if rules and args and args[0] == "analyze":
             command += ["--rules", str(rules_path)]
-        proc = subprocess.run(command, cwd=ANALYZER_ROOT, capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
+        proc = subprocess.run(command, cwd=ANALYZER_ROOT, capture_output=True, text=True,
+                              env={"PATH": "/usr/bin:/bin", **(env or {})})
         data = json.loads(out.read_text(encoding="utf-8")) if out.exists() else None
         return proc.returncode, data, proc.stderr
 

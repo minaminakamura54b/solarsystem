@@ -123,8 +123,9 @@ class IrradianceInput(BaseModel):
 class MeasurementInput(BaseModel):
     """--measurement で渡す測定パラメータ（DJI Thermal SDK に渡す。2026-10-22 ユーザー指示で受け皿だけ先に作る）。
 
-    値を渡さない項目は null（SDK・R-JPEG の既定のまま。どの値が使われるかは Phase S で確認する）。
-    範囲の確認は物理的にありえる値かどうかだけ。SDK が受け付ける範囲は Phase S で確認する（TODO）。
+    値を渡さない項目は null（R-JPEG に記録された値のまま。Phase S で確認）。
+    ここでは物理的にありえる値かだけを確かめる。SDK が受け付ける範囲（default_params.json の measurement_ranges）は
+    温度行列を読む前に __main__.load_thermal で確かめる。
     """
 
     model_config = ConfigDict(extra="forbid")

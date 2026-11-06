@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-11-06 — Phase S の後の作業 1 と組み合わせ方の修正（ブランチ `phase-s-reader`）
+
+### 追加・変更
+- 解析エンジン: `dji_reader` で DJI Thermal SDK（`dji_irp -a measure --measurefmt float32`）を呼び、R-JPEG の温度行列を読む。SDK の失敗は `sdk_failed`（終了コード 2・要確認）。測定パラメータは SDK が受け付ける範囲（`default_params.json` の `measurement_ranges`）の外なら SDK を呼ばずに `invalid_input`
+- 本番の Dockerfile に `libgomp1`（`dji_irp` が使う）を追加
+- 測定パラメータ（ユーザー指示）
+  - 距離は、画像ごとのレーザー距離計の値（`LRFTargetDistance`。`LRFStatus` が Normal のとき）→ 点検の入力 → 画像の記録値 の順に使い、出どころを `measurement_params` に残す
+  - 放射率は、入力が無ければ「未設定（カメラ既定値）」と記録・表示する（推測で値を決めない）
+  - 点検の入力の確認と解析エンジンに渡す値を、SDK が受け付ける範囲（`config/analyzer.yml` の `measurement_ranges`。解析エンジンと同じ値）に合わせた。範囲外の値（例: 気象データの湿度）は渡さず「範囲外」と残す
+  - 画像ごとに使った測定パラメータと出どころを、点検画面の画像の欄に表示する
+- 組み合わせ方（ユーザー指示）
+  - DJI の名前は、番号が同じで撮影時刻の差が `pairing_max_time_gap_seconds`（`config/image_quality.yml`。2 秒）以内なら組にする。超えるものは組にせず警告
+  - 名前の末尾が「 (2)」などの複製と思われるファイルは、警告を出して登録しない
+  - 組にならなかった RGB・複製の警告は flash の alert に出す。アップロード前の一覧（JS）もサーバーと同じ規則にした
+
+### 判断した事項
+- 画像に記録された測定パラメータの値（例: 距離 5 m）は、SDK の出力からは指定したときにしか読めないため、値は記録せず「画像の記録値を使用」と出どころだけを残した
+- `dji_irp` が受け付ける範囲は SDK が画像ごとに返す値で、ここでは M4T で確かめた値を設定に置いた（ほかの機種を使う場合は確かめる）
+
 ## 2026-11-06 — Phase S: DJI Thermal SDK で温度行列を確認し、手順 7 を実施（ブランチ `phase-s-sdk`）
 
 SDK（Linux v1.9）がそろったので、手順書の手順 1〜5 と 7 を実施した。アプリのコードは変えていない（記録だけ）。

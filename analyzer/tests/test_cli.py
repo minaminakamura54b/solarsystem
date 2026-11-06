@@ -1,7 +1,6 @@
 """CLI の終了コードと出力 JSON（5.2）。python -m analyzer を別プロセスで実行する。"""
 
 import json
-import stat
 
 from tests.fixtures.make_synthetic import GridLayout, make_gapped_scene, make_scene
 
@@ -72,25 +71,6 @@ def test_DJI_SDKが無ければ終了コード2(cli, tmp_path):
     assert code == 2
     assert data["status"] == "needs_review"
     assert data["review_reason"] == "sdk_unavailable"
-
-
-def test_DJI_SDKがあっても呼び出しは未実装なので終了コード1(tmp_path, monkeypatch):
-    from analyzer.errors import AnalyzerError
-    from analyzer.thermal import dji_reader
-
-    path = tmp_path / "DJI_0001_T.JPG"
-    path.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 100)
-    fake_sdk = tmp_path / "dji_irp"
-    fake_sdk.write_text("#!/bin/sh\nexit 0\n")
-    fake_sdk.chmod(fake_sdk.stat().st_mode | stat.S_IEXEC)
-
-    try:
-        dji_reader.read(path, {}, irp_path=str(fake_sdk))
-    except AnalyzerError as e:
-        assert e.exit_code == 1
-        assert e.reason == "dji_reader_not_implemented"
-    else:
-        raise AssertionError("未実装のはず")
 
 
 def test_radiometric_TIFFは未対応で終了コード2(cli, tmp_path):
