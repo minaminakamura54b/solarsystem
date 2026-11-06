@@ -53,8 +53,9 @@ class InspectionsController < ApplicationController
     end
 
     if @inspection.save
-      pairing.unpaired_rgb.each(&:purge_later)
+      (pairing.unpaired_rgb + pairing.duplicates).each(&:purge_later)
       @inspection.inspection_images.each { |image| ProcessInspectionImageJob.perform_later(image.id) }
+      flash[:alert] = pairing_warning(pairing)
       redirect_to inspection_path(@inspection), notice: create_notice(pairing)
     else
       blobs.each { |blob| blob.purge_later unless blob.attachments.exists? }
@@ -161,12 +162,25 @@ class InspectionsController < ApplicationController
 
   def create_notice(pairing)
     rgb_count = pairing.pairs.count(&:rgb)
-    message = "#{pairing.pairs.size}枚の画像を登録しました（RGB とのペア #{rgb_count}組）。メタデータの読み取りと品質チェックを行います"
-    if pairing.unpaired_rgb.any?
-      names = pairing.unpaired_rgb.map { |b| b.filename.to_s }.join("、")
-      message += "。対になるサーモ画像が無い RGB 画像は登録していません: #{names}（画像ごとに手動で添付できます）"
+    "#{pairing.pairs.size}枚の画像を登録しました（RGB とのペア #{rgb_count}組）。メタデータの読み取りと品質チェックを行います"
+  end
+
+  # 登録しなかったファイルの警告（無ければ nil）
+  def pairing_warning(pairing)
+    names = ->(blobs) { blobs.map { |b| b.filename.to_s }.join("、") }
+    no_thermal = pairing.unpaired_rgb - pairing.mismatched_rgb
+    warnings = []
+    if pairing.mismatched_rgb.any?
+      gap = ImageQualityConfig.current.pairing_max_time_gap_seconds.to_i
+      warnings << "番号が同じサーモ画像と撮影時刻が #{gap} 秒を超えてずれている RGB 画像は、組にせず登録していません: " \
+                  "#{names.(pairing.mismatched_rgb)}（別の飛行の画像の可能性があります。画像ごとに手動で添付できます）"
     end
-    message
+    warnings << "対になるサーモ画像が無い RGB 画像は登録していません: #{names.(no_thermal)}（画像ごとに手動で添付できます）" if no_thermal.any?
+    if pairing.duplicates.any?
+      warnings << "複製と思われるファイル（名前の末尾が「 (2)」など）は登録していません: #{names.(pairing.duplicates)}" \
+                  "（元のファイルが無い場合は、名前を直してから登録してください）"
+    end
+    warnings.join(" / ").presence
   end
 
   # 旧方式の点検。result に Claude の生 JSON が入っていることがあるので、そこから概要などを読む
