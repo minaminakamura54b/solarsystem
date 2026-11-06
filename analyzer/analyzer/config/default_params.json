@@ -11,8 +11,16 @@
   "segmenter_min_area_ratio": 0.0005,
   "segmenter_min_rectangularity": 0.80,
   "segmenter_size_tolerance": 0.5,
+  "dji_irp_timeout_seconds": 60,
+  "measurement_ranges": {
+    "_comment": "DJI Thermal SDK が受け付ける測定パラメータの範囲 [最小, 最大]（Phase S で M4T・SDK v1.9 の dji_irp が画像ごとに返した値。docs/spike_dji_sdk.md 5 章）。Rails の config/analyzer.yml の measurement_ranges と同じ値にする",
+    "emissivity": [0.1, 1.0],
+    "reflected_temperature_c": [-40.0, 100.0],
+    "humidity_percent": [1.0, 100.0],
+    "distance_m": [1.0, 300.0]
+  },
   "dji_thermal_params": {
-    "_comment": "DJI Thermal SDK に渡す測定パラメータの既定値。null は渡さない（SDK・R-JPEG の既定のまま）。Rails から --measurement で渡した値が優先する。渡し方と SDK が受け付ける範囲は Phase S で決める（TODO）",
+    "_comment": "DJI Thermal SDK に渡す測定パラメータの既定値。null は渡さない（R-JPEG に記録された値のまま）。Rails から --measurement で渡した値が優先する。放射率は根拠のある値が分かるまで null のままにする（2026-11-06 ユーザー指示）",
     "emissivity": null,
     "reflected_temperature_c": null,
     "humidity_percent": null,

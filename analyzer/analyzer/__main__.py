@@ -75,7 +75,7 @@ def run_analyze(args) -> tuple[AnalysisResult, int]:
         # グリッドが無ければ画像を読まずに終了コード 3
         return analyze(None, "", grids, module, rules, irradiance, params)
 
-    thermal = read_thermal(args.thermal, measurement.merged_over(params.dji_thermal_params))
+    thermal = load_thermal(args.thermal, measurement, params)
     return analyze(thermal.temps, thermal.source, grids, module, rules, irradiance, params)
 
 
@@ -85,7 +85,7 @@ def run_propose(args) -> tuple[ProposalResult, int]:
         measurement = MeasurementInput.model_validate_json(args.measurement)
     except ValidationError as e:
         raise AnalyzerError("invalid_input", f"入力が不正です: {e}") from e
-    thermal = read_thermal(args.thermal, measurement.merged_over(params.dji_thermal_params))
+    thermal = load_thermal(args.thermal, measurement, params)
     info = image_info(thermal.temps, thermal.source)
     try:
         proposal = propose_grid(thermal.temps, params)
@@ -93,6 +93,26 @@ def run_propose(args) -> tuple[ProposalResult, int]:
         e.image = info
         raise
     return ProposalResult(status="proposed", image=info, grid_proposal=proposal), EXIT_OK
+
+
+def load_thermal(path: str, measurement: MeasurementInput, params: AnalyzerParams):
+    """測定パラメータを SDK が受け付ける範囲で確かめてから、温度行列を読む。範囲外なら SDK を呼ばずに invalid_input。"""
+    thermal_params = measurement.merged_over(params.dji_thermal_params)
+    problems = out_of_range(thermal_params, params.measurement_ranges)
+    if problems:
+        raise AnalyzerError("invalid_input", f"測定パラメータが SDK の受け付ける範囲外です: {'、'.join(problems)}")
+    return read_thermal(path, thermal_params, params.dji_irp_timeout_seconds)
+
+
+def out_of_range(thermal_params: dict, ranges: dict) -> list[str]:
+    problems = []
+    for key, value in thermal_params.items():
+        if value is None or key not in ranges:
+            continue
+        low, high = ranges[key]
+        if not low <= value <= high:
+            problems.append(f"{key}={value:g}（{low:g}〜{high:g}）")
+    return problems
 
 
 def run_check_sdk() -> int:

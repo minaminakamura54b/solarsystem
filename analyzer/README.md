@@ -41,7 +41,7 @@ DJI_IRP_PATH=/path/to/dji_irp uv run python -m analyzer check-sdk
 - `corners` は**左上・右上・右下・左下**の順で、画像サイズで正規化した 0〜1 の座標です
 - `--rules` は Rails が有効なルールセットから書き出す JSON です（`version`・`detection_params`・`severity_rules`）。解析エンジンが使うのは、検出の最小値（mild）と検出パラメータだけです
 - `--thermal` には、開発・テスト用に `.npy`（float32 の温度行列、単位 ℃）も指定できます
-- `--measurement`（任意）は測定パラメータです。値がある項目だけを渡し、省略した項目は SDK・R-JPEG の既定のままにします（`config/default_params.json` の `dji_thermal_params` に上書き）。範囲は物理的にありえる値かだけを確かめます。SDK への渡し方は Phase S で確定します。`.npy` では使いません
+- `--measurement`（任意）は測定パラメータです。値がある項目だけを SDK に渡し、省略した項目は R-JPEG に記録された値のままにします（`config/default_params.json` の `dji_thermal_params` に上書き）。SDK が受け付ける範囲（`measurement_ranges`。M4T で確認した値）の外なら、SDK を呼ばずに終了コード 1（`invalid_input`）にします。`.npy` では値を使いません（範囲の確認だけ行います）
 - 解析パラメータのうちルールセットに含まれないもの（hotspot の面積比・縦横比、module_wide の面積比、グレア疑いの面積比など）は `analyzer/config/default_params.json` にあり、`--params` で差し替えられます
 
 ### 終了コード
@@ -49,8 +49,8 @@ DJI_IRP_PATH=/path/to/dji_irp uv run python -m analyzer check-sdk
 | コード | 意味 | 出力 JSON の status / review_reason |
 |---|---|---|
 | 0 | 成功（propose-grid は提案あり） | completed / proposed |
-| 1 | その他のエラー | failed（file_not_found、invalid_input、dji_reader_not_implemented など） |
-| 2 | 温度データなし | needs_review（no_radiometric、sdk_unavailable、unsupported_format） |
+| 1 | その他のエラー | failed（file_not_found、invalid_input など） |
+| 2 | 温度データなし | needs_review（no_radiometric、sdk_unavailable、sdk_failed、unsupported_format） |
 | 3 | グリッドなし・提案できない | needs_review（grid_required、panel_extraction_failed） |
 | 4 | 基準温度を出すための正常パネルが足りない | needs_review（insufficient_baseline） |
 
@@ -68,14 +68,20 @@ R-JPEG から温度行列を得るには、DJI Thermal SDK の `dji_irp` が必�
 
 Phase S の手順は [docs/PHASE_S_RUNBOOK.md](../docs/PHASE_S_RUNBOOK.md)、記録は [docs/spike_dji_sdk.md](../docs/spike_dji_sdk.md) です。サーモと RGB の位置合わせは `scripts/fit_rgb_alignment.py`（対応点から変換と誤差を出す）で確かめます。
 
-**現在の実装状況（Phase S 未実施）**: `thermal/dji_reader.py` は「JPEG でない（終了コード 2、`no_radiometric`）」「SDK が無い（終了コード 2、`sdk_unavailable`）」の判定までです。SDK のオプション名・出力形式・測定パラメータ（放射率・反射温度・湿度・距離）の渡し方は、Phase S で SDK 同梱の README と実画像を確認してから実装します（TODO）。それまでは、SDK があっても終了コード 1（`dji_reader_not_implemented`）を返します。
+**R-JPEG の読み込み（Phase S の記録どおりに実装。2026-11-06）**: `thermal/dji_reader.py` は `dji_irp -s <R-JPEG> -a measure -o <出力> --measurefmt float32` を呼び、ヘッダーなしの float32（℃・リトルエンディアン）を読みます。画像の大きさは `dji_irp` が標準出力に出す値で確かめます。測定パラメータは `--emissivity`・`--reflection`・`--humidity`・`--distance` で、値がある項目だけ渡します。
+
+- JPEG でない → 終了コード 2（`no_radiometric`）
+- SDK が無い（`DJI_IRP_PATH` が未設定・実行できない） → 終了コード 2（`sdk_unavailable`）
+- SDK の失敗（終了コード 0 以外・出力が無い・大きさが合わない・`dji_irp_timeout_seconds` を超えた） → 終了コード 2（`sdk_failed`）
+- 実行には OS のパッケージ `libgomp1` が要ります（本番の Dockerfile に入れてあります）。展開しただけの `dji_irp` には実行権限が無いので `chmod +x` してください
 
 ### 手元の R-JPEG で試す手順（Phase S 以降）
 
 顧客の画像はリポジトリに入れず、`tmp/spike/`（`.gitignore` 済み）などに置いて試してください。
 
 ```bash
-DJI_IRP_PATH=$PWD/bin/dji_irp uv run python -m analyzer propose-grid --thermal ../tmp/spike/DJI_0001_T.JPG --out /tmp/proposal.json
+# linux/amd64 のコンテナの中で（手順は docs/PHASE_S_RUNBOOK.md の手順 3）
+DJI_IRP_PATH=$PWD/bin/dji_thermal_sdk/<版>/utility/bin/linux/release_x64/dji_irp uv run python -m analyzer propose-grid --thermal ../tmp/spike/DJI_0001_T.JPG --out /tmp/proposal.json
 ```
 
 ## Docker

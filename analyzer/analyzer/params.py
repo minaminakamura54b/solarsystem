@@ -22,6 +22,8 @@ class AnalyzerParams:
     segmenter_min_area_ratio: float
     segmenter_min_rectangularity: float
     segmenter_size_tolerance: float
+    dji_irp_timeout_seconds: float
+    measurement_ranges: dict
     dji_thermal_params: dict = field(default_factory=dict)
 
     @classmethod
