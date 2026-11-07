@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_08_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_08_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -226,6 +226,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_100000) do
     t.datetime "updated_at", null: false
     t.jsonb "measurement_params"
     t.jsonb "georef"
+    t.jsonb "alignment"
     t.index ["analysis_status"], name: "index_inspection_images_on_analysis_status"
     t.index ["inspection_id", "sequence"], name: "index_inspection_images_on_inspection_id_and_sequence", unique: true
     t.index ["inspection_id"], name: "index_inspection_images_on_inspection_id"

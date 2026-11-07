@@ -114,10 +114,16 @@ class InspectionImage < ApplicationRecord
       start_panel_ref = StartPanelRef.normalize(grid["start_panel_ref"])
       StartPanelRef.verify!(site, start_panel_ref) if site
 
+      # 位置合わせの下書き（架台の ID 付き）を人が直して保存したグリッドは、架台の ID を残す（異常を架台のパネルに割り当てるため）
+      block_id = grid["pv_block_id"].presence && Integer(grid["pv_block_id"].to_s, exception: false)
+      raise ArgumentError, "グリッド #{n}: 架台が見つかりません" if block_id && site && !site.pv_blocks.exists?(id: block_id)
+
       {
         "rows" => rows, "cols" => cols, "corners" => corners.map { |x, y| [ x.round(6), y.round(6) ] },
         "panel_orientation" => orientation, "grid_template_id" => grid["grid_template_id"].presence&.to_i,
-        "start_panel_ref" => start_panel_ref
+        "start_panel_ref" => start_panel_ref,
+        "pv_block_id" => block_id, "block_label" => (block_id ? grid["block_label"].to_s.first(20).presence : nil),
+        "source" => (block_id ? "layout_adjusted" : nil)
       }.compact
     end
   end

@@ -253,6 +253,13 @@
               <% if image.measurement_params.present? && !image.npy_thermal? %>
                 <p class="text-xs text-gray-400 mt-1">測定パラメータ: <%= ThermalMeasurement.describe(image.measurement_params).join("・") %></p>
               <% end %>
+              <% if (al = image.alignment).present? %>
+                <% if al["status"] == "aligned" %>
+                  <p class="text-xs mt-1 text-gray-400">架台との位置合わせ: 自動（残差 パネル幅の <%= al.dig("residual", "panel_width_ratio") %>・閾値 <%= al["threshold_ratio"] %>。架台 <%= al["blocks_in_view"] %> 個）</p>
+                <% else %>
+                  <p class="text-xs mt-1" style="color:#ef9f27;">架台との位置合わせ: できませんでした — <%= al["message"] %><%= "（残差 パネル幅の #{al.dig('residual', 'panel_width_ratio')}）" if al.dig("residual", "panel_width_ratio") %></p>
+                <% end %>
+              <% end %>
               <% if image.georef.present? %>
                 <p class="text-xs mt-1" style="color:<%= image.georef["usable"] ? "var(--gray-400)" : "#ef9f27" %>;">位置: <%= ImageGeoref.describe(image.georef) %></p>
               <% end %>

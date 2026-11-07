@@ -4,6 +4,7 @@
   python -m analyzer propose-grid --thermal X --out proposal.json
   python -m analyzer check-sdk     （DJI Thermal SDK の置き場所の確認。結果の JSON を標準出力に出す）
   python -m analyzer build-block-map --input input.json --out map.json   （点検の画像から架台の地図の候補を作る）
+  python -m analyzer align-layout --input input.json --out align.json     （登録した架台を 1 枚の画像に重ねて補正する）
 
 終了コード: 0=成功（提案あり）、1=その他エラー、2=温度データなし（check-sdk では SDK が使えない）、3=グリッドなし（提案できない）、4=基準パネル不足。
 どの終了コードでも、可能なかぎり --out に結果の JSON を書き、理由を stderr に出す。
@@ -65,6 +66,12 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--layout-params", help="架台の検出と地図づくりのパラメータ（省略時は analyzer/config/layout_params.json）")
     b.add_argument("--params")
     b.add_argument("--out", required=True)
+
+    al = sub.add_parser("align-layout", help="登録した架台を 1 枚の画像に重ね、画像の架台の辺に合わせて補正する")
+    al.add_argument("--input", required=True, help="画像・撮影情報・近くの架台の JSON（analyzer/layout/command.py の AlignInput）")
+    al.add_argument("--layout-params")
+    al.add_argument("--params")
+    al.add_argument("--out", required=True)
     return parser
 
 
@@ -130,19 +137,20 @@ def run_check_sdk() -> int:
 
 
 def run_block_map_command(args) -> int:
-    from analyzer.layout.command import run_build_block_map
+    from analyzer.layout.command import run_align_layout, run_build_block_map
 
+    runner = run_build_block_map if args.command == "build-block-map" else run_align_layout
     try:
-        result = run_build_block_map(args.input, args.layout_params, args.params)
+        result = runner(args.input, args.layout_params, args.params)
         code = EXIT_OK
     except AnalyzerError as e:
         result = {"schema_version": SCHEMA_VERSION, "analyzer_version": ANALYZER_VERSION, "status": e.status,
-                  "review_reason": e.reason, "message": e.message, "blocks": []}
+                  "review_reason": e.reason, "message": e.message, "blocks": [], "grids": []}
         code = e.exit_code
         print(f"{e.reason}: {e.message}", file=sys.stderr)
     except Exception as e:  # noqa: BLE001 — 想定外のエラーも終了コード 1 と理由を必ず返す
         result = {"schema_version": SCHEMA_VERSION, "analyzer_version": ANALYZER_VERSION, "status": "failed",
-                  "review_reason": "unexpected_error", "message": f"{type(e).__name__}: {e}", "blocks": []}
+                  "review_reason": "unexpected_error", "message": f"{type(e).__name__}: {e}", "blocks": [], "grids": []}
         code = EXIT_ERROR
         print(f"unexpected_error: {type(e).__name__}: {e}", file=sys.stderr)
     Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -153,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "check-sdk":
         return run_check_sdk()
-    if args.command == "build-block-map":
+    if args.command in ("build-block-map", "align-layout"):
         return run_block_map_command(args)
     result_class = AnalysisResult if args.command == "analyze" else ProposalResult
     try:

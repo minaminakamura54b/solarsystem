@@ -102,3 +102,70 @@ def run_build_block_map(input_path: str, layout_params_path: str | None = None, 
     result = build_block_map(observations, frame, layout_params, spec.facing_azimuth_deg, spec.module)
     return {"schema_version": SCHEMA_VERSION, "analyzer_version": ANALYZER_VERSION, "status": "proposed",
             "review_reason": None, "message": None, "skipped": skipped, **result}
+
+
+# ── align-layout ───────────────────────────────────────────────
+
+
+class AlignBlockIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: int | str
+    label: str
+    rows: int = Field(gt=0)
+    cols: int = Field(gt=0)
+    corners_latlng: list[tuple[float, float]]
+    upper_elevation_m: float | None = None
+    lower_elevation_m: float | None = None
+    panel_orientation: str = "portrait"
+
+
+class AlignInput(BaseModel):
+    """1 枚の画像と、その近くの架台（docs/LAYOUT_OVERLAY_DESIGN.md の B-2）。
+    架台の標高が無ければ、panel_elevation_m ± edge_height_delta_m（架台の地図を作ったときの推定値）、それも無ければ
+    LRF が当たった地点の標高を使う（補正の拡大縮小で高さの誤差を吸収する）"""
+
+    model_config = ConfigDict(extra="ignore")
+    origin: Origin
+    image: ImageIn
+    blocks: list[AlignBlockIn]
+    max_residual_panel_width_ratio: float = Field(gt=0)
+    ifov_ratio: float = 1.0
+    panel_elevation_m: float | None = None
+    edge_height_delta_m: float = 0.0
+
+
+def run_align_layout(input_path: str, layout_params_path: str | None = None, params_path: str | None = None) -> dict:
+    from analyzer.layout.align import BlockIn, align
+
+    try:
+        spec = AlignInput.model_validate_json(Path(input_path).read_text(encoding="utf-8"))
+        layout_params = load_layout_params(layout_params_path)
+        params = AnalyzerParams.load(params_path)
+    except (ValueError, OSError) as e:
+        raise AnalyzerError("invalid_input", f"入力が不正です: {e}") from e
+
+    frame = LocalFrame(spec.origin.lat, spec.origin.lng)
+    img = spec.image
+    thermal = read_thermal(img.thermal, params.dji_thermal_params, params.dji_irp_timeout_seconds)
+    e, n = frame.to_local(img.camera.lat, img.camera.lng)
+    cam = NadirCamera(e, n, img.camera.abs_alt_m, img.camera.image_up_azimuth_deg,
+                      img.camera.ifov_mrad / 1000 * spec.ifov_ratio, img.camera.width, img.camera.height)
+    if thermal.temps.shape != (cam.height, cam.width):
+        raise AnalyzerError("invalid_input", "温度行列の大きさが画像の大きさと違います")
+    plane = spec.panel_elevation_m if spec.panel_elevation_m is not None else img.lrf_target_abs_alt_m
+    blocks = []
+    for b in spec.blocks:
+        upper = b.upper_elevation_m if b.upper_elevation_m is not None else (plane + spec.edge_height_delta_m if plane is not None else None)
+        lower = b.lower_elevation_m if b.lower_elevation_m is not None else (plane - spec.edge_height_delta_m if plane is not None else None)
+        if upper is None or lower is None:
+            raise AlignError("panel_elevation_unknown", "架台の標高が分からないため、画像に重ねられません")
+        corners = [frame.to_local(lat, lng) for lat, lng in b.corners_latlng]
+        blocks.append(BlockIn(b.id, b.label, b.rows, b.cols, corners, upper, lower, b.panel_orientation))
+    height = cam.abs_alt - (plane if plane is not None else cam.abs_alt - 40)
+    edges = detect_edges(thermal.temps, cam.ifov_rad * height, layout_params)
+    result = align(edges, cam, blocks, spec.max_residual_panel_width_ratio, layout_params)
+    return {"schema_version": SCHEMA_VERSION, "analyzer_version": ANALYZER_VERSION, **result}
+
+
+class AlignError(AnalyzerError):
+    status = "needs_review"
