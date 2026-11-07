@@ -1,0 +1,45 @@
+{
+  "_comment": "架台の検出と地図づくりのパラメータ（docs/LAYOUT_OVERLAY_DESIGN.md の A-3）。2026-11 の検証（飛行 008、M4T・対地約 40 m）で決めた値。判定（異常・重大度）には使わない",
+  "edge_search_px": 9,
+  "min_component_area_px": 1500,
+  "min_rectangularity": 0.75,
+  "block_short_side_m": [
+    2.5,
+    6.5
+  ],
+  "min_long_side_px": 40,
+  "max_edge_fit_sd_px": 1.2,
+  "edge_outlier_px": 1.5,
+  "cluster_across_m": 1.2,
+  "cluster_along_m": 0.8,
+  "row_band_m": 2.5,
+  "local_window_m": 15.0,
+  "pair_length_tolerance_m": 0.6,
+  "row_cluster_m": 1.0,
+  "single_end_row_tolerance_m": 0.8,
+  "single_end_max_overlap_m": 1.0,
+  "dedupe_overlap_m": 3.0,
+  "edge_band_m": 3.5,
+  "min_lrf_on_panel_images": 3,
+  "min_images": 5,
+  "ifov_search_ratio": [
+    0.97,
+    0.98,
+    0.99,
+    1.0,
+    1.01,
+    1.02,
+    1.03
+  ],
+  "edge_delta_search_m": [
+    0.0,
+    0.3,
+    0.6,
+    0.8,
+    1.0,
+    1.2,
+    1.4,
+    1.7,
+    2.0
+  ]
+}

@@ -96,6 +96,20 @@ uv run python scripts/select_images.py meta.csv --out selected.csv   # 間隔は
 
 顧客の画像の一覧なので、出力はリポジトリに置かないでください（`tmp/spike/` など）。
 
+## 架台の地図の候補を作る（build-block-map）
+
+点検の画像（真下向き・RTK）から架台を検出して地上の座標に移し、複数の画像で重ねて架台の地図の候補を作ります
+（docs/LAYOUT_OVERLAY_DESIGN.md の A-3。作った地図は人が確認してから使う）。
+
+```bash
+uv run python -m analyzer build-block-map --input input.json --out map.json
+```
+
+- 入力の形は `analyzer/layout/command.py` の説明（原点・パネルの向く方位・画像ごとの撮影情報。Rails の `inspection_images.georef` から作る）
+- パネル面の標高は LRF がパネルに当たった画像から、画素の角度の倍率は架台の端（短辺）から、上端と下端の高さの差は長辺から推定して `estimated` に出す
+- 架台の端は、長辺から求めた列に割り当ててから組にする。片方の端しか無い架台は長さで補い `low_confidence`
+- 地図を作れないとき（画像が少ない・パネル面の標高が分からない など）は `needs_review` と理由。パラメータは `analyzer/config/layout_params.json`
+
 ## 撮影前に反射を確かめる
 
 パネルに映った太陽（反射）がサーモ画像に写るかを、緯度・経度・傾斜角・方位・日時から計算します（幾何だけ。雲は考えない）。

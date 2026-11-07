@@ -3,6 +3,7 @@
   python -m analyzer analyze --thermal X --panel-grids '[...]' --module '{...}' --rules rules.json --out result.json
   python -m analyzer propose-grid --thermal X --out proposal.json
   python -m analyzer check-sdk     （DJI Thermal SDK の置き場所の確認。結果の JSON を標準出力に出す）
+  python -m analyzer build-block-map --input input.json --out map.json   （点検の画像から架台の地図の候補を作る）
 
 終了コード: 0=成功（提案あり）、1=その他エラー、2=温度データなし（check-sdk では SDK が使えない）、3=グリッドなし（提案できない）、4=基準パネル不足。
 どの終了コードでも、可能なかぎり --out に結果の JSON を書き、理由を stderr に出す。
@@ -17,6 +18,7 @@ from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
 
+from analyzer import ANALYZER_VERSION, SCHEMA_VERSION
 from analyzer.contract import (
     AnalysisResult,
     GridSpec,
@@ -57,6 +59,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", required=True)
 
     sub.add_parser("check-sdk", help="DJI Thermal SDK（DJI_IRP_PATH）が使える状態かを確かめる（SDK の機能は呼ばない）")
+
+    b = sub.add_parser("build-block-map", help="点検の画像から架台の地図の候補を作る（人が確認してから使う）")
+    b.add_argument("--input", required=True, help="画像と撮影情報の JSON（analyzer/layout/command.py の説明）")
+    b.add_argument("--layout-params", help="架台の検出と地図づくりのパラメータ（省略時は analyzer/config/layout_params.json）")
+    b.add_argument("--params")
+    b.add_argument("--out", required=True)
     return parser
 
 
@@ -121,10 +129,32 @@ def run_check_sdk() -> int:
     return EXIT_OK if report["ok"] else EXIT_NO_TEMPERATURE
 
 
+def run_block_map_command(args) -> int:
+    from analyzer.layout.command import run_build_block_map
+
+    try:
+        result = run_build_block_map(args.input, args.layout_params, args.params)
+        code = EXIT_OK
+    except AnalyzerError as e:
+        result = {"schema_version": SCHEMA_VERSION, "analyzer_version": ANALYZER_VERSION, "status": e.status,
+                  "review_reason": e.reason, "message": e.message, "blocks": []}
+        code = e.exit_code
+        print(f"{e.reason}: {e.message}", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001 — 想定外のエラーも終了コード 1 と理由を必ず返す
+        result = {"schema_version": SCHEMA_VERSION, "analyzer_version": ANALYZER_VERSION, "status": "failed",
+                  "review_reason": "unexpected_error", "message": f"{type(e).__name__}: {e}", "blocks": []}
+        code = EXIT_ERROR
+        print(f"unexpected_error: {type(e).__name__}: {e}", file=sys.stderr)
+    Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
+    return code
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "check-sdk":
         return run_check_sdk()
+    if args.command == "build-block-map":
+        return run_block_map_command(args)
     result_class = AnalysisResult if args.command == "analyze" else ProposalResult
     try:
         result, code = run_analyze(args) if args.command == "analyze" else run_propose(args)
