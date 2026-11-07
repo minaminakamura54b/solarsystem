@@ -127,7 +127,7 @@ class InspectionImage < ApplicationRecord
   # 拡張子が無ければ、同じ一時ディレクトリに拡張子付きのシンボリックリンクを作る（原本は変えない）
   def open_thermal
     extension = thermal.filename.extension_with_delimiter
-    Dir.mktmpdir("thermal") do |dir|
+    Dir.mktmpdir("thermal", AnalyzerConfig.current.tmp_parent) do |dir|
       thermal.open(tmpdir: dir) do |file|
         path = file.path
         if extension.present? && !File.extname(path).casecmp?(extension)

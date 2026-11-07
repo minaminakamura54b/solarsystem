@@ -3,10 +3,10 @@ require "test_helper"
 # 解析エンジンの呼び出し。ここでは解析エンジンの代わりに sh のスクリプトを動かし、
 # タイムアウト・終了コード・出力の検証・一時ファイルの削除を確かめる
 class ThermalAnalyzerClientTest < ActiveSupport::TestCase
-  def config(script, timeout: 5)
+  def config(script, timeout: 5, work_dir: nil)
     AnalyzerConfig.new(
       command: [ "sh", "-c", script, "analyzer" ], working_dir: ".", timeout_seconds: timeout,
-      schema_version: "2.1", stale_after_minutes: 10, template_match: { altitude_m: 2 }
+      schema_version: "2.1", stale_after_minutes: 10, template_match: { altitude_m: 2 }, work_dir: work_dir
     )
   end
 
@@ -44,6 +44,27 @@ class ThermalAnalyzerClientTest < ActiveSupport::TestCase
     assert result.ok?
     assert_equal "completed", result.status
     assert_equal "hotspot", result.output["anomalies"].first["anomaly_type"]
+  end
+
+  test "work_dir を設定すると、一時ファイルをその中に作り、終わったら消す（Docker の開発環境でコンテナと共有するため）" do
+    Dir.mktmpdir do |base|
+      work_dir = File.join(base, "analyzer_work")
+      record = File.join(base, "out_path.txt")
+      ENV["OUTPUT"] = analyzer_output.to_json
+      ENV["RECORD"] = record
+      client = ThermalAnalyzerClient.new(config: config('eval out=\${$#}; echo "$out" > "$RECORD"; printf %s "$OUTPUT" > "$out"', work_dir: work_dir))
+
+      assert analyze(client).ok?
+      out_path = File.read(record).strip
+      assert out_path.start_with?("#{work_dir}/"), out_path
+      assert_empty Dir.children(work_dir), "一時ディレクトリは消す"
+    ensure
+      ENV.delete("RECORD")
+    end
+  end
+
+  test "work_dir が無ければシステムの一時ディレクトリを使う" do
+    assert_nil config("true").tmp_parent
   end
 
   test "終了コードと要確認の理由を返す" do

@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-11-07 — 手順 1: Mac の開発環境で解析エンジンを Docker の中で動かす（ブランチ `dev-analyzer-docker`）
+
+- `bin/analyzer-container up|status|down`: 解析エンジン用の linux/amd64 のコンテナ（`solarsight-analyzer`）を用意する。プロジェクトを同じパスでマウントし、`libgomp1` と依存関係（コンテナの `/opt/venv`）を入れる
+- `bin/analyzer-docker`: コンテナの中で `python -m analyzer` を動かす。`config/analyzer.yml` の development で `ANALYZER_DOCKER=1` のときに使う
+- `config/analyzer.yml` に `work_dir` を追加（解析エンジンに渡す一時ファイルを作る場所。null ならシステムの一時ディレクトリ）。開発で Docker を使うときはプロジェクトの `tmp/analyzer`（コンテナと共有）
+- 確認: 点検画面の「再解析」から、実画像（R-JPEG）がコンテナの中の DJI Thermal SDK で解析され、結果が画面に出ることを確かめた
+- 判断した事項: `.env` は変えていない（使うときに `ANALYZER_DOCKER=1` と `DJI_IRP_PATH` を設定する）。Rails が時間切れで `docker exec` を止めても、コンテナの中の処理は止まらないことがある（開発用のため許容し、README に記載）
+
 ## 2026-11-06 — 却下の理由「他の画像と重複」と位置合わせの閾値の設定（ブランチ `rejection-duplicate`）
 
 - 却下の理由に「他の画像と重複」（`duplicate`）を追加（ユーザー指示）。同じ異常を別の画像でも検出したものを、誤検出（グレア・影・汚れなど）と区別して残すため。学習データの `labels_detail.csv` の `rejection_reason` で区別できる
