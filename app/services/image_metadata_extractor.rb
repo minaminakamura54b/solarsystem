@@ -5,7 +5,8 @@ class ImageMetadataExtractor
     Make Model DateTimeOriginal OffsetTimeOriginal ImageWidth ImageHeight
     GPSLatitude GPSLongitude GPSLatitudeRef GPSLongitudeRef GPSAltitude
     RelativeAltitude AbsoluteAltitude GimbalPitchDegree GimbalYawDegree GimbalRollDegree
-    LRFTargetDistance LRFStatus
+    LRFTargetDistance LRFStatus LRFTargetAbsAlt
+    GpsStatus AltitudeType RtkFlag RtkStdLon RtkStdLat RtkStdHgt
   ].freeze
 
   def initialize(tags, config: ImageQualityConfig.current)

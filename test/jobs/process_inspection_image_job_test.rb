@@ -39,6 +39,20 @@ class ProcessInspectionImageJobTest < ActiveSupport::TestCase
     assert_not @inspection.reload.in_progress?
   end
 
+  test "配置との位置合わせに使う撮影情報（georef）を記録する。RTK でない画像は使えない理由を残し、失敗にはしない" do
+    with_fake_exif(tags: dji_thermal_tags("Model" => "M4T", "AbsoluteAltitude" => 67.6, "GimbalRollDegree" => 180.0, "RtkFlag" => 50)) do
+      ProcessInspectionImageJob.perform_now(@image.id)
+    end
+    assert @image.reload.georef["usable"], @image.georef.inspect
+
+    with_fake_exif(tags: dji_thermal_tags("Model" => "M4T", "AbsoluteAltitude" => 67.6, "GimbalRollDegree" => 180.0, "RtkFlag" => 16)) do
+      ProcessInspectionImageJob.perform_now(@image.id)
+    end
+    @image.reload
+    assert_equal [ "rtk_not_fixed" ], @image.georef["issues"]
+    assert_not_equal "failed", @image.analysis_status
+  end
+
   test "品質 ok でグリッドがあれば解析ジョブを登録する" do
     @image.update_columns(panel_grids: [ { "rows" => 2, "cols" => 3, "corners" => [ [ 0.1, 0.1 ], [ 0.5, 0.1 ], [ 0.5, 0.4 ], [ 0.1, 0.4 ] ] } ])
 

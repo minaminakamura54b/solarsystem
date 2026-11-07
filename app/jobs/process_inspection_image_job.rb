@@ -21,6 +21,8 @@ class ProcessInspectionImageJob < ApplicationJob
     tags_result = image.thermal.open { |file| self.class.exif_reader.read(file.path) }
     image.assign_attributes(ImageMetadataExtractor.new(tags_result.tags).attributes) if tags_result.ok?
     image.is_radiometric = nil unless tags_result.ok? # 読めなかったときは「判定できない」
+    # 配置との位置合わせに使う撮影情報（使えない理由も残す）。メタデータを読めなかったときは記録しない
+    image.georef = tags_result.ok? && !image.npy_thermal? ? ImageGeoref.new(image).record : nil
 
     InspectionImageQuality.apply(image)
     image.save!

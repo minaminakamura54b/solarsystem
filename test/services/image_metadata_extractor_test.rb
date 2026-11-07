@@ -22,6 +22,13 @@ class ImageMetadataExtractorTest < ActiveSupport::TestCase
     assert_equal "Normal", attrs[:metadata]["LRFStatus"]
   end
 
+  test "RTK の状態と LRF の当たった地点の標高を残す（配置との位置合わせに使う）" do
+    tags = { "RtkFlag" => 50, "RtkStdLon" => 0.003, "GpsStatus" => "RTK", "LRFTargetAbsAlt" => 28.6, "AbsoluteAltitude" => 67.6 }
+    metadata = ImageMetadataExtractor.new(tags).attributes[:metadata]
+
+    assert_equal tags, metadata.slice(*tags.keys)
+  end
+
   test "撮影時刻はタイムゾーンが無ければ設定のタイムゾーン（Asia/Tokyo）の現地時刻として解釈する" do
     attrs = ImageMetadataExtractor.new(dji_thermal_tags).attributes
 
