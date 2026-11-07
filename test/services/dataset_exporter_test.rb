@@ -47,14 +47,44 @@ class DatasetExporterTest < ActiveSupport::TestCase
     assert_equal "shadow", detail.find { |r| r["review_status"] == "rejected" }["rejection_reason"]
   end
 
-  test "「他の画像と重複」で却下した候補は、labels_detail.csv で誤検出の却下と区別できる" do
-    anomaly(@first, review_status: "rejected", locked: true, rejection_reason: "duplicate")
-    anomaly(@second, review_status: "rejected", locked: true, rejection_reason: "glare")
+  def duplicate_of(target, image = @second)
+    anomaly(image, review_status: "rejected", locked: true, rejection_reason: "duplicate", duplicate_of: target,
+            bbox: { "x1" => 0.6, "y1" => 0.1, "x2" => 0.7, "y2" => 0.2 })
+  end
 
-    DatasetExporter.new(@out).export!
+  test "「他の画像と重複」の候補は、まとめ先が確定・修正なら異常あり（種類はまとめ先の最終の種類、位置はこの画像の bbox）" do
+    target = anomaly(@first, review_status: "corrected", locked: true, final_anomaly_type: "module_wide")
+    dup = duplicate_of(target)
 
-    detail = CSV.read(@out.join("labels_detail.csv"), headers: true)
-    assert_equal %w[duplicate glare], detail.map { |r| r["rejection_reason"] }.sort
+    result = DatasetExporter.new(@out).export!
+
+    assert_equal [ 2, 2, 0, 0 ], [ result.images, result.labels, result.negatives, result.skipped_duplicate_unresolved ]
+    assert_equal "3 0.650000 0.150000 0.100000 0.100000", File.read(Dir[@out.join("labels", "*_0002_*.txt")].sole).strip
+    row = CSV.read(@out.join("labels_detail.csv"), headers: true).find { |r| r["anomaly_id"] == dup.id.to_s }
+    assert_equal [ "module_wide", "duplicate", target.id.to_s, "label" ], row.values_at("class", "rejection_reason", "duplicate_of_id", "duplicate_outcome")
+  end
+
+  test "まとめ先が誤検出として却下されたら負例。まとめ先が未確定・無い画像は含めない" do
+    glare = anomaly(@first, review_status: "rejected", locked: true, rejection_reason: "glare")
+    duplicate_of(glare)
+    result = DatasetExporter.new(@out).export!
+    assert_equal [ 2, 0, 2 ], [ result.images, result.labels, result.negatives ]
+    assert_equal "", File.read(Dir[@out.join("labels", "*_0002_*.txt")].sole)
+
+    FileUtils.rm_rf(@out)
+    @second.anomalies.destroy_all
+    duplicate_of(nil)
+    result = DatasetExporter.new(@out).export!
+    assert_equal [ 1, 1 ], [ result.images, result.skipped_duplicate_unresolved ]
+  end
+
+  test "まとめ先が重複として却下されていれば、その先をたどる" do
+    root = anomaly(@first, review_status: "confirmed", locked: true)
+    middle = duplicate_of(root)
+    third_image_dup = anomaly(@second, review_status: "rejected", locked: true, rejection_reason: "duplicate", duplicate_of: middle)
+
+    assert_equal root, third_image_dup.duplicate_root
+    assert_equal :label, third_image_dup.duplicate_outcome
   end
 
   test "未確定の候補が残っている画像・解析が終わっていない画像は含めない" do

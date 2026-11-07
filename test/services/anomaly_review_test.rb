@@ -90,13 +90,25 @@ class AnomalyReviewTest < ActiveSupport::TestCase
     assert_equal [ "rejected", "glare", true ], [ record.reload.review_status, record.rejection_reason, record.locked ]
   end
 
-  test "却下の理由に「他の画像と重複」を選べる（誤検出と区別して残す）" do
+  test "「他の画像と重複」で却下するときは、同じ点検の別の画像の異常をまとめ先に選ぶ" do
     record = candidate
+    other_image = @inspection.inspection_images.create!(sequence: 99, thermal_filename: "x_T.jpg", thermal: record.inspection_image.thermal.blob)
+    target = other_image.anomalies.create!(inspection: @inspection, anomaly_type: "hotspot", severity: "warning")
 
-    AnomalyReview.new(record).reject!(reason: "duplicate")
+    assert_raises(AnomalyReview::Error) { AnomalyReview.new(record).reject!(reason: "duplicate") }
+    same_image = candidate
+    error = assert_raises(AnomalyReview::Error) { AnomalyReview.new(record).reject!(reason: "duplicate", duplicate_of: same_image) }
+    assert_match "同じ画像", error.message
 
-    assert_equal [ "rejected", "duplicate", true ], [ record.reload.review_status, record.rejection_reason, record.locked ]
+    AnomalyReview.new(record).reject!(reason: "duplicate", duplicate_of: target)
+    assert_equal [ "rejected", "duplicate", target.id, true ], [ record.reload.review_status, record.rejection_reason, record.duplicate_of_id, record.locked ]
     assert_equal "他の画像と重複", AnomalyReview::REJECTION_REASONS["duplicate"]
+
+    error = assert_raises(AnomalyReview::Error) { AnomalyReview.new(target).reject!(reason: "duplicate", duplicate_of: record) }
+    assert_match "戻ってしまいます", error.message
+
+    AnomalyReview.new(record).reject!(reason: "glare")
+    assert_nil record.reload.duplicate_of_id, "ほかの理由で却下し直したら、まとめ先を外す"
   end
 
   test "確定・修正した critical の異常にはアラートを作り、却下では作らない" do

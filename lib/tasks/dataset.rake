@@ -14,6 +14,9 @@ namespace :dataset do
     puts "#{out_path} に書き出しました: 画像 #{result.images} 枚（うち負例 #{result.negatives} 枚）、ラベル #{result.labels} 件"
     puts "未確定の候補が残っているため含めなかった画像: #{result.skipped_pending} 枚" if result.skipped_pending.positive?
     puts "表示できる画像が無いため含めなかった画像: #{result.skipped_undisplayable} 枚" if result.skipped_undisplayable.positive?
+    if result.skipped_duplicate_unresolved.positive?
+      puts "「他の画像と重複」のまとめ先が未確定（または無い）ため含めなかった画像: #{result.skipped_duplicate_unresolved} 枚"
+    end
     puts "注意: 顧客の画像を含みます。リポジトリにコミットしないでください"
   end
 end

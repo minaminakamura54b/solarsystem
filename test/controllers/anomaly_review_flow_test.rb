@@ -25,6 +25,22 @@ class AnomalyReviewFlowTest < ActionDispatch::IntegrationTest
     assert_select "input[type=submit][value='レビューを完了する']"
   end
 
+  test "「他の画像と重複」で却下するとき、別の画像の異常をまとめ先に選べる" do
+    other = @inspection.inspection_images.create!(sequence: 2, thermal_filename: "y_T.jpg", thermal: @image.thermal.blob)
+    target = other.anomalies.create!(inspection: @inspection, anomaly_type: "hotspot", severity: "warning")
+
+    get review_path
+    assert_select "select[name=duplicate_of_id] option[value='#{target.id}']", text: /画像 2/
+
+    patch reject_inspection_anomaly_path(@inspection, @anomaly, site_id: @site.id), params: { rejection_reason: "duplicate" }
+    assert_equal "pending", @anomaly.reload.review_status, "まとめ先が無ければ却下しない"
+
+    patch reject_inspection_anomaly_path(@inspection, @anomaly, site_id: @site.id), params: { rejection_reason: "duplicate", duplicate_of_id: target.id }
+    assert_equal [ "rejected", target.id ], [ @anomaly.reload.review_status, @anomaly.duplicate_of_id ]
+    get review_path
+    assert_match "まとめ先: 画像 2", response.body
+  end
+
   test "確定すると locked になり、レビュー画面に戻る" do
     patch confirm_inspection_anomaly_path(@inspection, @anomaly, site_id: @site.id), params: { causes: %w[cell_crack], note: "確認" }
 

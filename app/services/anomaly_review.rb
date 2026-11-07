@@ -44,9 +44,17 @@ class AnomalyReview
     review!("corrected", rgb_checked: rgb_checked, causes: causes, note: note)
   end
 
-  def reject!(reason:, note: nil)
+  # reason が duplicate のときは、まとめ先（同じ点検の別の画像の異常）を duplicate_of に指定する（2026-11-07 ユーザー承認）
+  def reject!(reason:, note: nil, duplicate_of: nil)
     raise Error, "却下の理由を選んでください" unless REJECTION_REASONS.key?(reason)
 
+    if reason == "duplicate"
+      raise Error, "異常群は「他の画像と重複」で却下できません（構成パネルの異常ごとにまとめ先を選んでください）" if group?
+      check_duplicate_target!(duplicate_of)
+      @record.duplicate_of = duplicate_of
+    elsif !group?
+      @record.duplicate_of = nil
+    end
     @record.rejection_reason = reason
     review!("rejected", note: note)
   end
@@ -121,6 +129,21 @@ class AnomalyReview
 
   def group?
     @record.is_a?(AnomalyGroup)
+  end
+
+  def check_duplicate_target!(target)
+    raise Error, "まとめ先の異常を選んでください（同じ異常を写した別の画像の異常）" if target.nil?
+    raise Error, "まとめ先は同じ点検の異常にしてください" if target.inspection_id != @record.inspection_id
+    raise Error, "同じ画像の異常はまとめ先にできません" if target.inspection_image_id == @record.inspection_image_id
+    raise Error, "自分自身はまとめ先にできません" if target.id == @record.id
+
+    node = target
+    Anomaly::DUPLICATE_CHAIN_LIMIT.times do
+      break unless node&.rejected_as_duplicate?
+      raise Error, "まとめ先をたどると、この異常に戻ってしまいます" if node.duplicate_of_id == @record.id
+
+      node = node.duplicate_of
+    end
   end
 
   def review!(status, rgb_checked: false, causes: [], note: nil)
