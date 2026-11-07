@@ -4,6 +4,7 @@ class Inspection < ApplicationRecord
   has_one_attached :report_pdf
   has_many :alerts, dependent: :destroy
   has_many :inspection_images, -> { ordered }, dependent: :destroy, inverse_of: :inspection
+  has_many :block_map_proposals, dependent: :destroy
   has_many :weather_readings, -> { chronological }, dependent: :destroy
   has_many :grid_templates, dependent: :destroy
   has_many :anomaly_groups, dependent: :destroy

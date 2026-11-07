@@ -8,6 +8,8 @@ shared:
   work_dir: null
   # 解析エンジンの1回の実行の上限。超えたらプロセスグループごと終了させ failed（timeout）にする
   timeout_seconds: 120
+  # 架台の地図の候補づくり（build-block-map。画像の枚数分 SDK を呼ぶ）の上限
+  block_map_timeout_seconds: 3600
   # 出力 JSON の schema_version（解析エンジンと合わせる）
   schema_version: "2.1"
   # この分数を超えて analyzing（または品質チェック待ち）のまま残った画像を、定期ジョブで failed にする
