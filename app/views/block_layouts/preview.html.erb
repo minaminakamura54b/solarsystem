@@ -1,0 +1,55 @@
+<% content_for :title, "架台の登録（確認） - #{@site.name}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🧱 架台の登録（確認）</h2>
+    <p class="text-sm text-gray-500 mt-1"><%= @site.name %> — まだ何も変更していません</p>
+  </div>
+  <%= link_to "← CSV を選び直す", new_site_block_layout_path(@site), class: "btn btn-secondary" %>
+</div>
+
+<% pp = @plan.panel_plan %>
+<div class="p-6 space-y-6">
+  <div class="card p-4 space-y-2" id="plan">
+    <p class="form-label">置き換えの内容</p>
+    <table class="table text-sm">
+      <tbody>
+        <tr><th>架台</th><td><%= @import.blocks.size %> 個（登録済み <%= @plan.current_block_count %> 個を置き換えます）</td></tr>
+        <tr><th>パネル</th><td><%= @import.panel_rows.size %> 枚（パネル枚数を <%= @site.panel_count %> 枚 → <%= @import.panel_rows.size %> 枚にします）</td></tr>
+        <tr><th>新しく登録するパネル</th><td><%= pp.creates.size %> 枚</td></tr>
+        <tr><th>更新するパネル（番号が同じ）</th><td><%= pp.updates.size %> 枚</td></tr>
+        <tr><th>削除するパネル</th><td>仮配置 <%= pp.placeholder_deletes %> 枚・実配置 <%= pp.manual_deletes %> 枚</td></tr>
+        <tr><th>パネルの割り当てを外す異常</th>
+          <td><%= pp.anomalies.size %> 件（うち割り当て直しの一覧に出すもの <%= pp.reassignment_anomalies.size %> 件）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card p-4 space-y-2">
+    <p class="form-label">配置図</p>
+    <%= render "block_layouts/map", blocks: @import.blocks %>
+  </div>
+
+  <div class="card p-4 space-y-2">
+    <p class="form-label">架台（先頭 30 個）</p>
+    <table class="table text-xs">
+      <thead><tr><th>行</th><th>架台ラベル</th><th>段 × 列</th><th>長さ・奥行き（m）</th><th>パネルの向き</th><th>出どころ</th><th>パネル番号の例</th></tr></thead>
+      <tbody>
+        <% @import.blocks.first(30).each do |b| %>
+          <tr>
+            <td><%= b.line %></td><td><%= b.label %></td><td><%= b.rows %> × <%= b.cols %></td>
+            <td><%= b.length.round(2) %>・<%= b.depth.round(2) %></td><td><%= b.panel_orientation %></td>
+            <td><%= PvBlock::SOURCES[b.source] %></td><td><%= b.label %>-1-01 〜 <%= b.label %>-<%= b.rows %>-<%= b.cols.to_s.rjust(2, "0") %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+
+  <%= form_with url: site_block_layout_path(@site), class: "card p-4 space-y-2" do %>
+    <%= hidden_field_tag :csv_text, @csv_text %>
+    <%= hidden_field_tag :plan_digest, @plan.digest %>
+    <p class="text-sm">この内容で架台とパネルを置き換えます。元には戻せません。</p>
+    <%= submit_tag "この内容で登録する", class: "btn btn-primary", data: { turbo_confirm: "架台とパネルを CSV の内容に置き換えます。よろしいですか？" } %>
+  <% end %>
+</div>

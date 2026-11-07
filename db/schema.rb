@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_07_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_07_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -262,9 +262,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_090000) do
     t.decimal "gps_lng", precision: 10, scale: 7
     t.string "layout_source", default: "auto", null: false
     t.string "pcs_number"
+    t.bigint "pv_block_id"
+    t.integer "block_row"
+    t.integer "block_col"
+    t.index ["pv_block_id"], name: "index_panels_on_pv_block_id"
     t.index ["site_id", "number"], name: "index_panels_on_site_id_and_number", unique: true
     t.index ["site_id"], name: "index_panels_on_site_id"
     t.index ["status"], name: "index_panels_on_status"
+  end
+
+  create_table "pv_blocks", force: :cascade do |t|
+    t.bigint "site_id", null: false
+    t.string "label", null: false
+    t.jsonb "corners_latlng", null: false
+    t.jsonb "corners_local", null: false
+    t.integer "rows", null: false
+    t.integer "cols", null: false
+    t.string "panel_orientation", default: "portrait", null: false
+    t.decimal "facing_azimuth_deg", precision: 6, scale: 2, default: "180.0", null: false
+    t.decimal "tilt_deg", precision: 5, scale: 2
+    t.decimal "upper_elevation_m", precision: 8, scale: 3
+    t.decimal "lower_elevation_m", precision: 8, scale: 3
+    t.string "source", default: "drawing", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["site_id", "label"], name: "index_pv_blocks_on_site_id_and_label", unique: true
+    t.index ["site_id"], name: "index_pv_blocks_on_site_id"
   end
 
   create_table "revenues", force: :cascade do |t|
@@ -322,6 +345,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_090000) do
     t.jsonb "bypass_pattern"
     t.decimal "specific_yield_kwh_per_kw", precision: 8, scale: 1
     t.decimal "fit_price_yen_per_kwh", precision: 6, scale: 2
+    t.decimal "geo_origin_lat", precision: 10, scale: 7
+    t.decimal "geo_origin_lng", precision: 10, scale: 7
     t.index ["status"], name: "index_sites_on_status"
   end
 
@@ -358,7 +383,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_090000) do
   add_foreign_key "grid_templates", "inspections"
   add_foreign_key "inspection_images", "inspections"
   add_foreign_key "inspections", "sites"
+  add_foreign_key "panels", "pv_blocks", on_delete: :nullify
   add_foreign_key "panels", "sites"
+  add_foreign_key "pv_blocks", "sites"
   add_foreign_key "revenues", "sites"
   add_foreign_key "severity_rules", "rule_sets"
   add_foreign_key "weather_readings", "inspections"

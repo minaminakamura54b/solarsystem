@@ -69,12 +69,17 @@ class PanelLayoutImport
     end
   end
 
-  def initialize(site, text, now: Time.current)
+  # rows: CSV を読む代わりに、パネルの行（Panel の属性名。パネル番号は panel_number）を直接渡す（架台の登録 BlockLayoutImport から使う）
+  def initialize(site, text = nil, now: Time.current, rows: nil)
     @site = site
     @now = now
     @errors = []
-    @text = utf8_text(text.to_s)
-    @rows = @text ? parse : []
+    if rows
+      @rows = rows
+    else
+      @text = utf8_text(text.to_s)
+      @rows = @text ? parse : []
+    end
   end
 
   def valid?

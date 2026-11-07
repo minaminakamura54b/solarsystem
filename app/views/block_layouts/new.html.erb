@@ -1,0 +1,81 @@
+<% content_for :title, "架台の登録 - #{@site.name}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🧱 架台の登録</h2>
+    <p class="text-sm text-gray-500 mt-1"><%= @site.name %></p>
+  </div>
+  <div class="flex gap-2">
+    <%= link_to "割り当て直しの一覧", site_panel_layout_path(@site), class: "btn btn-secondary" %>
+    <%= link_to "← 発電所一覧に戻る", sites_path, class: "btn btn-secondary" %>
+  </div>
+</div>
+
+<div class="p-6 space-y-6">
+  <% if @errors.present? %>
+    <div class="card p-4" id="errors">
+      <p class="form-label" style="color:#e24b4a;">CSV を登録できませんでした（何も変更していません）</p>
+      <ul class="text-sm" style="list-style:disc; padding-left:1.25rem; color:#e24b4a;">
+        <% @errors.each do |error| %><li><%= error %></li><% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <div class="card p-4 space-y-3">
+    <p class="form-label">登録済みの架台</p>
+    <% if @blocks.any? %>
+      <p class="text-sm">架台 <%= @blocks.size %> 個・パネル <%= @blocks.sum { |b| b.rows * b.cols } %> 枚
+        <%= link_to "CSV で書き出す", export_site_block_layout_path(@site, format: :csv), class: "btn btn-sm btn-secondary" %></p>
+      <%= render "block_layouts/map", blocks: @blocks %>
+    <% else %>
+      <p class="text-sm text-gray-500">まだ登録されていません。</p>
+    <% end %>
+  </div>
+
+  <div class="card p-4 space-y-3">
+    <p class="form-label">架台の CSV を選ぶ</p>
+    <ul class="text-xs text-gray-500" style="list-style:disc; padding-left:1.25rem;">
+      <li>図面の座標から作った CSV と、画像から作った架台の地図（確認・修正したもの）を書き出した CSV は同じ形です。</li>
+      <li>CSV は発電所の配置の<strong>全体</strong>です。登録すると、架台とパネルを CSV の内容に置き換えます。パネルは架台から作り、番号は「架台ラベル-段-列」（段は上端から、列は列の始まり＝東西の架台は西から）です。</li>
+      <li>パネルの置き換えは「実配置の登録」と同じです。同じ番号のパネルは更新し、消えるパネルに付いた異常は割り当てを外して「割り当て直しの一覧」に出します（確定・重大度は変わりません）。ストリング番号・パワコン番号は架台の CSV には無いため、置き換えたパネルでは空になります。</li>
+      <li>文字コードは UTF-8 か Shift_JIS。1 行目は列名です。1 行でもエラーがあれば何も登録しません。確定の前に確認画面で配置図を表示します。</li>
+    </ul>
+    <%= form_with url: preview_site_block_layout_path(@site), multipart: true, class: "flex items-center gap-3" do %>
+      <%= file_field_tag :file, accept: ".csv,text/csv", class: "form-input" %>
+      <%= submit_tag "内容を確認する", class: "btn btn-primary" %>
+    <% end %>
+  </div>
+
+  <div class="card p-4 space-y-2">
+    <div class="flex items-center justify-between">
+      <p class="form-label">列名（英語・日本語のどちらでも可）</p>
+      <%= link_to "雛形の CSV をダウンロード", template_site_block_layout_path(@site, format: :csv), class: "btn btn-sm btn-secondary" %>
+    </div>
+    <table class="table text-sm">
+      <thead><tr><th>英語</th><th>日本語</th><th>必須</th><th>内容</th></tr></thead>
+      <tbody>
+        <% [
+             [ "block_label", false, "架台ラベル。空欄なら自動（列を北から A, B, …、列の中を始まりから 01, 02, …）。20 文字まで、「-」は使えない" ],
+             [ "rows", true, "段数（1〜50）" ],
+             [ "cols", true, "列数（1〜200）" ],
+             [ "corner1_lat", true, "隅 1〜4 の緯度・経度（corner1_lat, corner1_lng, … corner4_lng）。順不同。上端・下端はパネルの向く方位で決める" ],
+             [ "panel_orientation", false, "パネルの向き（portrait / landscape。既定 portrait）" ],
+             [ "facing_azimuth_deg", false, "パネルの向く方位（北 0・東 90・南 180・西 270。既定 180）" ],
+             [ "tilt_deg", false, "傾斜角（度）" ],
+             [ "upper_elevation_m", false, "上端の標高（m）。無ければ画像から推定する" ],
+             [ "lower_elevation_m", false, "下端の標高（m）" ],
+             [ "source", false, "出どころ（drawing = 図面 / image_map = 画像から作った地図 / manual = 手入力。既定 drawing）" ],
+             [ "low_confidence", false, "書き出し用（確認が必要か）。取り込みでは使わない" ],
+             [ "observations", false, "書き出し用（観測の数）。取り込みでは使わない" ]
+           ].each do |key, required, description| %>
+          <tr>
+            <td><code><%= key %></code></td>
+            <td><%= BlockLayoutImport::COLUMNS[key].last %><%= "（隅1経度 … 隅4経度）" if key == "corner1_lat" %></td>
+            <td><%= required ? "○" : "" %></td>
+            <td><%= description %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>

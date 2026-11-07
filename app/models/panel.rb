@@ -1,5 +1,6 @@
 class Panel < ApplicationRecord
   belongs_to :site
+  belongs_to :pv_block, optional: true
   has_many :alerts, dependent: :nullify
   # 異常が紐付いたパネルは消さない（実配置の置き換えでは、先に紐付けを外して履歴に残す。PanelLayoutImport）
   has_many :anomalies, dependent: :restrict_with_exception
