@@ -1,0 +1,42 @@
+<% content_for :title, "架台の地図の候補 - #{@site.name}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🧭 架台の地図の候補</h2>
+    <p class="text-sm text-gray-500 mt-1"><%= @site.name %> — 点検 <%= link_to @proposal.inspection.conducted_at&.strftime("%Y/%m/%d"), inspection_path(@proposal.inspection) %> の画像から作成</p>
+  </div>
+  <%= link_to "架台の登録へ", new_site_block_layout_path(@site), class: "btn btn-secondary" %>
+</div>
+
+<div class="p-6 space-y-6">
+  <div class="card p-4 space-y-2" id="proposal-status">
+    <p class="form-label">状態: <%= BlockMapProposal::STATUS_LABELS[@proposal.status] %></p>
+    <p class="text-sm">使った画像: <%= @proposal.image_count || "-" %> 枚（位置合わせに使える画像だけ）／ モジュール <%= @proposal.params["module_width_m"] %> m × <%= @proposal.params["module_length_m"] %> m</p>
+    <% if @proposal.message.present? %><p class="text-sm" style="color:#ef9f27;"><%= @proposal.message %></p><% end %>
+    <% if @proposal.in_progress? %><p class="text-xs text-gray-400">作成中です。このページを開き直すと最新の状態になります。</p><% end %>
+  </div>
+
+  <% if @proposal.proposed? %>
+    <% est = @proposal.result["estimated"].to_h; fit = @proposal.result["fit"].to_h; blocks = @proposal.blocks %>
+    <div class="card p-4 space-y-2">
+      <p class="form-label">候補の内容（確認してから登録してください。自動では使いません）</p>
+      <table class="table text-sm">
+        <tbody>
+          <tr><th>架台</th><td><%= blocks.size %> 個（確認が必要 <%= blocks.count { |b| b["low_confidence"] } %> 個・隣と離した <%= blocks.count { |b| b["adjusted"] } %> 個）</td></tr>
+          <tr><th>列数・段数の目安</th><td>列数が決まらない架台 <%= blocks.count { |b| b["cols_estimate"].nil? } %> 個（CSV で入力してください）</td></tr>
+          <tr><th>画像から推定した値</th><td>パネル面の標高 <%= est["panel_elevation_m"] %> m（LRF がパネルに当たった <%= est["lrf_on_panel_images"] %> 枚）・画素の角度の倍率 <%= est["ifov_ratio"] %>・上端と下端の高さの差 ±<%= est["edge_height_delta_m"] %> m・架台の長さ <%= est["block_length_m"] %> m</td></tr>
+          <tr><th>画像ごとのずれ（地図との差）</th><td>列に沿う向き 中央値 <%= fit["along_median_m"] %> m（90% <%= fit["along_p90_m"] %> m）・列に直交する向き 中央値 <%= fit["across_median_m"] %> m（90% <%= fit["across_p90_m"] %> m）</td></tr>
+        </tbody>
+      </table>
+      <%= render "block_layouts/map", blocks: @proposal.map_blocks %>
+      <p class="text-xs text-gray-400">確認が必要な架台（片方の端しか見つからなかったもの・上端か下端が見つからなかったもの）は、CSV の「確認が必要」が true です。見落とし・余分な架台は CSV を直してから登録してください。</p>
+      <div class="flex gap-2">
+        <%= link_to "CSV をダウンロード（修正用）", csv_site_block_map_proposal_path(@site, @proposal, format: :csv), class: "btn btn-secondary" %>
+        <%= form_with url: preview_site_block_layout_path(@site) do %>
+          <%= hidden_field_tag :csv_text, @proposal.to_csv %>
+          <%= submit_tag "この候補で登録の確認へ（まだ登録しません）", class: "btn btn-primary" %>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>

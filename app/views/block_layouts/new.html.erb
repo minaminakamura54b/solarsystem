@@ -32,6 +32,18 @@
     <% end %>
   </div>
 
+  <% if @proposals.present? %>
+    <div class="card p-4 space-y-2">
+      <p class="form-label">画像から作った架台の地図の候補</p>
+      <ul class="text-sm" style="list-style:disc; padding-left:1.25rem;">
+        <% @proposals.each do |p| %>
+          <li><%= link_to "#{p.created_at.strftime('%Y/%m/%d %H:%M')}（点検 #{p.inspection.conducted_at&.strftime('%Y/%m/%d')}）— #{BlockMapProposal::STATUS_LABELS[p.status]}", site_block_map_proposal_path(@site, p) %></li>
+        <% end %>
+      </ul>
+      <p class="text-xs text-gray-400">候補は点検の画面の「架台の地図の候補を作る」で作ります。</p>
+    </div>
+  <% end %>
+
   <div class="card p-4 space-y-3">
     <p class="form-label">架台の CSV を選ぶ</p>
     <ul class="text-xs text-gray-500" style="list-style:disc; padding-left:1.25rem;">

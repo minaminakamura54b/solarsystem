@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_07_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_08_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -159,6 +159,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_100000) do
     t.index ["inspection_id"], name: "index_anomaly_groups_on_inspection_id"
     t.index ["inspection_image_id"], name: "index_anomaly_groups_on_inspection_image_id"
     t.index ["rule_set_id"], name: "index_anomaly_groups_on_rule_set_id"
+  end
+
+  create_table "block_map_proposals", force: :cascade do |t|
+    t.bigint "site_id", null: false
+    t.bigint "inspection_id", null: false
+    t.string "status", default: "pending", null: false
+    t.jsonb "params", default: {}, null: false
+    t.jsonb "result"
+    t.integer "image_count"
+    t.text "message"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["inspection_id"], name: "index_block_map_proposals_on_inspection_id"
+    t.index ["site_id"], name: "index_block_map_proposals_on_site_id"
   end
 
   create_table "grid_templates", force: :cascade do |t|
@@ -380,6 +394,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_100000) do
   add_foreign_key "anomaly_groups", "inspection_images"
   add_foreign_key "anomaly_groups", "inspections"
   add_foreign_key "anomaly_groups", "rule_sets"
+  add_foreign_key "block_map_proposals", "inspections"
+  add_foreign_key "block_map_proposals", "sites"
   add_foreign_key "grid_templates", "inspections"
   add_foreign_key "inspection_images", "inspections"
   add_foreign_key "inspections", "sites"

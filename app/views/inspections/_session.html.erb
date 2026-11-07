@@ -77,6 +77,29 @@
     <%= render "findings" %>
   <% end %>
 
+  <%# ── 架台の地図（docs/LAYOUT_OVERLAY_DESIGN.md の A-3） ─────────────── %>
+  <% usable = @inspection.inspection_images.count { |i| i.georef&.dig("usable") } %>
+  <div class="card p-4" id="block-map">
+    <p style="font-size:0.65rem; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.75rem;">架台の地図（発電所ごとに 1 回）</p>
+    <p class="text-xs text-gray-500 mb-2">
+      この点検の画像のうち、位置合わせに使える画像（RTK 固定解・真下向き）<%= usable %> 枚から、架台の地図の候補を作ります。
+      候補は確認画面と CSV で確かめてから「架台の登録」で登録します（自動では登録しません）。登録済みの架台: <%= @inspection.site.pv_blocks.count %> 個
+    </p>
+    <% if (latest = @inspection.block_map_proposals.order(created_at: :desc).first) %>
+      <p class="text-xs mb-2">前回の候補: <%= link_to "#{BlockMapProposal::STATUS_LABELS[latest.status]}（#{latest.created_at.strftime('%m/%d %H:%M')}）", site_block_map_proposal_path(@inspection.site, latest) %></p>
+    <% end %>
+    <% if usable.positive? %>
+      <%= form_with url: site_block_map_proposals_path(@inspection.site), class: "flex flex-wrap items-end gap-3" do %>
+        <%= hidden_field_tag :inspection_id, @inspection.id %>
+        <label class="text-xs">モジュールの幅（m）<%= number_field_tag :module_width_m, nil, step: 0.001, min: 0.3, max: 3, required: true, class: "form-input", style: "width:7rem;" %></label>
+        <label class="text-xs">長さ（m）<%= number_field_tag :module_length_m, nil, step: 0.001, min: 0.3, max: 3, required: true, class: "form-input", style: "width:7rem;" %></label>
+        <label class="text-xs">段数の既定値<%= number_field_tag :rows, 2, min: 1, max: 50, class: "form-input", style: "width:5rem;" %></label>
+        <label class="text-xs">パネルの向く方位<%= number_field_tag :facing_azimuth_deg, 180, min: 0, max: 360, class: "form-input", style: "width:6rem;" %></label>
+        <%= submit_tag "架台の地図の候補を作る", class: "btn btn-secondary" %>
+      <% end %>
+    <% end %>
+  </div>
+
   <%# ── 測定パラメータ ─────────────────────────────── %>
   <div class="card p-4" id="measurement">
     <p style="font-size:0.65rem; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.75rem;">測定パラメータ（任意）</p>

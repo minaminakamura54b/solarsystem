@@ -5,6 +5,7 @@ class BlockLayoutsController < ApplicationController
 
   def new
     @blocks = @site.pv_blocks.order(:label).to_a
+    @proposals = @site.block_map_proposals.includes(:inspection).order(created_at: :desc).limit(10)
   end
 
   def template
@@ -18,9 +19,14 @@ class BlockLayoutsController < ApplicationController
   # CSV を読んで、置き換えの内容を表示する（まだ何も変えない）
   def preview
     file = params[:file]
-    return render_new_with_errors([ "CSV ファイルを選んでください" ]) unless file.respond_to?(:read)
-
-    @csv_text = PanelLayoutImport.decode(file.read)
+    # 架台の地図の候補（BlockMapProposal）からは、CSV の本文を直接受け取る
+    if params[:csv_text].present?
+      @csv_text = params[:csv_text].to_s
+    elsif file.respond_to?(:read)
+      @csv_text = PanelLayoutImport.decode(file.read)
+    else
+      return render_new_with_errors([ "CSV ファイルを選んでください" ])
+    end
     @import = BlockLayoutImport.new(@site, @csv_text)
     return render_new_with_errors(@import.errors) unless @import.valid?
 
@@ -55,6 +61,7 @@ class BlockLayoutsController < ApplicationController
   def render_new_with_errors(errors)
     @errors = errors
     @blocks = @site.pv_blocks.order(:label).to_a
+    @proposals = @site.block_map_proposals.includes(:inspection).order(created_at: :desc).limit(10)
     render :new, status: :unprocessable_entity
   end
 end

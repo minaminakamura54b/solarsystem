@@ -4,10 +4,16 @@ module AnalyzerTestHelper
   class FakeAnalyzerClient
     attr_reader :calls
 
-    def initialize(analyze: nil, propose: nil)
+    def initialize(analyze: nil, propose: nil, block_map: nil)
       @analyze_result = analyze
       @propose_result = propose
+      @block_map_result = block_map
       @calls = []
+    end
+
+    def build_block_map(input:, dir:)
+      @calls << [ :build_block_map, { input:, files: input[:images].map { |i| File.exist?(i[:thermal]) } } ]
+      @block_map_result
     end
 
     def analyze(**kwargs)
@@ -21,9 +27,9 @@ module AnalyzerTestHelper
     end
   end
 
-  def with_fake_analyzer(analyze: nil, propose: nil)
+  def with_fake_analyzer(analyze: nil, propose: nil, block_map: nil)
     previous = AnalyzeInspectionImageJob.instance_variable_get(:@client)
-    client = FakeAnalyzerClient.new(analyze: analyze, propose: propose)
+    client = FakeAnalyzerClient.new(analyze: analyze, propose: propose, block_map: block_map)
     AnalyzeInspectionImageJob.client = client
     yield client
   ensure

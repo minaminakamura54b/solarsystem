@@ -6,7 +6,8 @@ require "open3"
 class ThermalAnalyzerClient
   VALID_STATUSES = {
     "analyze" => %w[completed needs_review failed],
-    "propose-grid" => %w[proposed needs_review failed]
+    "propose-grid" => %w[proposed needs_review failed],
+    "build-block-map" => %w[proposed needs_review failed]
   }.freeze
 
   Result = Data.define(:exit_code, :output, :stderr, :error) do
@@ -37,13 +38,21 @@ class ThermalAnalyzerClient
     end
   end
 
+  # 点検の画像から架台の地図の候補を作る（docs/LAYOUT_OVERLAY_DESIGN.md の A-3）。input は analyzer/layout/command.py の形。
+  # 画像の枚数が多いので、時間の上限は block_map_timeout_seconds
+  def build_block_map(input:, dir:)
+    input_path = File.join(dir, "block_map_input.json")
+    File.write(input_path, input.to_json)
+    run("build-block-map", [ "build-block-map", "--input", input_path ], dir, timeout: @config.block_map_timeout_seconds)
+  end
+
   def propose_grid(thermal_path:)
     Dir.mktmpdir("analyzer", @config.tmp_parent) { |dir| run("propose-grid", [ "propose-grid", "--thermal", thermal_path.to_s ], dir) }
   end
 
   private
 
-  def run(subcommand, args, dir)
+  def run(subcommand, args, dir, timeout: @config.timeout_seconds)
     out_path = File.join(dir, "out.json")
     command = @config.command + args + [ "--out", out_path ]
     stdout_text = stderr_text = nil
@@ -54,7 +63,7 @@ class ThermalAnalyzerClient
       stdin.close
       out_reader = Thread.new { stdout.read }
       err_reader = Thread.new { stderr.read }
-      if wait_thr.join(@config.timeout_seconds)
+      if wait_thr.join(timeout)
         exit_code = wait_thr.value.exitstatus
       else
         timed_out = true

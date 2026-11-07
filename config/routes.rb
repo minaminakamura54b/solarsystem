@@ -16,6 +16,10 @@ Rails.application.routes.draw do
       get :template
       get :export
     end
+    # 点検の画像から作る架台の地図の候補（docs/LAYOUT_OVERLAY_DESIGN.md の A-3）
+    resources :block_map_proposals, only: %i[create show] do
+      get :csv, on: :member
+    end
   end
   resources :inspections, only: %i[index show new create destroy] do
     member do
