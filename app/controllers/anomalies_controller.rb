@@ -34,8 +34,16 @@ class AnomaliesController < ApplicationController
   end
 
   def assign_panel
-    panel = params[:panel_id].present? ? @inspection.site.panels.find_by(id: params[:panel_id]) : nil
-    review { |r| r.assign_panel!(panel) }
+    review do |r|
+      # 番号での検索（全パネルから。位置合わせが違っていたときのため）を、選択肢より優先する
+      number = params[:panel_number].to_s.unicode_normalize(:nfkc).strip
+      panel = if number.present?
+        @inspection.site.panels.find_by(number: number) || raise(AnomalyReview::Error, "パネル番号「#{number}」はこの発電所にありません")
+      elsif params[:panel_id].present?
+        @inspection.site.panels.find_by(id: params[:panel_id])
+      end
+      r.assign_panel!(panel)
+    end
   end
 
   def electrical

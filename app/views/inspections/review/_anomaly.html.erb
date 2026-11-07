@@ -107,7 +107,8 @@
         <% end %>
         <%= form_with url: assign_panel_inspection_anomaly_path(anomaly.inspection, anomaly), method: :patch, class: "space-y-1" do %>
           <%= select_tag :panel_id, options_for_select(panels.map { |p| [ "#{p.number}#{'（仮配置）' if p.placeholder_layout?}", p.id ] }, anomaly.panel_id), prompt: "パネルを選ぶ", class: "form-select", style: "font-size:0.75rem;" %>
-          <p class="text-gray-400">位置情報か人の指定でだけ割り当てます（自動では割り当てません）。</p>
+          <%= text_field_tag :panel_number, nil, class: "form-input", placeholder: "または全パネルから番号で探す（例: A01-1-03）", style: "font-size:0.75rem;" %>
+          <p class="text-gray-400">位置情報か人の指定でだけ割り当てます。架台との位置合わせのグリッドの異常は自動で割り当て済みです（違っていれば直してください）。選択肢は、位置合わせのグリッドがある画像では写っている架台のパネルだけです。位置合わせが違っていたときは、番号で全パネルから探せます（番号を入れると選択肢より優先します）。</p>
           <%= submit_tag "パネルを割り当て", class: "btn btn-sm btn-secondary" %>
         <% end %>
         <%= form_with url: electrical_inspection_anomaly_path(anomaly.inspection, anomaly), method: :patch, class: "space-y-1" do %>

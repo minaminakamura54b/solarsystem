@@ -41,6 +41,27 @@ class AnomalyReviewFlowTest < ActionDispatch::IntegrationTest
     assert_match "まとめ先: 画像 2", response.body
   end
 
+  test "位置合わせのグリッドがある画像は、選択肢を写っている架台のパネルに絞り、番号で全パネルから探して割り当てられる" do
+    block_a = @site.pv_blocks.create!(label: "A01", rows: 1, cols: 2, corners_latlng: [ [ 0, 0 ] ] * 4, corners_local: [ [ 0, 0 ] ] * 4)
+    block_b = @site.pv_blocks.create!(label: "B01", rows: 1, cols: 2, corners_latlng: [ [ 0, 0 ] ] * 4, corners_local: [ [ 0, 0 ] ] * 4)
+    shown = @site.panels.create!(number: "A01-1-01", position_x: 10, position_y: 10, pv_block: block_a, block_row: 1, block_col: 1, layout_source: "manual")
+    hidden = @site.panels.create!(number: "B01-1-02", position_x: 11, position_y: 10, pv_block: block_b, block_row: 1, block_col: 2, layout_source: "manual")
+    @image.update_columns(panel_grids: [ SAMPLE_GRID.merge("source" => "layout", "pv_block_id" => block_a.id) ])
+
+    get review_path
+    assert_select "select[name=panel_id] option[value='#{shown.id}']"
+    assert_select "select[name=panel_id] option[value='#{hidden.id}']", count: 0
+    assert_select "input[name=panel_number]"
+
+    patch assign_panel_inspection_anomaly_path(@inspection, @anomaly, site_id: @site.id), params: { panel_id: shown.id, panel_number: "Ｂ01-1-02" }
+    assert_equal hidden.id, @anomaly.reload.panel_id, "番号を入れたら選択肢より優先する（全角も可）"
+
+    patch assign_panel_inspection_anomaly_path(@inspection, @anomaly, site_id: @site.id), params: { panel_number: "Z99-9-99" }
+    assert_equal hidden.id, @anomaly.reload.panel_id
+    follow_redirect!
+    assert_match "パネル番号「Z99-9-99」はこの発電所にありません", response.body
+  end
+
   test "確定すると locked になり、レビュー画面に戻る" do
     patch confirm_inspection_anomaly_path(@inspection, @anomaly, site_id: @site.id), params: { causes: %w[cell_crack], note: "確認" }
 
