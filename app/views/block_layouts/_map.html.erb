@@ -1,0 +1,17 @@
+<%# 架台の配置図（地上の座標。北が上）。blocks は corners_local（東・北 m）と label を持つもの %>
+<% points = blocks.flat_map(&:corners_local) %>
+<% if points.any? %>
+  <% e0, e1 = points.map(&:first).minmax; n0, n1 = points.map(&:last).minmax %>
+  <% pad = 5.0; w = (e1 - e0) + 2 * pad; h = (n1 - n0) + 2 * pad %>
+  <svg viewBox="0 0 <%= w.round(2) %> <%= h.round(2) %>" style="width:100%; max-height:600px; background:#fafafa; border:1px solid #e5e7eb;" role="img" aria-label="架台の配置図">
+    <% blocks.each do |b| %>
+      <% pts = b.corners_local.map { |e, n| "#{(e - e0 + pad).round(2)},#{(n1 - n + pad).round(2)}" }.join(" ") %>
+      <polygon points="<%= pts %>" fill="#dbeafe" stroke="#1d4ed8" stroke-width="0.25"><title><%= b.label %>（<%= b.rows %> 段 × <%= b.cols %> 列）</title></polygon>
+      <% us = b.corners_local[0]; ue = b.corners_local[1] %>
+      <line x1="<%= (us[0] - e0 + pad).round(2) %>" y1="<%= (n1 - us[1] + pad).round(2) %>" x2="<%= (ue[0] - e0 + pad).round(2) %>" y2="<%= (n1 - ue[1] + pad).round(2) %>" stroke="#1e3a8a" stroke-width="0.6" />
+      <% c = b.corners_local.transpose.map { |v| v.sum / 4.0 } %>
+      <text x="<%= (c[0] - e0 + pad).round(2) %>" y="<%= (n1 - c[1] + pad).round(2) %>" font-size="1.6" text-anchor="middle" dominant-baseline="middle" fill="#1e3a8a"><%= b.label %></text>
+    <% end %>
+  </svg>
+  <p class="text-xs text-gray-400">北が上。太い線は上端（パネルの高い側）。架台にマウスを重ねると段数・列数を表示します。</p>
+<% end %>

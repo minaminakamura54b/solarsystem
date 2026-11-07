@@ -10,6 +10,12 @@ Rails.application.routes.draw do
       post :preview
       get :template
     end
+    # 架台の登録（架台の CSV。docs/LAYOUT_OVERLAY_DESIGN.md の A）
+    resource :block_layout, only: %i[new create] do
+      post :preview
+      get :template
+      get :export
+    end
   end
   resources :inspections, only: %i[index show new create destroy] do
     member do

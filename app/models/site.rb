@@ -1,5 +1,6 @@
 class Site < ApplicationRecord
   has_many :panels, dependent: :destroy
+  has_many :pv_blocks, dependent: :destroy
   has_many :inspections, dependent: :destroy
   has_many :revenues, dependent: :destroy
   has_many :alerts, dependent: :destroy

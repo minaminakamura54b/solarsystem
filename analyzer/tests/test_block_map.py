@@ -164,3 +164,27 @@ def test_入力が不正なら終了コード1(tmp_path):
     assert code == 1
     assert out["review_reason"] == "invalid_input"
     assert out["blocks"] == []
+
+
+def test_隣の架台と重なる端は中点から離す():
+    params = load_layout_params()
+    blocks = [{"a0": 0.0, "a1": 11.8, "c": 0.0}, {"a0": 11.7, "a1": 23.4, "c": 0.1}, {"a0": 23.65, "a1": 35.2, "c": 0.0}]
+    BM.separate_neighbors(blocks, params)
+    assert blocks[1]["a0"] - blocks[0]["a1"] == pytest.approx(params["min_gap_m"])
+    assert blocks[0]["a1"] == pytest.approx(11.75 - params["min_gap_m"] / 2)
+    assert blocks[0].get("adjusted") and blocks[1].get("adjusted")
+    assert blocks[2]["a0"] == pytest.approx(23.65)  # 十分離れていれば動かさない
+
+
+def test_近い列の中心は1つにまとめる():
+    params = load_layout_params()
+    feats = []
+    for img in range(6):
+        feats += [BM.Feature(f"i{img}", "long", "upper", 0.0, 2.0), BM.Feature(f"j{img}", "long", "upper", 30.0, 2.6),
+                  BM.Feature(f"i{img}", "long", "lower", 0.0, -2.0)]
+    groups = [("long", [i for i, f in enumerate(feats) if f.side == "upper" and f.across == 2.0]),
+              ("long", [i for i, f in enumerate(feats) if f.side == "upper" and f.across == 2.6]),
+              ("long", [i for i, f in enumerate(feats) if f.side == "lower"])]
+    centers = BM.row_centers(feats, groups, params)
+    assert len(centers) == 1
+    assert centers[0] == pytest.approx(0.15)

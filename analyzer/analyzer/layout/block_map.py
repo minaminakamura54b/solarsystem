@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
+from itertools import pairwise
 
 import numpy as np
 
@@ -102,7 +103,7 @@ def build_block_map(observations: list[ImageObs], frame: LocalFrame, params: dic
             "length_m": round(length_m, 3), "height_m": round(height_m, 3),
             "cols_estimate": round(length_m / module["width_m"]) if module and module.get("width_m") else None,
             "rows_estimate": round(slope_m / module["length_m"]) if module and module.get("length_m") else None,
-            "source": b["source"], "low_confidence": bool(b.get("low_confidence")),
+            "source": b["source"], "low_confidence": bool(b.get("low_confidence")), "adjusted": bool(b.get("adjusted")),
             "observations": {"start": b["n0"], "end": b["n1"], "upper": b["n_upper"], "lower": b["n_lower"]},
         })
     out_blocks.sort(key=lambda b: (-np.mean([c[1] for c in b["corners_local"]]), np.mean([c[0] for c in b["corners_local"]])))
@@ -223,7 +224,15 @@ def row_centers(feats, groups, params) -> list[float]:
         if cands:
             l = min(cands, key=lambda x: abs(abs(u - x) - (lo + hi) / 2))
             centers.append((u + l) / 2)
-    return sorted(centers)
+    # 同じ列の上端・下端が 2 つの群に分かれると、近い中心が 2 つできる（2026-11 の検証で 0.4〜0.7 m 離れた組があった）。
+    # 中心が 2 つあると、同じ架台の端が別々の列に割り当てられて架台が二重になるので、近いものは 1 つにまとめる
+    merged: list[list[float]] = []
+    for c in sorted(centers):
+        if merged and c - merged[-1][-1] <= params["row_center_merge_m"]:
+            merged[-1].append(c)
+        else:
+            merged.append([c])
+    return [float(np.mean(m)) for m in merged]
 
 
 def _value(f: Feature) -> float:
@@ -323,4 +332,26 @@ def make_blocks(feats, groups, params):
         if near < params["single_end_row_tolerance_m"] and b["n_upper"] >= 2 and b["n_lower"] >= 2 and not overlap:
             b["low_confidence"] = True
             final.append(b)
+    separate_neighbors(final, params)
     return final, length
+
+
+def separate_neighbors(blocks, params) -> None:
+    """同じ列で隣り合う架台が重なる（または隙間が min_gap_m より狭い）ときは、両方の端を中点から min_gap_m / 2 ずつ離す。
+    地図の誤差（0.1〜0.3 m）で、実際は約 0.25 m 離れている隣の架台と重なることがあるため。0.1 m を超えて動かした架台は adjusted"""
+    gap = params["min_gap_m"]
+    rows: list[list[dict]] = []
+    for b in sorted(blocks, key=lambda x: x["c"]):
+        if rows and abs(b["c"] - rows[-1][0]["c"]) < params["row_band_m"]:
+            rows[-1].append(b)
+        else:
+            rows.append([b])
+    for row in rows:
+        row.sort(key=lambda x: x["a0"])
+        for prev, nxt in pairwise(row):
+            if nxt["a0"] - prev["a1"] < gap:
+                mid = (prev["a1"] + nxt["a0"]) / 2
+                moved = abs(prev["a1"] - (mid - gap / 2))
+                prev["a1"], nxt["a0"] = mid - gap / 2, mid + gap / 2
+                if moved > 0.1:
+                    prev["adjusted"] = nxt["adjusted"] = True
