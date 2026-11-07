@@ -29,7 +29,8 @@ class AnomaliesController < ApplicationController
   end
 
   def reject
-    review { |r| r.reject!(reason: params[:rejection_reason].to_s, note: params[:note]) }
+    duplicate_of = params[:duplicate_of_id].present? ? @inspection.anomalies.find_by(id: params[:duplicate_of_id]) : nil
+    review { |r| r.reject!(reason: params[:rejection_reason].to_s, note: params[:note], duplicate_of:) }
   end
 
   def assign_panel

@@ -7,12 +7,14 @@ require "csv"
 #   OUT_DIR/manifest.csv        画像ごとの撮影条件と数値
 #   OUT_DIR/labels_detail.csv   ラベル・却下した候補ごとの数値
 # 対象は、解析が終わり（completed）、未確定の候補が残っていない画像だけ（ラベルが不完全な画像を含めない）。
-# 却下した候補しかない画像・異常の無い画像は、空のラベル（負例）として含める
+# 却下した候補しかない画像・異常の無い画像は、空のラベル（負例）として含める。
+# 「他の画像と重複」で却下した候補は、まとめ先の最終判断に合わせる（2026-11-07 ユーザー指示）: まとめ先が確定・修正なら
+# 異常あり（種類はまとめ先の最終の種類、位置はこの画像の bbox）、誤検出として却下なら負例。まとめ先が未確定・無い画像は含めない
 class DatasetExporter
   CLASSES = Anomaly::ANOMALY_TYPES
   CONFIRMED = InspectionReview::CONFIRMED
 
-  Result = Data.define(:images, :labels, :negatives, :skipped_pending, :skipped_undisplayable)
+  Result = Data.define(:images, :labels, :negatives, :skipped_pending, :skipped_undisplayable, :skipped_duplicate_unresolved)
 
   def initialize(out_dir, inspections: Inspection.all)
     @out = Pathname(out_dir).expand_path
@@ -22,7 +24,7 @@ class DatasetExporter
   def export!
     FileUtils.mkdir_p([ @out.join("images"), @out.join("labels") ])
     File.write(@out.join("classes.txt"), CLASSES.join("\n") + "\n")
-    counts = { images: 0, labels: 0, negatives: 0, skipped_pending: 0, skipped_undisplayable: 0 }
+    counts = { images: 0, labels: 0, negatives: 0, skipped_pending: 0, skipped_undisplayable: 0, skipped_duplicate_unresolved: 0 }
     zone = ImageQualityConfig.current.capture_time_zone
 
     CSV.open(@out.join("manifest.csv"), "w") do |manifest|
@@ -38,13 +40,19 @@ class DatasetExporter
             counts[:skipped_undisplayable] += 1
             next
           end
+          duplicates = image.anomalies.select(&:rejected_as_duplicate?)
+          if duplicates.any? { |a| a.duplicate_outcome == :unresolved }
+            counts[:skipped_duplicate_unresolved] += 1
+            next
+          end
 
           stem = "#{image.inspection_id}_#{image.sequence.to_s.rjust(4, '0')}_#{File.basename(image.thermal_filename.to_s, '.*').gsub(/[^\w.-]/, '_')}"
           ext = image.display_image.filename.extension_with_delimiter.downcase
           File.binwrite(@out.join("images", "#{stem}#{ext}"), image.display_image.download)
 
-          labeled = image.anomalies.select { |a| CONFIRMED.include?(a.review_status) && a.effective_bbox.present? }
-          rejected = image.anomalies.select { |a| a.review_status == "rejected" }
+          duplicate_labels = duplicates.select { |a| a.duplicate_outcome == :label && a.effective_bbox.present? }
+          labeled = image.anomalies.select { |a| CONFIRMED.include?(a.review_status) && a.effective_bbox.present? } + duplicate_labels
+          rejected = image.anomalies.select { |a| a.review_status == "rejected" } - duplicate_labels
           File.write(@out.join("labels", "#{stem}.txt"), labeled.map { |a| yolo_line(a) }.join)
           (labeled + rejected).each { |a| detail << detail_row("#{stem}#{ext}", a) }
 
@@ -66,7 +74,7 @@ class DatasetExporter
 
   DETAIL_HEADERS = %w[
     image_file anomaly_id review_status class original_type severity delta_t normalized_delta_t threshold_basis measure
-    area_ratio detection active_bands evidence_level rejection_reason x1 y1 x2 y2
+    area_ratio detection active_bands evidence_level rejection_reason x1 y1 x2 y2 duplicate_of_id duplicate_outcome
   ].freeze
 
   private
@@ -75,7 +83,12 @@ class DatasetExporter
     b = Bbox.normalize(anomaly.effective_bbox)
     cx = (b["x1"] + b["x2"]) / 2
     cy = (b["y1"] + b["y2"]) / 2
-    format("%d %.6f %.6f %.6f %.6f\n", CLASSES.index(anomaly.effective_type), cx, cy, b["x2"] - b["x1"], b["y2"] - b["y1"])
+    format("%d %.6f %.6f %.6f %.6f\n", CLASSES.index(label_type(anomaly)), cx, cy, b["x2"] - b["x1"], b["y2"] - b["y1"])
+  end
+
+  # ラベルの種類。重複として却下した候補は、まとめ先の最終の種類
+  def label_type(anomaly)
+    anomaly.rejected_as_duplicate? ? anomaly.duplicate_root.effective_type : anomaly.effective_type
   end
 
   def manifest_row(image, image_file, label_file, labels, rejected, zone)
@@ -92,9 +105,9 @@ class DatasetExporter
   def detail_row(image_file, a)
     b = Bbox.normalize(a.effective_bbox) || {}
     [
-      image_file, a.id, a.review_status, a.effective_type, a.anomaly_type, a.effective_severity, a.delta_t, a.normalized_delta_t,
+      image_file, a.id, a.review_status, (a.rejected_as_duplicate? ? a.duplicate_root&.effective_type : a.effective_type), a.anomaly_type, a.effective_severity, a.delta_t, a.normalized_delta_t,
       a.threshold_basis, a.measure, a.area_ratio, a.detection, a.active_bands, a.evidence_level, a.rejection_reason,
-      b["x1"], b["y1"], b["x2"], b["y2"]
+      b["x1"], b["y1"], b["x2"], b["y2"], a.duplicate_of_id, (a.duplicate_outcome if a.rejected_as_duplicate?)
     ]
   end
 end

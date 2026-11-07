@@ -24,7 +24,7 @@
       <%= submit_tag "群を確定（c）", class: "btn btn-sm btn-primary mt-1" %>
     <% end %>
     <%= form_with url: reject_inspection_anomaly_group_path(group.inspection, group), method: :patch, data: { review_role: "reject" } do %>
-      <%= select_tag :rejection_reason, options_for_select(AnomalyReview::REJECTION_REASONS.invert, group.rejection_reason), prompt: "却下の理由", class: "form-select", style: "font-size:0.75rem;", data: { review_role: "reject-reason" } %>
+      <%= select_tag :rejection_reason, options_for_select(AnomalyReview::REJECTION_REASONS.except("duplicate").invert, group.rejection_reason), prompt: "却下の理由", class: "form-select", style: "font-size:0.75rem;", data: { review_role: "reject-reason" } %>
       <%= submit_tag "群を却下（x）", class: "btn btn-sm btn-danger mt-1" %>
     <% end %>
   </div>

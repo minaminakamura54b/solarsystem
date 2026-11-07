@@ -92,6 +92,9 @@ class InspectionsController < ApplicationController
     @anomalies = @image.anomalies.includes(:panel).order(:panel_index_in_image, :id)
     @panels = @inspection.site.panels.by_position
     @review = InspectionReview.new(@inspection)
+    # 「他の画像と重複」のまとめ先の候補（別の画像の、重複として却下していない異常）
+    @duplicate_candidates = @inspection.anomalies.where.not(inspection_image_id: @image.id).includes(:inspection_image, :panel)
+                                       .reject(&:rejected_as_duplicate?).sort_by { |a| [ a.inspection_image.sequence, a.id ] }
   end
 
   # レビュー完了。完了できなければ理由と警告を表示してレビュー画面に戻る

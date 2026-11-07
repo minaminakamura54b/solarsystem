@@ -14,7 +14,7 @@
         <%= anomaly_type_label(anomaly.effective_type) %><%= "（帯 #{anomaly.active_bands} 本）" if anomaly.active_bands %>
         <span class="badge <%= { 'critical' => 'badge-error', 'warning' => 'badge-warning', 'mild' => 'badge-info' }.fetch(anomaly.effective_severity.to_s, 'badge-gray') %>"><%= anomaly_severity_label(anomaly.effective_severity) %></span>
         <span class="text-xs text-gray-400">
-          <%= { "pending" => "候補", "confirmed" => "確定", "corrected" => "修正して確定", "rejected" => "却下（#{AnomalyReview::REJECTION_REASONS[anomaly.rejection_reason]}）" }[anomaly.review_status] %>
+          <%= { "pending" => "候補", "confirmed" => "確定", "corrected" => "修正して確定", "rejected" => "却下（#{AnomalyReview::REJECTION_REASONS[anomaly.rejection_reason]}#{"・まとめ先: 画像 #{anomaly.duplicate_of.inspection_image.sequence}" if anomaly.duplicate_of}）" }[anomaly.review_status] %>
           ／ 証拠レベル <%= anomaly.evidence_level || "-" %>
           ／ <%= { "local" => "局所的な判定", "baseline" => "基準温度からの判定", "manual" => "手動追加" }[anomaly.detection] %>
           <%= "／ 群の構成パネル" if member %>
@@ -80,6 +80,11 @@
       <% end %>
       <%= form_with url: reject_inspection_anomaly_path(anomaly.inspection, anomaly), method: :patch, class: "space-y-1", data: { review_role: "reject" } do %>
         <%= select_tag :rejection_reason, options_for_select(AnomalyReview::REJECTION_REASONS.invert, anomaly.rejection_reason), prompt: "却下の理由", class: "form-select", style: "font-size:0.75rem;", data: { review_role: "reject-reason" } %>
+        <% candidates = local_assigns.fetch(:duplicate_candidates, []) %>
+        <% same_panel, others = candidates.partition { |c| anomaly.panel_id && c.panel_id == anomaly.panel_id } %>
+        <%= select_tag :duplicate_of_id,
+              options_for_select((same_panel + others).first(200).map { |c| [ "画像 #{c.inspection_image.sequence}・#{c.panel&.number || 'パネル未割り当て'}・#{anomaly_type_label(c.effective_type)}（#{{ 'pending' => '候補', 'confirmed' => '確定', 'corrected' => '修正', 'rejected' => '却下' }[c.review_status]}）", c.id ] }, anomaly.duplicate_of_id),
+              prompt: "まとめ先（「他の画像と重複」のときだけ）", class: "form-select", style: "font-size:0.75rem;" %>
         <%= text_field_tag :note, nil, class: "form-input", placeholder: "メモ（任意）", style: "font-size:0.75rem;" %>
         <%= submit_tag "誤検出として却下（x）", class: "btn btn-sm btn-danger" %>
       <% end %>

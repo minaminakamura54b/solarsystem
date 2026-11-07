@@ -60,7 +60,7 @@
         <%= render "inspections/review/group", group: group %>
       <% end %>
       <% @anomalies.each do |anomaly| %>
-        <%= render "inspections/review/anomaly", anomaly: anomaly, image: @image, panels: @panels %>
+        <%= render "inspections/review/anomaly", anomaly: anomaly, image: @image, panels: @panels, duplicate_candidates: @duplicate_candidates %>
       <% end %>
       <%= render "inspections/review/manual", image: @image %>
     </div>

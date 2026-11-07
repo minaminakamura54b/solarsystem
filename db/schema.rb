@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_08_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_08_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -116,7 +116,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_090000) do
     t.text "explanation_error"
     t.jsonb "panel_assignment_history", default: [], null: false
     t.boolean "panel_reassignment_required", default: false, null: false
+    t.bigint "duplicate_of_id"
     t.index ["anomaly_group_id"], name: "index_anomalies_on_anomaly_group_id"
+    t.index ["duplicate_of_id"], name: "index_anomalies_on_duplicate_of_id"
     t.index ["inspection_id"], name: "index_anomalies_on_inspection_id"
     t.index ["inspection_image_id"], name: "index_anomalies_on_inspection_image_id"
     t.index ["panel_id"], name: "index_anomalies_on_panel_id"
@@ -386,6 +388,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_090000) do
   add_foreign_key "alerts", "inspections"
   add_foreign_key "alerts", "panels"
   add_foreign_key "alerts", "sites"
+  add_foreign_key "anomalies", "anomalies", column: "duplicate_of_id", on_delete: :nullify
   add_foreign_key "anomalies", "anomaly_groups"
   add_foreign_key "anomalies", "inspection_images"
   add_foreign_key "anomalies", "inspections"
