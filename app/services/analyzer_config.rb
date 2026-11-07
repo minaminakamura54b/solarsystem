@@ -1,7 +1,7 @@
 # config/analyzer.yml の読み込み
 class AnalyzerConfig
   attr_reader :command, :working_dir, :timeout_seconds, :schema_version, :stale_after_minutes, :template_match,
-              :locked_overlap_iou, :measurement_ranges
+              :locked_overlap_iou, :measurement_ranges, :work_dir
 
   def self.current
     new(Rails.application.config_for(:analyzer))
@@ -11,6 +11,7 @@ class AnalyzerConfig
     values = values.to_h.with_indifferent_access
     @command = Array(values.fetch(:command)).map(&:to_s)
     @working_dir = Rails.root.join(values.fetch(:working_dir)).to_s
+    @work_dir = values[:work_dir].presence && Rails.root.join(values[:work_dir]).to_s
     @timeout_seconds = values.fetch(:timeout_seconds).to_f
     @schema_version = values.fetch(:schema_version).to_s
     @stale_after_minutes = values.fetch(:stale_after_minutes).to_i
@@ -24,6 +25,13 @@ class AnalyzerConfig
   def measurement_in_range?(key, value)
     low, high = measurement_ranges.fetch(key.to_s)
     value.to_f.between?(low, high)
+  end
+
+  # 一時ディレクトリを作る場所（nil ならシステムの一時ディレクトリ）。無ければ作る
+  def tmp_parent
+    return nil if work_dir.nil?
+    FileUtils.mkdir_p(work_dir)
+    work_dir
   end
 
   def allow_npy_thermal?

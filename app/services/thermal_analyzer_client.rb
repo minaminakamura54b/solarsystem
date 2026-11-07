@@ -26,7 +26,7 @@ class ThermalAnalyzerClient
   end
 
   def analyze(thermal_path:, panel_grids:, module_spec:, rules:, irradiance: nil, irradiance_type: nil, measurement: {})
-    Dir.mktmpdir("analyzer") do |dir|
+    Dir.mktmpdir("analyzer", @config.tmp_parent) do |dir|
       rules_path = File.join(dir, "rules.json")
       File.write(rules_path, rules.to_json)
       args = [ "analyze", "--thermal", thermal_path.to_s, "--panel-grids", panel_grids.to_json,
@@ -38,7 +38,7 @@ class ThermalAnalyzerClient
   end
 
   def propose_grid(thermal_path:)
-    Dir.mktmpdir("analyzer") { |dir| run("propose-grid", [ "propose-grid", "--thermal", thermal_path.to_s ], dir) }
+    Dir.mktmpdir("analyzer", @config.tmp_parent) { |dir| run("propose-grid", [ "propose-grid", "--thermal", thermal_path.to_s ], dir) }
   end
 
   private

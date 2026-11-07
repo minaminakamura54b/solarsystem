@@ -243,6 +243,7 @@ DJI Thermal SDK は linux/amd64 専用のため、Mac（Apple Silicon）では D
 - **開発用の設定**: `.env`（コミットしない）の `ANALYZER_COMMAND=bin/analyzer-docker` などで切り替え、未設定なら今のまま（Mac の uv、.npy の合成データだけ）
 - エミュレーションで動くので遅い。速度は本番の目安にしない
 - 確かめること: 画面から実画像（R-JPEG）を登録 → 品質チェック → 位置合わせ → 解析 → レビュー画面まで通る
+- **実装済み（2026-11-07）**: `bin/analyzer-container up|status|down`（コンテナ名 `solarsight-analyzer`）、`bin/analyzer-docker`、`config/analyzer.yml` の `work_dir` と、development で `ANALYZER_DOCKER=1` のときの切り替え。点検画面の「再解析」から、実画像がコンテナの中の SDK で解析されることを確認した（位置合わせは手順 2〜5 で追加）
 
 ---
 

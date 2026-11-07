@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# 開発用: 解析エンジンを動かす Docker（linux/amd64）のコンテナを用意する（docs/LAYOUT_OVERLAY_DESIGN.md の F）。
+#   bin/analyzer-container up      作成して起動し、OS のパッケージと Python の依存関係を入れる（2 回目以降は起動と依存関係の更新だけ）
+#   bin/analyzer-container status  状態と、DJI Thermal SDK の置き場所の確認（check-sdk）
+#   bin/analyzer-container down    停止して削除する
+# プロジェクトを同じパスでマウントする（DJI_IRP_PATH もホストと同じパスで指定できる）。
+# Python の仮想環境はコンテナの中の /opt/venv（Mac 用の analyzer/.venv は使わない・上書きしない）
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CONTAINER="${ANALYZER_CONTAINER:-solarsight-analyzer}"
+DOCKER="${DOCKER:-$(command -v docker || echo /Applications/Docker.app/Contents/Resources/bin/docker)}"
+IMAGE="python:3.12-slim"
+
+exec_in() { "$DOCKER" exec -w "$ROOT/analyzer" -e UV_PROJECT_ENVIRONMENT=/opt/venv "$CONTAINER" "$@"; }
+
+case "${1:-}" in
+  up)
+    if ! "$DOCKER" container inspect "$CONTAINER" >/dev/null 2>&1; then
+      "$DOCKER" run -d --name "$CONTAINER" --platform linux/amd64 -v "$ROOT:$ROOT" -w "$ROOT/analyzer" "$IMAGE" sleep infinity
+      # libgomp1: dji_irp が使う OpenMP（無いと起動しない）。本番の Dockerfile と同じ
+      exec_in sh -c "apt-get update -qq && apt-get install -y -qq --no-install-recommends libgomp1 >/dev/null && pip install -q uv"
+    else
+      "$DOCKER" start "$CONTAINER" >/dev/null
+    fi
+    exec_in uv sync --frozen
+    echo "起動しました: $CONTAINER（.env に ANALYZER_DOCKER=1 と DJI_IRP_PATH を設定して bin/dev を起動し直してください）"
+    ;;
+  status)
+    "$DOCKER" container inspect -f '{{.Name}} {{.State.Status}}' "$CONTAINER"
+    "$ROOT/bin/analyzer-docker" check-sdk
+    ;;
+  down)
+    "$DOCKER" rm -f "$CONTAINER"
+    ;;
+  *)
+    echo "使い方: bin/analyzer-container up|status|down" >&2
+    exit 1
+    ;;
+esac

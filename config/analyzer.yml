@@ -3,6 +3,9 @@ shared:
   # 解析エンジンを起動するコマンド（配列）。この後ろにサブコマンドと引数が付く。working_dir で実行する
   command: ["uv", "run", "--frozen", "python", "-m", "analyzer"]
   working_dir: "analyzer" # Rails.root からの相対パス、または絶対パス
+  # 解析エンジンに渡す一時ファイル（画像・ルールセット・出力 JSON）を作るディレクトリ。null ならシステムの一時ディレクトリ。
+  # 解析エンジンを Docker の中で動かす開発環境では、コンテナと共有しているプロジェクトの中（tmp/analyzer）にする
+  work_dir: null
   # 解析エンジンの1回の実行の上限。超えたらプロセスグループごと終了させ failed（timeout）にする
   timeout_seconds: 120
   # 出力 JSON の schema_version（解析エンジンと合わせる）
@@ -29,6 +32,12 @@ shared:
 
 development:
   allow_npy_thermal: true
+  # ANALYZER_DOCKER=1 のとき、解析エンジンを Docker（linux/amd64）の中で動かす（DJI Thermal SDK は Mac で動かないため）。
+  # コンテナは bin/analyzer-container up で用意する（docs/LAYOUT_OVERLAY_DESIGN.md の F）
+<% if ENV["ANALYZER_DOCKER"] == "1" %>
+  command: ["<%= Rails.root.join("bin/analyzer-docker") %>"]
+  work_dir: "tmp/analyzer"
+<% end %>
 
 test:
   allow_npy_thermal: true

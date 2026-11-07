@@ -103,6 +103,20 @@ docker build --platform linux/amd64 -t solarsystem-analyzer analyzer
 docker run --rm -v "$PWD/work:/work" solarsystem-analyzer analyze --thermal /work/x.npy --panel-grids '[...]' --rules /work/rules.json --out /work/result.json
 ```
 
+### Mac の開発環境で、画面から実画像を解析する
+
+DJI Thermal SDK は linux/amd64 専用なので、Apple Silicon の Mac では Docker のコンテナの中で解析エンジンを動かします。
+
+```bash
+bin/analyzer-container up       # コンテナ solarsight-analyzer を作り、libgomp1 と依存関係（/opt/venv）を入れる
+bin/analyzer-container status   # check-sdk で SDK の置き場所を確認
+# .env に ANALYZER_DOCKER=1 と DJI_IRP_PATH=<プロジェクトの絶対パス>/analyzer/bin/.../dji_irp を設定して bin/dev を起動し直す
+```
+
+- プロジェクトを同じパスでマウントするので、DJI_IRP_PATH と画像のパスはホストと同じ
+- Rails は一時ファイルをプロジェクトの `tmp/analyzer/` に作る（`config/analyzer.yml` の `work_dir`）
+- エミュレーションで動くので遅い。速度は本番の目安にしない。Rails が時間切れで止めても、コンテナの中の処理は最後まで動くことがある
+
 イメージに SDK は含めません。本番ではサーバーの `/opt/dji_thermal_sdk` を読み取り専用でマウントします（設計は docs/PHASE_S_RUNBOOK.md の付録、設定は `config/deploy.yml` のコメント）。
 
 ## 構成

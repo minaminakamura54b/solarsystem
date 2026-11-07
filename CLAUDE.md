@@ -42,6 +42,7 @@ cd analyzer && uv run pytest   # 解析エンジン（Python 3.12・uv）のテ�
 bin/rails test:system     # グリッド入力画面の JS（ヘッドレス Chrome）
 bin/rails dev:synthetic_inspection   # 開発用: 合成シーン（.npy）の点検を登録する
 cd analyzer && uv run python -m analyzer check-sdk   # DJI Thermal SDK の置き場所の確認（DJI_IRP_PATH。SDK の機能は呼ばない）
+bin/analyzer-container up      # 開発用: 解析エンジンを動かす Docker（linux/amd64）のコンテナを用意。.env に ANALYZER_DOCKER=1 と DJI_IRP_PATH を設定して bin/dev を起動すると、実画像（R-JPEG）を画面から解析できる
 ```
 
 `bin/rails test` は本物の解析エンジンも呼ぶ（`cd analyzer && uv sync` が必要）。
