@@ -81,9 +81,13 @@
       <%= form_with url: reject_inspection_anomaly_path(anomaly.inspection, anomaly), method: :patch, class: "space-y-1", data: { review_role: "reject" } do %>
         <%= select_tag :rejection_reason, options_for_select(AnomalyReview::REJECTION_REASONS.invert, anomaly.rejection_reason), prompt: "却下の理由", class: "form-select", style: "font-size:0.75rem;", data: { review_role: "reject-reason" } %>
         <% candidates = local_assigns.fetch(:duplicate_candidates, []) %>
-        <% same_panel, others = candidates.partition { |c| anomaly.panel_id && c.panel_id == anomaly.panel_id } %>
+        <%# まとめ先の候補: 同じパネル → 同じ架台 → それ以外（多すぎると画面が重くなるため 50 件まで） %>
+        <% block_id = anomaly.panel&.pv_block_id %>
+        <% ranked = candidates.sort_by { |c| [ (anomaly.panel_id && c.panel_id == anomaly.panel_id) ? 0 : ((block_id && c.panel&.pv_block_id == block_id) ? 1 : 2), c.inspection_image.sequence ] } %>
+        <% ranked = ranked.first(50) %>
+        <% ranked |= [ anomaly.duplicate_of ] if anomaly.duplicate_of %>
         <%= select_tag :duplicate_of_id,
-              options_for_select((same_panel + others).first(200).map { |c| [ "画像 #{c.inspection_image.sequence}・#{c.panel&.number || 'パネル未割り当て'}・#{anomaly_type_label(c.effective_type)}（#{{ 'pending' => '候補', 'confirmed' => '確定', 'corrected' => '修正', 'rejected' => '却下' }[c.review_status]}）", c.id ] }, anomaly.duplicate_of_id),
+              options_for_select(ranked.map { |c| [ "画像 #{c.inspection_image.sequence}・#{c.panel&.number || 'パネル未割り当て'}・#{anomaly_type_label(c.effective_type)}（#{{ 'pending' => '候補', 'confirmed' => '確定', 'corrected' => '修正', 'rejected' => '却下' }[c.review_status]}）", c.id ] }, anomaly.duplicate_of_id),
               prompt: "まとめ先（「他の画像と重複」のときだけ）", class: "form-select", style: "font-size:0.75rem;" %>
         <%= text_field_tag :note, nil, class: "form-input", placeholder: "メモ（任意）", style: "font-size:0.75rem;" %>
         <%= submit_tag "誤検出として却下（x）", class: "btn btn-sm btn-danger" %>

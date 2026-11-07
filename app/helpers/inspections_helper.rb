@@ -18,6 +18,7 @@ module InspectionsHelper
   # 解析エンジン・ジョブが付ける要確認・失敗の理由（品質チェックの理由は quality_report の message を使う）
   REVIEW_REASON_MESSAGES = {
     "grid_required" => "グリッド（パネル配列の4隅と行数・列数）の指定が必要です",
+    "alignment_failed" => "登録した架台との位置合わせができませんでした。グリッドの画面で下書きを直して保存してください",
     "sdk_unavailable" => "DJI Thermal SDK が無いため温度データを取得できません",
     "sdk_failed" => "DJI Thermal SDK で温度データを取得できませんでした（R-JPEG でない・壊れている・SDK の失敗など）",
     "unsupported_format" => "このサーモ画像の形式にはまだ対応していません",

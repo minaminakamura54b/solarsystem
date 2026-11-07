@@ -7,7 +7,8 @@ class ThermalAnalyzerClient
   VALID_STATUSES = {
     "analyze" => %w[completed needs_review failed],
     "propose-grid" => %w[proposed needs_review failed],
-    "build-block-map" => %w[proposed needs_review failed]
+    "build-block-map" => %w[proposed needs_review failed],
+    "align-layout" => %w[aligned needs_review failed]
   }.freeze
 
   Result = Data.define(:exit_code, :output, :stderr, :error) do
@@ -44,6 +45,13 @@ class ThermalAnalyzerClient
     input_path = File.join(dir, "block_map_input.json")
     File.write(input_path, input.to_json)
     run("build-block-map", [ "build-block-map", "--input", input_path ], dir, timeout: @config.block_map_timeout_seconds)
+  end
+
+  # 登録した架台を 1 枚の画像に重ねて補正する（docs/LAYOUT_OVERLAY_DESIGN.md の B-2）。input は analyzer/layout/command.py の AlignInput
+  def align_layout(input:, dir:)
+    input_path = File.join(dir, "align_input.json")
+    File.write(input_path, input.to_json)
+    run("align-layout", [ "align-layout", "--input", input_path ], dir)
   end
 
   def propose_grid(thermal_path:)

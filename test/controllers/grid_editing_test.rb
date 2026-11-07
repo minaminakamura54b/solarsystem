@@ -13,6 +13,18 @@ class GridEditingTest < ActionDispatch::IntegrationTest
     (grids.presence || [ SAMPLE_GRID ]).to_json
   end
 
+  test "位置合わせできなかった画像は、グリッドの画面に下書き（架台を重ねたもの）を出す" do
+    draft = SAMPLE_GRID.merge("source" => "layout", "pv_block_id" => 1, "block_label" => "A01")
+    @first.update_columns(alignment: { "status" => "needs_review", "message" => "架台の端が写っておらず", "draft_grids" => [ draft ] })
+
+    get grid_inspection_inspection_image_path(@inspection, @first, site_id: @site.id)
+
+    assert_response :success
+    assert_match "下書きを表示しています", response.body
+    grids = JSON.parse(css_select("[data-controller='grid-editor']").first["data-grid-editor-grids-value"])
+    assert_equal [ "A01" ], grids.map { |g| g["block_label"] }
+  end
+
   test "グリッド入力画面を表示する（前後の画像へのリンク・提案の読み込み）" do
     @first.update_columns(grid_proposal: { "rows" => 3, "cols" => 5, "corners" => SAMPLE_GRID["corners"], "panel_orientation" => "landscape" })
 

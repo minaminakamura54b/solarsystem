@@ -90,7 +90,7 @@ class InspectionsController < ApplicationController
     @image = @images.find { |i| i.sequence == params[:image].to_i } || @images.first
     @groups = @image.anomaly_groups.includes(:anomalies).order(:id)
     @anomalies = @image.anomalies.includes(:panel).order(:panel_index_in_image, :id)
-    @panels = @inspection.site.panels.by_position
+    @panels = review_panels
     @review = InspectionReview.new(@inspection)
     # 「他の画像と重複」のまとめ先の候補（別の画像の、重複として却下していない異常）
     @duplicate_candidates = @inspection.anomalies.where.not(inspection_image_id: @image.id).includes(:inspection_image, :panel)
@@ -161,6 +161,16 @@ class InspectionsController < ApplicationController
         ActiveStorage::Blob.create_and_upload!(io: file, filename: file.original_filename, content_type: file.content_type)
       end
     end
+  end
+
+  # レビュー画面のパネルの選択肢。架台との位置合わせのグリッドがある画像では、写っている架台のパネル（と割り当て済みのパネル）
+  # だけにする（架台から作ったパネルは数千枚になり、異常ごとに全部を並べると画面が重くなるため）
+  def review_panels
+    block_ids = Array(@image.panel_grids).filter_map { |g| g["pv_block_id"] }
+    panels = @inspection.site.panels.by_position
+    return panels if block_ids.empty?
+
+    panels.where(pv_block_id: block_ids).or(panels.where(id: @anomalies.map(&:panel_id).compact))
   end
 
   def create_notice(pairing)

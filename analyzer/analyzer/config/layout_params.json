@@ -43,5 +43,8 @@
     2.0
   ],
   "min_gap_m": 0.2,
-  "row_center_merge_m": 1.5
+  "row_center_merge_m": 1.5,
+  "align_search_m": 1.0,
+  "align_outlier_px": 3.0,
+  "align_min_inlier_ratio": 0.6
 }

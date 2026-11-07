@@ -21,7 +21,7 @@
 
 <div class="p-6"
      data-controller="grid-editor"
-     data-grid-editor-grids-value="<%= @image.panel_grids.to_json %>"
+     data-grid-editor-grids-value="<%= (@image.panel_grids.presence || Array(@image.alignment&.dig("draft_grids"))).to_json %>"
      data-grid-editor-proposal-value="<%= (@image.grid_proposal || {}).to_json %>"
      data-grid-editor-width-value="<%= width || 640 %>"
      data-grid-editor-height-value="<%= height || 512 %>">
@@ -29,6 +29,9 @@
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <%# ── 画像とグリッド ── %>
     <div class="lg:col-span-2 card p-3">
+      <% if @image.panel_grids.blank? && @image.alignment&.dig("draft_grids").present? %>
+        <p class="text-xs mb-2" style="color:#ef9f27;">登録した架台を撮影情報で重ねた下書きを表示しています（位置合わせができなかった理由: <%= @image.alignment["message"] %>）。架台の 4 隅を画像に合わせて直し、保存してください。保存したグリッドの異常は、架台の段・列のパネルに割り当てます。</p>
+      <% end %>
       <p class="text-xs text-gray-400 mb-2" data-grid-editor-target="hint">
         「グリッドを追加」を押してから、パネル配列の <strong>左上 → 右上 → 右下 → 左下</strong> の順に4隅をクリックします。
         選んだグリッドの角はドラッグで動かせます。キーボード: ← / → で前後の画像（未保存の変更があるときは移動しません）、Esc で追加をやめる。

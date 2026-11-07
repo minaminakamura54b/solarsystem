@@ -3,6 +3,8 @@
 # - locked の異常と bbox の IoU が locked_overlap_iou 以上で重なる候補は作らない（同じ異常を再び候補にしない）
 # - locked の群とパネルが重なる群は作らない
 # - 証拠レベルは検出時点ではすべて C（RGB の確認・電気測定はレビューで入力して B / A にする。2026-10-15 ユーザー指示）
+# - 架台との位置合わせで作ったグリッド（pv_block_id あり）の異常は、グリッドの行・列から架台のパネルに割り当てる（位置情報による
+#   割り当て。docs/LAYOUT_OVERLAY_DESIGN.md の B-3）。割り当ての根拠を panel_assignment_history に残す。それ以外は今までどおり人が割り当てる
 class AnalysisResultImporter
   def initialize(image, output, rule_set, overlap_iou: AnalyzerConfig.current.locked_overlap_iou)
     @image = image
@@ -12,6 +14,8 @@ class AnalysisResultImporter
   end
 
   attr_reader :skipped_anomalies, :skipped_groups
+
+  BASIS = { "layout" => "位置合わせ（自動）", "layout_adjusted" => "位置合わせの下書きを人が直したグリッド" }.freeze
 
   def import!
     ActiveRecord::Base.transaction do
@@ -53,6 +57,7 @@ class AnalysisResultImporter
           # 群の構成パネル（module_wide）は群に紐付ける（計上は群を1件とする。docs/IMPROVEMENT_PLAN.md 4.4）
           anomaly_group: data["anomaly_type"] == "module_wide" ? groups_by_panel[data["panel_index"]] : nil
         )
+        assign_layout_panel(anomaly, data["panel_index"])
         @engine.apply(anomaly).save!
       end
 
@@ -60,6 +65,33 @@ class AnalysisResultImporter
         raw_analysis: @output, analyzer_version: @output["analyzer_version"],
         analysis_status: "completed", review_reason: nil, error_message: nil
       )
+    end
+  end
+
+  private
+
+  # 画像内のパネル番号（グリッド順・グリッド内は行優先）→ 架台の段・列 → パネル
+  def assign_layout_panel(anomaly, index)
+    return if index.nil?
+
+    offset = 0
+    Array(@image.panel_grids).each do |grid|
+      count = grid["rows"].to_i * grid["cols"].to_i
+      if index < offset + count
+        return unless BASIS.key?(grid["source"]) && grid["pv_block_id"]
+
+        local = index - offset
+        panel = Panel.find_by(pv_block_id: grid["pv_block_id"], block_row: local / grid["cols"].to_i + 1, block_col: local % grid["cols"].to_i + 1)
+        return unless panel
+
+        anomaly.panel = panel
+        anomaly.panel_assignment_history = anomaly.panel_assignment_history + [ {
+          "panel_number" => panel.number, "assigned_by" => grid["source"], "basis" => BASIS[grid["source"]],
+          "alignment_residual_ratio" => @image.alignment&.dig("residual", "panel_width_ratio"), "assigned_at" => Time.current.iso8601
+        }.compact ]
+        return
+      end
+      offset += count
     end
   end
 end
