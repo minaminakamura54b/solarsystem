@@ -230,6 +230,9 @@
               <% if image.measurement_params.present? && !image.npy_thermal? %>
                 <p class="text-xs text-gray-400 mt-1">測定パラメータ: <%= ThermalMeasurement.describe(image.measurement_params).join("・") %></p>
               <% end %>
+              <% if image.georef.present? %>
+                <p class="text-xs mt-1" style="color:<%= image.georef["usable"] ? "var(--gray-400)" : "#ef9f27" %>;">位置: <%= ImageGeoref.describe(image.georef) %></p>
+              <% end %>
               <% unless ThermalMeasurement.new(image).current? %>
                 <p class="text-xs mt-1" style="color:#ef9f27;">解析した後に測定パラメータ（または湿度）が変わっています。反映するには再解析してください。</p>
               <% end %>

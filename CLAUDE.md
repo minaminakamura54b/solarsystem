@@ -80,5 +80,6 @@ bin/analyzer-container up      # 開発用: 解析エンジンを動かす Docke
 - `app/services/panel_layout_import.rb` / `app/controllers/panel_layouts_controller.rb` — 配置図の CSV による実配置の登録（全部の置き換え）と割り当て直しの一覧。`app/services/start_panel_ref.rb` — グリッドの左上のパネルの形式
 - `app/services/dataset_exporter.rb` — 学習データの書き出し（`bin/rails "dataset:export[OUT_DIR]"`。顧客の画像を含むのでリポジトリに書き出さない）
 - `app/services/thermal_measurement.rb` / `analyzer/analyzer/thermal/dji_reader.py` / `analyzer/analyzer/thermal/sdk.py` — 測定パラメータ（距離は画像ごとのレーザー距離を優先。出どころを記録）、DJI Thermal SDK の呼び出しと置き場所
+- `app/services/image_georef.rb` / `app/services/layout_overlay_config.rb` / `analyzer/analyzer/geo/projection.py` — 配置図と位置情報によるパネルの自動特定（設計案 docs/LAYOUT_OVERLAY_DESIGN.md）。画像の位置の記録と、画素と地上の座標の対応。設定は `config/layout_overlay.yml`
 - `docs/PHASE_S_RUNBOOK.md` / `docs/spike_dji_sdk.md` — Phase S の手順書と記録
 - `docs/IMPROVEMENT_PLAN.md` — 改善指示書（仕様の正本）
