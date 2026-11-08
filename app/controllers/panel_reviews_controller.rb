@@ -28,8 +28,7 @@ class PanelReviewsController < ApplicationController
   end
 
   def rebuild
-    candidates = PanelCandidateBuilder.new(@inspection).call
-    rows = BlockRowEffect.new(@inspection).call
+    candidates, rows = @inspection.with_lock { [ PanelCandidateBuilder.new(@inspection).call, BlockRowEffect.new(@inspection).call ] }
     redirect_to inspection_panel_review_path(@inspection),
                 notice: "パネルの候補（未判断 #{candidates.size} 件）と架台・段の候補（#{rows.count(&:candidate?)} 件）を作り直しました。判断済みのものは変えていません"
   end
