@@ -1,0 +1,77 @@
+<%# 架台・段の候補（案 X 改）。画面の上に置き、パネルごとの候補とは別に判断する %>
+<% vm = @inspection.view_model || {} %>
+<% rule = RuleSet.active_set&.rule_for("block_row") %>
+<div class="card p-4 space-y-3" id="block-rows">
+  <p class="form-label">架台・段の候補（段全体・架台全体の発熱）</p>
+  <p class="text-xs text-gray-400">
+    点検の全画像から、架台の段ごとの温度を、見え方の影響（画像内の位置による違い。全画像から 1 つの関数として求めたもの）を除いて比べています。
+    <% if vm["status"] == "ok" %>
+      解析済みの画像 <%= vm["images"] %> 枚・パネルの観測 <%= vm["observations"] %> 件から求めました。
+    <% end %>
+    <% if rule %>
+      閾値（判定基準 <%= RuleSet.active_set.version %>）: 候補 +<%= rule.raw_mild.to_f %>℃（暫定値）・注意 +<%= rule.raw_warning.to_f %>℃・重大 +<%= rule.raw_critical.to_f %>℃（依頼元と合意するまでの仮の値）。
+    <% else %>
+      有効な判定基準に架台・段の閾値（block_row）が無いため、候補にしていません（効果だけを表示します）。
+    <% end %>
+  </p>
+  <% if vm["status"] == "insufficient" %>
+    <p class="text-sm" style="color:#ef9f27;">判断の材料が足りないため、架台・段の判定をしていません: <%= vm["reason"] %>（正常とは扱いません）</p>
+  <% end %>
+
+  <% if @row_all.any? %>
+    <%= render "panel_reviews/row_map", rows: @row_all %>
+  <% end %>
+
+  <% if @row_candidates.any? %>
+    <table class="table text-sm" id="row-candidates">
+      <thead style="white-space:nowrap;"><tr><th>架台・段</th><th>効果</th><th>重大度</th><th>写った画像（上側・下側）</th><th>その段が写った画像</th><th>判断</th></tr></thead>
+      <tbody>
+        <% @row_candidates.each do |r| %>
+          <tr id="row_finding_<%= r.id %>">
+            <td style="white-space:nowrap;"><strong><%= r.label %></strong></td>
+            <td style="white-space:nowrap;">+<%= r.effect_c.to_f.round(2) %>℃</td>
+            <td style="white-space:nowrap;"><%= { "mild" => "候補（軽微）", "warning" => "注意", "critical" => "重大" }[r.severity] %></td>
+            <td style="white-space:nowrap;"><%= r.views_count %> 枚（上 <%= r.upper_views %>・下 <%= r.lower_views %>）</td>
+            <td>
+              <div class="flex flex-wrap gap-1">
+                <% r.observations.each do |o| %>
+                  <%= link_to review_inspection_path(@inspection, image: o["sequence"]), title: "画像 #{o['sequence']}・縦位置 #{o['y']}・効果 #{o['effect']}℃" do %>
+                    <div style="<%= panel_thumb_style(@images[o['image_id']], o['bbox'], pad: 0.2) %> border:2px solid <%= o['effect'].to_f >= 0.8 ? '#e24b4a' : '#52525b' %>;"></div>
+                  <% end %>
+                <% end %>
+              </div>
+            </td>
+            <td style="min-width:13rem;">
+              <% if r.pending? %>
+                <%= text_field_tag "note[row_#{r.id}]", nil, class: "form-input", placeholder: "メモ（任意）", style: "font-size:0.75rem;", form: "row-form-#{r.id}" %>
+                <%= form_with url: confirm_row_inspection_block_row_finding_path(@inspection, r, status: @status, flag: @flag), id: "row-form-#{r.id}", class: "flex gap-1 mt-1" do %>
+                  <%= submit_tag "確定", class: "btn btn-sm btn-primary" %>
+                  <%= select_tag "row_reason[row_#{r.id}]", options_for_select(AnomalyReview::REJECTION_REASONS.except("duplicate").invert), prompt: "理由", class: "form-select", style: "font-size:0.75rem; width:auto;" %>
+                  <button type="submit" class="btn btn-sm btn-danger" formaction="<%= reject_row_inspection_block_row_finding_path(@inspection, r, status: @status, flag: @flag) %>">却下</button>
+                <% end %>
+              <% else %>
+                <%= { "confirmed" => "確定", "rejected" => "却下（#{AnomalyReview::REJECTION_REASONS[r.rejection_reason]}）" }[r.review_status] %>
+              <% end %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% elsif @row_all.any? %>
+    <p class="text-sm">閾値を超えた段はありません（判定した段 <%= @row_all.count { |r| r.status == "evaluated" } %>）。</p>
+  <% end %>
+
+  <% if @row_insufficient.any? %>
+    <details id="row-insufficient">
+      <summary class="text-sm" style="cursor:pointer; color:#ef9f27;">判断の材料が足りない段（<%= @row_insufficient.size %> 段。正常とは扱いません）</summary>
+      <table class="table text-xs mt-2">
+        <thead><tr><th>架台・段</th><th>写った画像（上側・下側）</th><th>理由</th></tr></thead>
+        <tbody>
+          <% @row_insufficient.each do |r| %>
+            <tr><td><%= r.label %></td><td><%= r.views_count %> 枚（上 <%= r.upper_views %>・下 <%= r.lower_views %>）</td><td><%= r.insufficient_reason %></td></tr>
+          <% end %>
+        </tbody>
+      </table>
+    </details>
+  <% end %>
+</div>

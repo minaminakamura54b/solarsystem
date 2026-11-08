@@ -284,13 +284,13 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 | U | 開発環境はジョブが `:inline` のため、レビュー完了のリクエストの中で Claude API を呼ぶ（確定した異常の件数だけ待つ） | `ExplainInspectionJob` | 本番は Solid Queue で非同期（2026-10-15 確認: 使い捨ての DB に solid_queue のテーブルを作り、5 秒待つ偽の Claude で、レビュー完了の応答は 0.24 秒・Claude の呼び出し 0 回、ジョブは queue default に登録され、ワーカーが後から所見と総括文を作った。重要度・状態は変わらない）。開発で困るようなら指示を受けて対応 |
 | V | 所見・総括文は、発電所のモジュール構成や気象データを後から変えても自動では作り直さない（画面に「古い所見」と表示する） | `AnomalyExplainer#current?` | 「所見を作り直す」で作り直す。報告書（Phase 7）の版の管理と合わせて検討 |
 | W | 群の構成パネルの異常には、レビュー画面でパネルを割り当てる操作が無い（群から外せば割り当てられる）。今は構成パネルにパネルが割り当てられることは無いので、配置の置き換えで割り当て直しの対象になることも無い | `inspections/review/_anomaly.html.erb` | 群の構成パネルにパネルを割り当てる必要が出たら対応 |
-| X | 基準温度を画像内の位置の傾向から取る方法（`position_trend`）は、架台全体（20 枚程度）のような広い異常が画像の下側に写ると、傾向に取り込んで見落とすことがある（合成の異常の試しで 59 回中 3 回） | `analyzer/analyzer/analysis/baseline.py` | **別のタスクとして記録（2026-11-08 ユーザー指示。未実装）**。案: 飛行全体で架台ごとの温度の中央値を出し、ほかの架台と比べる（画像の写る位置に左右されない）。異常を地上の位置でまとめる仕組みの後に検討 |
+| X | 基準温度を画像内の位置の傾向から取る方法（`position_trend`）は、架台全体（20 枚程度）のような広い異常が画像の下側に写ると、傾向に取り込んで見落とすことがある（合成の異常の試しで 59 回中 3 回） | `analyzer/analyzer/analysis/baseline.py` | **2026-11-08 に案 X 改として実装**（架台・段の候補。見え方の影響を飛行全体で 1 つの関数として除き、段ごとの中央値で比べる。docs/LAYOUT_OVERLAY_DESIGN.md の C-1b）。閾値は暫定・仮の値で、本番では有効にしない |
 | Y | 帯状の発熱（パネルの 1/3 の帯が +3℃）の検出が弱い（合成の異常の試しで、今の方法でも 59 回中 38 回。基準温度の取り方を変えても同程度） | `analyzer/analyzer/analysis/patterns.py` ほか | **課題として記録（2026-11-08 ユーザー指示。未実装）**。局所的な判定の閾値・帯の形の判定のどちらで落ちているかを調べてから案を出す |
 | M | 温度データの有無はメタデータのタグによる仮判定。実際の R-JPEG でどのタグが出るかは未確認 | `config/image_quality.yml` の `radiometric_tags` | Phase S で実画像を確認して見直す。最終判定は Phase 3 の解析エンジン |
 
 ## 6. テスト
 
-- `bin/rails test`: 370件（パネルごとの候補の追加の時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 7件（グリッド入力画面・レビュー画面・登録画面のペアの一覧の JS をヘッドレス Chrome で確認）
+- `bin/rails test`: 377件（架台・段の候補の追加の時点。旧方式の Claude 判定のテスト 38件は Phase 6 でコードと一緒に削除）。services / jobs / controllers / models / integration と主要画面のスモークテスト。`bin/rails test:system`: 7件（グリッド入力画面・レビュー画面・登録画面のペアの一覧の JS をヘッドレス Chrome で確認）
 - **本物の解析エンジンを呼ぶテスト**（`test/integration/analyzer_end_to_end_test.rb`）: `analyzer/scripts/make_dev_scenes.py` で合成シーン（.npy）を作り、Rails から `uv run python -m analyzer` を実行する。uv と `cd analyzer && uv sync` が必要（CI の test ジョブも uv を入れている）
 - 解析エンジンのタイムアウトのテストは、子プロセスが片付くまで最大 5 秒待ってから確かめる（終了済みで回収待ちのゾンビは残っていないとみなす。Phase 6b）
 - 偽の解析エンジン: `AnalyzeInspectionImageJob.client` を `with_fake_analyzer` で差し替える（本番では常に `ThermalAnalyzerClient`）

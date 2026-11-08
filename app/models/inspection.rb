@@ -6,6 +6,7 @@ class Inspection < ApplicationRecord
   has_many :inspection_images, -> { ordered }, dependent: :destroy, inverse_of: :inspection
   has_many :block_map_proposals, dependent: :destroy
   has_many :panel_candidates, dependent: :destroy
+  has_many :block_row_findings, dependent: :destroy
   has_many :weather_readings, -> { chronological }, dependent: :destroy
   has_many :grid_templates, dependent: :destroy
   has_many :anomaly_groups, dependent: :destroy
@@ -110,7 +111,8 @@ class Inspection < ApplicationRecord
 
   # 未確定の異常の候補の件数（群の構成パネルは群を1件として数える。docs/IMPROVEMENT_PLAN.md 4.4）
   def candidate_count
-    anomalies.candidates.countable.count + anomaly_groups.where(review_status: "pending").count
+    anomalies.candidates.countable.count + anomaly_groups.where(review_status: "pending").count +
+      block_row_findings.candidates.where(review_status: "pending").count
   end
 
   # 異常の件数（旧方式は Claude の判定の件数。新方式は確定・修正した異常の件数で、群は1件として数える）

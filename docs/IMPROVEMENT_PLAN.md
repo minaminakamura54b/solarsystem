@@ -237,6 +237,7 @@ Python は `analyzer/` に置き、Rails のジョブから `Open3` で呼ぶ。
 - **mild = 検出の最小値**。これ未満は異常として出力しない。Python には active ルールセットを JSON で渡し、検出にもこの値を使う（検出と重大度の閾値を一元化する）
 - **バリデーション**: 各系列で `mild < warning < critical`。1つのセットに全 anomaly_type が揃っていること
 - 閾値を変えるときは既存のセットを編集せず、**新しいセットを作って active を切り替える**
+- **無くてもよい種類（2026-11-08 追加、ユーザー承認）**: `block_row`（架台・段の候補。measure `row_effect`）。無い版では架台・段の候補を作らない。解析エンジンには渡さない（点検の全画像から Rails が判定する。docs/LAYOUT_OVERLAY_DESIGN.md の C-1b）
 
 初期値（暫定。商用製品の公開基準を参考にした値であり、案件ごとに依頼元と合意して変更する）:
 | anomaly_type | measure | mild | warning | critical |

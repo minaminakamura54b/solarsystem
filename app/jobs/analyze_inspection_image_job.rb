@@ -47,15 +47,16 @@ class AnalyzeInspectionImageJob < ApplicationJob
 
   private
 
-  # 点検の画像の解析がすべて終わったら、パネルの候補を作り直す（架台を登録した発電所だけ）。
+  # 点検の画像の解析がすべて終わったら、パネルの候補と架台・段の候補を作り直す（架台を登録した発電所だけ）。
   # 失敗しても画像の解析結果には影響させない（候補は「作り直す」でやり直せる）
   def build_panel_candidates(inspection)
     return unless LayoutAlignment.site_has_layout?(inspection.site)
     return if inspection.inspection_images.where(analysis_status: %w[pending analyzing]).exists?
 
     PanelCandidateBuilder.new(inspection).call
+    BlockRowEffect.new(inspection).call
   rescue => e
-    Rails.logger.error("PanelCandidateBuilder failed: #{e.class}: #{e.message}")
+    Rails.logger.error("PanelCandidateBuilder / BlockRowEffect failed: #{e.class}: #{e.message}")
   end
 
   def handle(image, result, rule_set)

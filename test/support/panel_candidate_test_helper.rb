@@ -15,7 +15,8 @@ module PanelCandidateTestHelper
   end
 
   # 画像を「解析済み」にする。blocks を横に並べたグリッドを、画像の縦位置 y0（0〜1）に置く
-  def analyzed_image(image, blocks, y0:)
+  # temp: パネルの平均温度（グリッド番号・段・列・画像内の縦位置 → ℃）。省略時は 30℃
+  def analyzed_image(image, blocks, y0:, temp: nil)
     grids = []
     panels = []
     blocks.each_with_index do |block, gi|
@@ -25,7 +26,8 @@ module PanelCandidateTestHelper
       2.times do |r|
         10.times do |c|
           x1, y1 = x0 + c * 0.04, y0 + r * 0.1
-          panels << { "index" => panels.size, "grid_index" => gi, "row" => r, "col" => c, "excluded" => false,
+          t_mean = temp ? temp.call(gi, r + 1, c + 1, y1 + 0.05) : 30.0
+          panels << { "index" => panels.size, "grid_index" => gi, "row" => r, "col" => c, "excluded" => false, "t_mean" => t_mean,
                       "bbox" => { "x1" => x1, "y1" => y1, "x2" => x1 + 0.04, "y2" => y1 + 0.1 },
                       "polygon" => [ [ x1, y1 ], [ x1 + 0.04, y1 ], [ x1 + 0.04, y1 + 0.1 ], [ x1, y1 + 0.1 ] ] }
         end

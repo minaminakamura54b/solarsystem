@@ -2,7 +2,7 @@
 # - 解析中・要確認・失敗の画像が残っていれば完了できない（除外するか解析を終える）
 # - 「すべての画像を確認し、見逃しがない」ことの確認が必須（候補0件でも、人が異常なしを確認してから完了）
 # - 未確定の候補が残っていれば警告し、残っていることを確認したときだけ完了できる。残った候補は重要度に入れない
-# - 重要度 = 確定・修正した異常・群の最大重大度（mild / warning / critical）。無ければ normal
+# - 重要度 = 確定・修正した異常・群・架台・段の候補の最大重大度（mild / warning / critical）。無ければ normal
 class InspectionReview
   CONFIRMED = %w[confirmed corrected].freeze
   SEVERITY_ORDER = %w[mild warning critical].freeze
@@ -57,6 +57,7 @@ class InspectionReview
   def final_severity
     severities = @inspection.anomalies.where(review_status: CONFIRMED).countable.map { |a| a.final_severity.presence || a.severity }
     severities += @inspection.anomaly_groups.where(review_status: CONFIRMED).map(&:severity)
+    severities += @inspection.block_row_findings.candidates.where(review_status: "confirmed").map(&:severity) # 架台・段の候補（案 X 改）
     severities.compact.max_by { |s| SEVERITY_ORDER.index(s) || -1 } || "normal"
   end
 end
