@@ -51,10 +51,14 @@ class AnalyzeInspectionImageJob < ApplicationJob
   # 失敗しても画像の解析結果には影響させない（候補は「作り直す」でやり直せる）
   def build_panel_candidates(inspection)
     return unless LayoutAlignment.site_has_layout?(inspection.site)
-    return if inspection.inspection_images.where(analysis_status: %w[pending analyzing]).exists?
 
-    PanelCandidateBuilder.new(inspection).call
-    BlockRowEffect.new(inspection).call
+    # 複数のワーカーで最後の画像がほぼ同時に終わっても、作り直しが重ならないよう点検の行をロックしてから確かめる
+    inspection.with_lock do
+      next if inspection.inspection_images.where(analysis_status: %w[pending analyzing]).exists?
+
+      PanelCandidateBuilder.new(inspection).call
+      BlockRowEffect.new(inspection).call
+    end
   rescue => e
     Rails.logger.error("PanelCandidateBuilder / BlockRowEffect failed: #{e.class}: #{e.message}")
   end
