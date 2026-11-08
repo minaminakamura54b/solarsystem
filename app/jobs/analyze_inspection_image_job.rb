@@ -39,12 +39,24 @@ class AnalyzeInspectionImageJob < ApplicationJob
     end
     handle(image, result, rule_set)
     image.inspection.refresh_status!
+    build_panel_candidates(image.inspection)
   rescue => e
     Rails.logger.error("AnalyzeInspectionImageJob failed: #{e.class}: #{e.message}")
     mark_failed(image, "解析中にエラーが発生しました: #{e.message}") if image
   end
 
   private
+
+  # 点検の画像の解析がすべて終わったら、パネルの候補を作り直す（架台を登録した発電所だけ）。
+  # 失敗しても画像の解析結果には影響させない（候補は「作り直す」でやり直せる）
+  def build_panel_candidates(inspection)
+    return unless LayoutAlignment.site_has_layout?(inspection.site)
+    return if inspection.inspection_images.where(analysis_status: %w[pending analyzing]).exists?
+
+    PanelCandidateBuilder.new(inspection).call
+  rescue => e
+    Rails.logger.error("PanelCandidateBuilder failed: #{e.class}: #{e.message}")
+  end
 
   def handle(image, result, rule_set)
     if result.timed_out?

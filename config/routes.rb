@@ -22,6 +22,17 @@ Rails.application.routes.draw do
     end
   end
   resources :inspections, only: %i[index show new create destroy] do
+    # パネルごとの候補（同じパネルの同じ場所の異常をまとめたもの。docs/LAYOUT_OVERLAY_DESIGN.md の C-1）
+    resource :panel_review, only: :show do
+      post :rebuild
+      post :bulk_reject
+    end
+    resources :panel_candidates, only: [], controller: "panel_reviews" do
+      member do
+        post :confirm
+        post :reject
+      end
+    end
     member do
       post :rejudge
       get :review

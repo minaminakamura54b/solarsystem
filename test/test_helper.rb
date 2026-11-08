@@ -16,5 +16,6 @@ module ActiveSupport
     include ClaudeTestHelper
     include Phase2TestHelper
     include AnalyzerTestHelper
+    include PanelCandidateTestHelper
   end
 end

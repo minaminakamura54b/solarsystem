@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_08_110000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_08_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -117,10 +117,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_110000) do
     t.jsonb "panel_assignment_history", default: [], null: false
     t.boolean "panel_reassignment_required", default: false, null: false
     t.bigint "duplicate_of_id"
+    t.bigint "panel_candidate_id"
     t.index ["anomaly_group_id"], name: "index_anomalies_on_anomaly_group_id"
     t.index ["duplicate_of_id"], name: "index_anomalies_on_duplicate_of_id"
     t.index ["inspection_id"], name: "index_anomalies_on_inspection_id"
     t.index ["inspection_image_id"], name: "index_anomalies_on_inspection_image_id"
+    t.index ["panel_candidate_id"], name: "index_anomalies_on_panel_candidate_id"
     t.index ["panel_id"], name: "index_anomalies_on_panel_id"
     t.index ["rule_set_id"], name: "index_anomalies_on_rule_set_id"
   end
@@ -263,6 +265,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_110000) do
     t.index ["site_id"], name: "index_inspections_on_site_id"
   end
 
+  create_table "panel_candidates", force: :cascade do |t|
+    t.bigint "inspection_id", null: false
+    t.bigint "panel_id", null: false
+    t.string "kind", null: false
+    t.jsonb "location"
+    t.string "anomaly_type", null: false
+    t.bigint "representative_anomaly_id"
+    t.integer "observed_count", default: 0, null: false
+    t.integer "visible_count", default: 0, null: false
+    t.jsonb "flags", default: [], null: false
+    t.jsonb "observations", default: [], null: false
+    t.string "review_status", default: "pending", null: false
+    t.boolean "locked", default: false, null: false
+    t.string "rejection_reason"
+    t.text "reviewer_note"
+    t.datetime "reviewed_at"
+    t.string "config_version"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["inspection_id"], name: "index_panel_candidates_on_inspection_id"
+    t.index ["panel_id"], name: "index_panel_candidates_on_panel_id"
+    t.index ["representative_anomaly_id"], name: "index_panel_candidates_on_representative_anomaly_id"
+  end
+
   create_table "panels", force: :cascade do |t|
     t.bigint "site_id", null: false
     t.string "number", null: false
@@ -393,6 +419,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_110000) do
   add_foreign_key "anomalies", "anomaly_groups"
   add_foreign_key "anomalies", "inspection_images"
   add_foreign_key "anomalies", "inspections"
+  add_foreign_key "anomalies", "panel_candidates", on_delete: :nullify
   add_foreign_key "anomalies", "panels"
   add_foreign_key "anomalies", "rule_sets"
   add_foreign_key "anomaly_groups", "inspection_images"
@@ -403,6 +430,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_110000) do
   add_foreign_key "grid_templates", "inspections"
   add_foreign_key "inspection_images", "inspections"
   add_foreign_key "inspections", "sites"
+  add_foreign_key "panel_candidates", "anomalies", column: "representative_anomaly_id", on_delete: :nullify
+  add_foreign_key "panel_candidates", "inspections"
+  add_foreign_key "panel_candidates", "panels"
   add_foreign_key "panels", "pv_blocks", on_delete: :nullify
   add_foreign_key "panels", "sites"
   add_foreign_key "pv_blocks", "sites"
