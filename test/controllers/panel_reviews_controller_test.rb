@@ -72,4 +72,35 @@ class PanelReviewsControllerTest < ActionDispatch::IntegrationTest
     post confirm_row_inspection_block_row_finding_path(@inspection, hot, site_id: @site.id)
     assert_equal [ "confirmed", true ], [ hot.reload.review_status, hot.locked ]
   end
+
+  test "「部材・構造物」でまとめて却下するときに部材の位置を登録でき、次の点検では目印を付けてたたむ（自動では却下しない）" do
+    ids = @inspection.panel_candidates.select { |c| c.flags.include?("same_position") }.map(&:id)
+    post bulk_reject_inspection_panel_review_path(@inspection, site_id: @site.id), params: { candidate_ids: ids, reason: "structure", register_structure: "1" }
+    assert_equal 1, @site.structure_positions.count, "3 つの架台の同じ位置は 1 か所として登録する"
+    position = StructurePosition.where(site: @site).sole
+    assert_equal [ 1, 1 ], [ position.block_row, position.block_col ]
+
+    # 次の点検: 同じ位置の点状の発熱
+    nxt = analyzable_inspection(grids: [], files: %w[thermal_plain_T.jpg])
+    img = nxt.inspection_images.first
+    analyzed_image(img, @site.pv_blocks.order(:label).first(2), y0: 0.4)
+    a = anomaly_at(img, 0, 1, 1, type: "multi_hotspot", u: 0.1)
+    other = anomaly_at(img, 1, 2, 7, type: "hotspot", u: 0.7, v: 0.7)
+    PanelCandidateBuilder.new(nxt).call
+    flagged = nxt.panel_candidates.find_by!(panel: a.panel)
+    assert_includes flagged.flags, "registered_structure"
+    assert_not_includes nxt.panel_candidates.find_by!(panel: other.panel).flags, "registered_structure"
+    get inspection_panel_review_path(nxt, site_id: @site.id)
+    assert_select "#candidates tr[id^=candidate_]", 1
+    assert_select "#hidden-structure", text: /登録済みの部材の位置に出た候補が 1 件/
+    get inspection_panel_review_path(nxt, site_id: @site.id, flag: "registered_structure")
+    assert_select "#candidates tr#candidate_#{flagged.id}"
+    assert_equal "pending", a.reload.review_status, "自動では却下しない"
+  end
+
+  test "部材の位置の登録は、理由が「部材・構造物」でチェックしたときだけ" do
+    ids = @inspection.panel_candidates.select { |c| c.flags.include?("same_position") }.map(&:id)
+    post bulk_reject_inspection_panel_review_path(@inspection, site_id: @site.id), params: { candidate_ids: ids, reason: "glare", register_structure: "1" }
+    assert_equal 0, @site.structure_positions.count
+  end
 end

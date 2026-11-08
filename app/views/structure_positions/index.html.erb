@@ -1,0 +1,36 @@
+<% content_for :title, "部材の位置 - #{@site.name}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🔩 部材の位置</h2>
+    <p class="text-sm text-gray-500 mt-1"><%= @site.name %></p>
+  </div>
+  <%= link_to "← 発電所一覧に戻る", sites_path, class: "btn btn-secondary" %>
+</div>
+
+<div class="p-6 space-y-4">
+  <div class="card p-4 space-y-2">
+    <p class="text-xs text-gray-500">
+      架台の端の金具など、パネルの故障ではない部材が写る位置です。この位置に出た点状の発熱の候補には「登録済みの部材の位置」の目印を付け、
+      パネルごとの候補の画面でたたんで表示します。<strong>自動では却下せず、検出も変えません</strong>（判断は人が行います）。
+      登録は、パネルごとの候補を「部材・構造物」でまとめて却下するときに行います。位置は、すべての架台に共通の「段・列・パネルの中の区画」で表します。
+    </p>
+    <% if @positions.any? %>
+      <table class="table text-sm" id="positions">
+        <thead><tr><th>位置</th><th>登録のもと</th><th>登録日</th><th></th></tr></thead>
+        <tbody>
+          <% @positions.each do |p| %>
+            <tr id="position_<%= p.id %>">
+              <td><%= p.description %></td>
+              <td class="text-xs"><%= p.note %><% if p.source_inspection %>（<%= link_to "点検", inspection_panel_review_path(p.source_inspection, status: "all") %>）<% end %></td>
+              <td class="text-xs"><%= p.created_at.strftime("%Y/%m/%d") %></td>
+              <td><%= button_to "削除", site_structure_position_path(@site, p), method: :delete, class: "btn btn-sm btn-danger", form: { data: { turbo_confirm: "この部材の位置を削除しますか？（判断済みの候補は変わりません）" } } %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% else %>
+      <p class="text-sm text-gray-500">まだ登録されていません。</p>
+    <% end %>
+  </div>
+</div>

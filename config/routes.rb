@@ -16,6 +16,8 @@ Rails.application.routes.draw do
       get :template
       get :export
     end
+    # 発電所ごとの部材の位置（案 A）。一覧と削除だけ（登録はパネルごとの候補の「部材・構造物」の却下から）
+    resources :structure_positions, only: %i[index destroy]
     # 点検の画像から作る架台の地図の候補（docs/LAYOUT_OVERLAY_DESIGN.md の A-3）
     resources :block_map_proposals, only: %i[create show] do
       get :csv, on: :member

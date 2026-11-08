@@ -11,6 +11,11 @@ class PanelReviewsController < ApplicationController
     scope = scope.pending if @status == "pending"
     @candidates = scope.to_a
     @candidates.select! { |c| @flag == "none" ? c.flags.empty? : c.flags.include?(@flag) } if @flag
+    # 登録済みの部材の位置に出た候補は、目印で絞り込んだときだけ表示する（たたんで表示。自動では却下しない）
+    unless @flag
+      @hidden_structure = @candidates.count { |c| c.flags.include?("registered_structure") }
+      @candidates.reject! { |c| c.flags.include?("registered_structure") }
+    end
     @candidates.sort_by! { |c| [ c.pending? ? 0 : 1, -(c.observed_count.fdiv([ c.visible_count, 1 ].max)), -c.max_delta_t.to_f ] }
     @images = @inspection.inspection_images.index_by(&:id)
     @counts = @inspection.panel_candidates.pending.flat_map(&:flags).tally
@@ -67,14 +72,33 @@ class PanelReviewsController < ApplicationController
     return back(alert: "却下する候補を選んでください") if ids.empty?
 
     reason = params[:reason].to_s
-    candidates = @inspection.panel_candidates.pending.where(id: ids).to_a
-    ActiveRecord::Base.transaction { candidates.each { |c| PanelCandidateReview.new(c).reject!(reason:) } }
-    back(notice: "#{candidates.size} 件の候補を「#{AnomalyReview::REJECTION_REASONS[reason]}」として却下しました")
+    candidates = @inspection.panel_candidates.pending.includes(:panel).where(id: ids).to_a
+    registered = 0
+    ActiveRecord::Base.transaction do
+      candidates.each { |c| PanelCandidateReview.new(c).reject!(reason:) }
+      registered = register_structure_positions(candidates) if reason == "structure" && params[:register_structure] == "1"
+    end
+    notice = "#{candidates.size} 件の候補を「#{AnomalyReview::REJECTION_REASONS[reason]}」として却下しました"
+    notice += "。部材の位置を #{registered} か所登録しました（次の点検から目印を付けます）" if registered.positive?
+    back(notice:)
   rescue PanelCandidateReview::Error, AnomalyReview::Error => e
     back(alert: e.message)
   end
 
   private
+
+  # 「部材・構造物」で却下した点状の発熱の候補の位置（段・列・パネルの中の区画）を、発電所の部材の位置として登録する（案 A）
+  def register_structure_positions(candidates)
+    bins = PanelCandidateConfig.current.flags["same_position_grid_bins"].to_i
+    keys = candidates.select { |c| c.kind == "point" && c.location }.map { |c| StructurePosition.key_for(c.panel, c.location, bins) }.uniq
+    keys.count do |row, col, u, v, b|
+      position = @inspection.site.structure_positions.find_or_initialize_by(block_row: row, block_col: col, u_bin: u, v_bin: v, bins: b)
+      next false if position.persisted?
+
+      position.update!(source_inspection: @inspection, note: "点検 #{@inspection.conducted_at&.strftime('%Y/%m/%d')} のパネルごとの候補で「部材・構造物」として却下")
+      true
+    end
+  end
 
   def require_site
     redirect_to sites_path, alert: "発電所を選択してください" unless current_site

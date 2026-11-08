@@ -31,6 +31,11 @@
     <p class="text-xs text-gray-400 mt-2">目印は絞り込みのためのもので、判定は変えません。「1 枚だけ」= 3 枚以上に写って異常が出たのは 1 枚。「写る位置で変わる」= 異常が出た画像と出なかった画像で、画像内の縦位置が大きく違う。「多くの架台の同じ位置」= 点状の発熱が多くの架台の同じ位置（例: 端の列）に出ている</p>
   </div>
 
+  <% if @hidden_structure.to_i.positive? %>
+    <p class="text-sm" id="hidden-structure">登録済みの部材の位置に出た候補が <%= @hidden_structure %> 件あります（たたんでいます。自動では却下していません）。
+      <%= link_to "表示してまとめて判断する", inspection_panel_review_path(@inspection, flag: "registered_structure") %></p>
+  <% end %>
+
   <%= form_with url: bulk_reject_inspection_panel_review_path(@inspection), id: "bulk-form" do %>
     <%= hidden_field_tag :status, @status %>
     <%= hidden_field_tag :flag, @flag %>
@@ -38,6 +43,9 @@
       <span>選んだ候補を</span>
       <%= select_tag :reason, options_for_select(AnomalyReview::REJECTION_REASONS.except("duplicate").invert), prompt: "却下の理由", class: "form-select", style: "width:auto; font-size:0.8rem;" %>
       <%= submit_tag "まとめて却下", class: "btn btn-sm btn-danger", data: { turbo_confirm: "選んだ候補の観測をすべて却下します。よろしいですか？" } %>
+      <label class="text-xs" title="理由が「部材・構造物」のとき、点状の発熱の候補の位置（段・列・パネルの中の区画）を発電所に登録し、次の点検から目印を付けます（自動では却下しません）">
+        <%= check_box_tag :register_structure, "1", false %> 「部材・構造物」のとき、この位置を部材の位置として登録する
+      </label>
       <label class="text-xs"><input type="checkbox" onclick="document.querySelectorAll('input[name=&quot;candidate_ids[]&quot;]').forEach(c => c.checked = this.checked)"> 表示中をすべて選ぶ</label>
     </div>
 

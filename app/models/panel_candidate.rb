@@ -11,7 +11,8 @@ class PanelCandidate < ApplicationRecord
   FLAGS = {
     "single_view" => "1 枚だけ",
     "position_biased" => "写る位置で変わる",
-    "same_position" => "多くの架台の同じ位置"
+    "same_position" => "多くの架台の同じ位置",
+    "registered_structure" => "登録済みの部材の位置"
   }.freeze
 
   validates :kind, inclusion: { in: KINDS }

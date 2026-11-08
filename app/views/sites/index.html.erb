@@ -31,6 +31,7 @@
             <%= link_to "編集", edit_site_path(site), class: "btn btn-secondary btn-sm" %>
             <%= link_to "実配置を登録", new_site_panel_layout_path(site), class: "btn btn-secondary btn-sm" %>
             <%= link_to "架台を登録", new_site_block_layout_path(site), class: "btn btn-secondary btn-sm" %>
+            <%= link_to "部材の位置", site_structure_positions_path(site), class: "btn btn-secondary btn-sm" %>
             <%= button_to "削除", site_path(site), method: :delete,
                 class: "btn btn-danger btn-sm",
                 data: { turbo_confirm: "#{site.name}を削除しますか？" } %>

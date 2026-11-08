@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_08_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_08_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -423,6 +423,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_130000) do
     t.index ["status"], name: "index_sites_on_status"
   end
 
+  create_table "structure_positions", force: :cascade do |t|
+    t.bigint "site_id", null: false
+    t.integer "block_row", null: false
+    t.integer "block_col", null: false
+    t.integer "u_bin", null: false
+    t.integer "v_bin", null: false
+    t.integer "bins", null: false
+    t.text "note"
+    t.bigint "source_inspection_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["site_id", "block_row", "block_col", "u_bin", "v_bin", "bins"], name: "index_structure_positions_on_site_and_position", unique: true
+    t.index ["site_id"], name: "index_structure_positions_on_site_id"
+    t.index ["source_inspection_id"], name: "index_structure_positions_on_source_inspection_id"
+  end
+
   create_table "weather_readings", force: :cascade do |t|
     t.bigint "inspection_id", null: false
     t.datetime "observed_at", null: false
@@ -471,5 +487,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_130000) do
   add_foreign_key "pv_blocks", "sites"
   add_foreign_key "revenues", "sites"
   add_foreign_key "severity_rules", "rule_sets"
+  add_foreign_key "structure_positions", "inspections", column: "source_inspection_id", on_delete: :nullify
+  add_foreign_key "structure_positions", "sites"
   add_foreign_key "weather_readings", "inspections"
 end
