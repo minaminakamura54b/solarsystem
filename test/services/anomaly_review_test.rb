@@ -111,6 +111,13 @@ class AnomalyReviewTest < ActiveSupport::TestCase
     assert_nil record.reload.duplicate_of_id, "ほかの理由で却下し直したら、まとめ先を外す"
   end
 
+  test "却下の理由に「部材・構造物」を選べる（パネルの故障ではないものを、誤検出・重複と分けて残す）" do
+    record = candidate
+    AnomalyReview.new(record).reject!(reason: "structure")
+    assert_equal [ "rejected", "structure" ], [ record.reload.review_status, record.rejection_reason ]
+    assert_equal "部材・構造物", AnomalyReview::REJECTION_REASONS["structure"]
+  end
+
   test "確定・修正した critical の異常にはアラートを作り、却下では作らない" do
     assert_difference -> { Alert.count }, 1 do
       AnomalyReview.new(candidate(severity: "critical")).confirm!
