@@ -33,6 +33,13 @@ Rails.application.routes.draw do
         post :reject
       end
     end
+    # 架台・段の候補（案 X 改）
+    resources :block_row_findings, only: [], controller: "panel_reviews" do
+      member do
+        post :confirm_row
+        post :reject_row
+      end
+    end
     member do
       post :rejudge
       get :review

@@ -54,3 +54,19 @@ unless RuleSet.exists?(version: trend_version)
   copy.save!
   puts "ルールセット #{trend_version} を作成しました（まだ有効ではありません）"
 end
+
+# 架台・段の候補（案 X 改。2026-11-08 ユーザー承認）の閾値を加えた版。基準温度の取り方は 2026-11-trend-provisional と同じ。
+# 自動では有効にしない。本番で有効にするのは、業者の報告書・次の点検データと比べてから（ユーザー指示）
+row_version = "2026-11-trend-row-provisional"
+unless RuleSet.exists?(version: row_version)
+  source = RuleSet.find_by!(version: trend_version)
+  copy = source.duplicate(version: row_version)
+  copy.note = "暫定: 2026-11-trend-provisional に架台・段の候補（block_row）を加えた版。" \
+              "候補の閾値 +0.8℃ は飛行 008 の 1 回分（夏の夕方・日射量の記録なし）から決めた暫定値で、次の点検データで見直す。" \
+              "注意 +1.5℃・重大 +3.0℃ は依頼元と合意するまでの仮の値。本番では有効にしない（業者の報告書・次の点検データと比べてから）"
+  copy.severity_rules.build(anomaly_type: "block_row", measure: "row_effect",
+                            normalized_mild: 0.8, normalized_warning: 1.5, normalized_critical: 3.0,
+                            raw_mild: 0.8, raw_warning: 1.5, raw_critical: 3.0)
+  copy.save!
+  puts "ルールセット #{row_version} を作成しました（まだ有効ではありません）"
+end

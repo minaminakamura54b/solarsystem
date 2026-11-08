@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_08_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_08_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -179,6 +179,35 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_120000) do
     t.index ["site_id"], name: "index_block_map_proposals_on_site_id"
   end
 
+  create_table "block_row_findings", force: :cascade do |t|
+    t.bigint "inspection_id", null: false
+    t.bigint "pv_block_id", null: false
+    t.integer "block_row", null: false
+    t.string "status", null: false
+    t.string "insufficient_reason"
+    t.decimal "effect_c", precision: 6, scale: 3
+    t.integer "views_count", default: 0, null: false
+    t.integer "upper_views", default: 0, null: false
+    t.integer "lower_views", default: 0, null: false
+    t.jsonb "observations", default: [], null: false
+    t.string "severity"
+    t.bigint "rule_set_id"
+    t.string "rule_version"
+    t.jsonb "rule_snapshot"
+    t.string "review_status", default: "pending", null: false
+    t.boolean "locked", default: false, null: false
+    t.string "rejection_reason"
+    t.text "reviewer_note"
+    t.datetime "reviewed_at"
+    t.string "config_version"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["inspection_id", "pv_block_id", "block_row"], name: "index_block_row_findings_on_inspection_block_row", unique: true
+    t.index ["inspection_id"], name: "index_block_row_findings_on_inspection_id"
+    t.index ["pv_block_id"], name: "index_block_row_findings_on_pv_block_id"
+    t.index ["rule_set_id"], name: "index_block_row_findings_on_rule_set_id"
+  end
+
   create_table "grid_templates", force: :cascade do |t|
     t.bigint "inspection_id", null: false
     t.string "name", null: false
@@ -259,6 +288,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_120000) do
     t.decimal "emissivity", precision: 4, scale: 3
     t.decimal "reflected_temperature_c", precision: 5, scale: 1
     t.decimal "object_distance_m", precision: 6, scale: 1
+    t.jsonb "view_model"
     t.index ["analysis_status"], name: "index_inspections_on_analysis_status"
     t.index ["conducted_at"], name: "index_inspections_on_conducted_at"
     t.index ["severity"], name: "index_inspections_on_severity"
@@ -427,6 +457,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_120000) do
   add_foreign_key "anomaly_groups", "rule_sets"
   add_foreign_key "block_map_proposals", "inspections"
   add_foreign_key "block_map_proposals", "sites"
+  add_foreign_key "block_row_findings", "inspections"
+  add_foreign_key "block_row_findings", "pv_blocks"
+  add_foreign_key "block_row_findings", "rule_sets"
   add_foreign_key "grid_templates", "inspections"
   add_foreign_key "inspection_images", "inspections"
   add_foreign_key "inspections", "sites"

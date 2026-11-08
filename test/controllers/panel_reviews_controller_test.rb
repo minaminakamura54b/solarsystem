@@ -54,4 +54,22 @@ class PanelReviewsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to inspection_panel_review_path(@inspection)
     assert_equal 4, @inspection.panel_candidates.count
   end
+
+  test "架台・段の候補を上に表示し、判断の材料が足りない段は理由つきで表示する。確定・却下できる" do
+    block = @site.pv_blocks.first
+    hot = @inspection.block_row_findings.create!(pv_block: block, block_row: 2, status: "evaluated", effect_c: 1.2, views_count: 6, upper_views: 3, lower_views: 3,
+                                                 severity: "mild", observations: [ { "image_id" => @i1.id, "sequence" => 1, "y" => 0.5, "effect" => 1.2, "bbox" => { "x1" => 0.1, "y1" => 0.4, "x2" => 0.5, "y2" => 0.5 } } ])
+    @inspection.block_row_findings.create!(pv_block: block, block_row: 1, status: "insufficient", insufficient_reason: "画像の下側にしか写っておらず、見え方の影響と区別できません")
+
+    get path
+    assert_select "#row-candidates tr#row_finding_#{hot.id}"
+    assert_select "#row-insufficient", text: /判断の材料が足りない段（1 段。正常とは扱いません）/
+    assert_match "画像の下側にしか写っておらず", response.body
+    assert_select "svg[aria-label='架台・段の効果の配置図'] polygon", minimum: 2
+
+    post reject_row_inspection_block_row_finding_path(@inspection, hot, site_id: @site.id)
+    assert_equal "pending", hot.reload.review_status, "理由が無ければ却下しない"
+    post confirm_row_inspection_block_row_finding_path(@inspection, hot, site_id: @site.id)
+    assert_equal [ "confirmed", true ], [ hot.reload.review_status, hot.locked ]
+  end
 end

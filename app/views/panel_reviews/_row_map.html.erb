@@ -1,0 +1,22 @@
+<%# 架台の配置図に、段ごとの効果を色で示す（北が上。灰色の斜線は判断の材料が足りない段） %>
+<% by_key = rows.index_by { |r| [ r.pv_block_id, r.block_row ] } %>
+<% blocks = @inspection.site.pv_blocks.to_a %>
+<% points = blocks.flat_map(&:corners_local) %>
+<% if points.any? %>
+  <% e0, e1 = points.map(&:first).minmax; n0, n1 = points.map(&:last).minmax; pad = 5.0 %>
+  <% color = ->(r) { if r.nil? then "#27272a" elsif r.status == "insufficient" then "url(#hatch)" else e = r.effect_c.to_f; e >= 1.5 ? "#dc2626" : e >= 0.8 ? "#f97316" : e >= 0.4 ? "#facc15" : "#3f3f46" end } %>
+  <svg viewBox="0 0 <%= (e1 - e0 + 2 * pad).round(2) %> <%= (n1 - n0 + 2 * pad).round(2) %>" style="width:100%; max-height:420px; background:#18181b;" role="img" aria-label="架台・段の効果の配置図">
+    <defs><pattern id="hatch" width="1.2" height="1.2" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.2" height="1.2" fill="#27272a"/><line x1="0" y1="0" x2="0" y2="1.2" stroke="#71717a" stroke-width="0.5"/></pattern></defs>
+    <% blocks.each do |b| %>
+      <% us, ue, le, ls = b.corners_local %>
+      <% mid_s = [ (us[0] + ls[0]) / 2, (us[1] + ls[1]) / 2 ]; mid_e = [ (ue[0] + le[0]) / 2, (ue[1] + le[1]) / 2 ] %>
+      <% [ [ 1, [ us, ue, mid_e, mid_s ] ], [ 2, [ mid_s, mid_e, le, ls ] ] ].each do |row, quad| %>
+        <% r = by_key[[ b.id, row ]] %>
+        <polygon points="<%= quad.map { |e, n| "#{(e - e0 + pad).round(2)},#{(n1 - n + pad).round(2)}" }.join(' ') %>" fill="<%= color.(r) %>" stroke="#52525b" stroke-width="0.15">
+          <title><%= b.label %> <%= row %> 段目<%= r ? "：#{r.status == 'insufficient' ? '判断の材料が足りない' : "効果 #{r.effect_c.to_f.round(2)}℃"}" : "：この点検では写っていない" %></title>
+        </polygon>
+      <% end %>
+    <% end %>
+  </svg>
+  <p class="text-xs text-gray-400">段ごとの効果: 赤 +1.5℃ 以上・橙 +0.8℃ 以上・黄 +0.4℃ 以上・灰 それ未満・斜線 判断の材料が足りない・黒 この点検では写っていない。段にマウスを重ねると値を表示します。</p>
+<% end %>

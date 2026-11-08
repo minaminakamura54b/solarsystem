@@ -1,6 +1,7 @@
 # ルールセット内の、異常の種類ごとの閾値。作成後は編集できない
 class SeverityRule < ApplicationRecord
-  MEASURES = %w[region_max region_mean panel_mean].freeze
+  # row_effect = 架台・段の効果（見え方の影響を除いた、段の温度の画像をまたいだ中央値。block_row で使う）
+  MEASURES = %w[region_max region_mean panel_mean row_effect].freeze
   SERIES = %w[normalized raw].freeze
   COPYABLE_ATTRIBUTES = %w[
     anomaly_type measure
@@ -10,7 +11,7 @@ class SeverityRule < ApplicationRecord
 
   belongs_to :rule_set, inverse_of: :severity_rules
 
-  validates :anomaly_type, inclusion: { in: RuleSet::ANOMALY_TYPES }
+  validates :anomaly_type, inclusion: { in: RuleSet::ALL_TYPES }
   validates :measure, inclusion: { in: MEASURES }
   validates(*COPYABLE_ATTRIBUTES.grep(/_(mild|warning|critical)\z/), presence: true, numericality: { greater_than: 0 })
   validate :thresholds_ascending

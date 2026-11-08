@@ -2,6 +2,9 @@
 # 作成後は編集できない（active の切り替えだけできる）。閾値を変えるときは新しいルールセットを作る
 class RuleSet < ApplicationRecord
   ANOMALY_TYPES = %w[hotspot multi_hotspot substring_bypass module_wide partial_module panel_row_group].freeze
+  # 無くてもよい種類。block_row = 架台・段の候補（案 X 改。2026-11-08 ユーザー承認）。無い版では架台・段の候補を作らない
+  OPTIONAL_TYPES = %w[block_row].freeze
+  ALL_TYPES = (ANOMALY_TYPES + OPTIONAL_TYPES).freeze
   DETECTION_PARAM_KEYS = %w[
     panel_mad_k panel_mad_floor_c min_region_offset_c
     baseline_mad_k baseline_mad_floor_c baseline_min_panels baseline_min_ratio
@@ -60,7 +63,8 @@ class RuleSet < ApplicationRecord
     {
       "version" => version,
       "detection_params" => detection_params,
-      "severity_rules" => severity_rules.map { |rule| rule.snapshot.except("version") }
+      # 解析エンジン（画像ごとの判定）は block_row を使わない（点検の全画像から Rails が判定する）
+      "severity_rules" => severity_rules.reject { |rule| OPTIONAL_TYPES.include?(rule.anomaly_type) }.map { |rule| rule.snapshot.except("version") }
     }
   end
 

@@ -15,11 +15,34 @@ class PanelReviewsController < ApplicationController
     @images = @inspection.inspection_images.index_by(&:id)
     @counts = @inspection.panel_candidates.pending.flat_map(&:flags).tally
     @pending_total = @inspection.panel_candidates.pending.count
+    rows = @inspection.block_row_findings.includes(:pv_block).to_a
+    @row_candidates = rows.select(&:candidate?).sort_by { |r| [ r.pending? ? 0 : 1, -r.effect_c.to_f ] }
+    @row_candidates.select!(&:pending?) if @status == "pending"
+    @row_insufficient = rows.select { |r| r.status == "insufficient" }.sort_by { |r| [ r.pv_block.label, r.block_row ] }
+    @row_all = rows
   end
 
   def rebuild
     candidates = PanelCandidateBuilder.new(@inspection).call
-    redirect_to inspection_panel_review_path(@inspection), notice: "パネルの候補を作り直しました（未判断 #{candidates.size} 件。判断済みの候補は変えていません）"
+    rows = BlockRowEffect.new(@inspection).call
+    redirect_to inspection_panel_review_path(@inspection),
+                notice: "パネルの候補（未判断 #{candidates.size} 件）と架台・段の候補（#{rows.count(&:candidate?)} 件）を作り直しました。判断済みのものは変えていません"
+  end
+
+  def confirm_row
+    row = @inspection.block_row_findings.find(params[:id])
+    BlockRowReview.new(row).confirm!(note: params.dig(:note, "row_#{row.id}"))
+    back(notice: "#{row.label} の候補を確定しました")
+  rescue BlockRowReview::Error => e
+    back(alert: e.message)
+  end
+
+  def reject_row
+    row = @inspection.block_row_findings.find(params[:id])
+    BlockRowReview.new(row).reject!(reason: params.dig(:row_reason, "row_#{row.id}").to_s, note: params.dig(:note, "row_#{row.id}"))
+    back(notice: "#{row.label} の候補を却下しました")
+  rescue BlockRowReview::Error => e
+    back(alert: e.message)
   end
 
   def confirm

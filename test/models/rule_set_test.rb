@@ -99,4 +99,17 @@ class RuleSetTest < ActiveSupport::TestCase
     assert_not copy.valid?
     assert_match "baseline_method", copy.errors.full_messages.join
   end
+
+  test "架台・段の閾値（block_row）は無くてもよい種類。入れた版では解析エンジンには渡さない" do
+    row = RuleSet.find_by!(version: "2026-11-trend-row-provisional")
+    rule = row.rule_for("block_row")
+
+    assert_equal [ "row_effect", 0.8, 1.5, 3.0 ], [ rule.measure, rule.raw_mild.to_f, rule.raw_warning.to_f, rule.raw_critical.to_f ]
+    assert_match "暫定値", row.note
+    assert_match "仮の値", row.note
+    assert_not row.active?
+    assert_nil @initial.rule_for("block_row")
+    assert_not_includes row.to_analyzer_rules["severity_rules"].map { |r| r["anomaly_type"] }, "block_row"
+    assert @initial.valid?, "block_row の無い版も有効なまま"
+  end
 end
