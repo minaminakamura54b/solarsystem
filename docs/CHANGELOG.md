@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-11-08 — 却下の理由「部材・構造物」（ブランチ `reason-structure`）
+
+- 却下の理由に「部材・構造物」（`structure`）を追加（ユーザー指示）。架台の端の金具などパネルの故障ではないものを、誤検出（グレアなど）・重複と分けて残す。学習データの `labels_detail.csv` の `rejection_reason` で区別できる（負例として扱う）
+
 ## 2026-11-08 — 基準温度を画像内の位置の傾向から取る方法（暫定）（ブランチ `baseline-trend`）
 
 - ルールセットの検出パラメータに `baseline_method`（`image_median` = 従来 / `position_trend`）と `trend_min_spread` を追加（ユーザー承認。省略時は従来のまま）。`position_trend` は、パネルの位置（縦・横）の温度の傾向を外れ値を除いて平面で表し、各パネルの位置での値を基準温度にする（指示書 5.6）
