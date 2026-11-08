@@ -3,7 +3,7 @@
 # - 面状の発熱（partial_module・module_wide・substring_bypass）は同じパネルなら 1 つ、点状の発熱（hotspot・multi_hotspot）は
 #   パネルの中の位置が point_merge_distance 以内なら 1 つにまとめる
 # - N = そのパネルを解析できた画像の数（解析結果のパネルのうち端で切れていないもの）、M = 異常が出た画像の数
-# - 目印（判定は変えない。レビューで絞り込むため）: 1 枚だけ・写る位置で変わる・多くの架台の同じ位置
+# - 目印（判定は変えない。レビューで絞り込むため）: 1 枚だけ・写る位置で変わる・多くの架台の同じ位置・登録済みの部材の位置
 # - 人が判断した候補（locked）は作り直さない（束ねた観測も変えない）。それ以外は毎回作り直す
 class PanelCandidateBuilder
   def initialize(inspection, config: PanelCandidateConfig.current)
@@ -22,6 +22,7 @@ class PanelCandidateBuilder
       clusters = cluster(anomalies)
       candidates = clusters.map { |panel_id, kind, members, location| build(panel_id, kind, members, location) }
       flag_same_position(candidates)
+      flag_registered_structure(candidates)
       candidates.each(&:save!)
       candidates.each { |c| Anomaly.where(id: c.instance_variable_get(:@member_ids)).update_all(panel_candidate_id: c.id) }
       candidates
@@ -97,6 +98,20 @@ class PanelCandidateBuilder
       next unless blocks >= @config.flags["same_position_min_blocks"].to_i && blocks >= blocks_with_points * @config.flags["same_position_min_block_ratio"].to_f
 
       list.each { |c| c.flags = (c.flags + [ "same_position" ]).uniq }
+    end
+  end
+
+  # 発電所に登録した「部材の位置」に出た点状の発熱（目印だけ。自動では却下しない）
+  def flag_registered_structure(candidates)
+    positions = StructurePosition.where(site_id: @inspection.site_id).to_a # 読み込み済みの関連を使わず、常に最新の登録を見る
+    return if positions.empty?
+
+    keys = positions.map(&:key).to_set
+    points = candidates.select { |c| c.kind == "point" && c.location }
+    panels = Panel.where(id: points.map(&:panel_id)).index_by(&:id)
+    points.each do |c|
+      match = positions.map(&:bins).uniq.any? { |bins| keys.include?(StructurePosition.key_for(panels[c.panel_id], c.location, bins)) }
+      c.flags = (c.flags + [ "registered_structure" ]).uniq if match
     end
   end
 
