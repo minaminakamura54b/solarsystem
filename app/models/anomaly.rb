@@ -12,6 +12,8 @@ class Anomaly < ApplicationRecord
   belongs_to :rule_set, optional: true
   # 「他の画像と重複」で却下したときのまとめ先（同じ点検の別の画像の異常）
   belongs_to :duplicate_of, class_name: "Anomaly", optional: true
+  # パネルの候補（同じパネルの同じ場所の観測を束ねたもの。PanelCandidateBuilder）
+  belongs_to :panel_candidate, optional: true
 
   validates :anomaly_type, inclusion: { in: ANOMALY_TYPES }
   validates :severity, inclusion: { in: SEVERITIES }, allow_nil: true

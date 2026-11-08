@@ -46,7 +46,10 @@
     <% end %>
     <% if @inspection.inspection_images.any?(&:completed?) %>
       <div class="mt-3">
-        <%= link_to "異常候補をレビューする（未確定 #{@inspection.candidate_count} 件）", review_inspection_path(@inspection), class: "btn btn-primary" %>
+        <% if @inspection.panel_candidates.exists? %>
+          <%= link_to "パネルごとの候補を確認する（未判断 #{@inspection.panel_candidates.pending.count} 件）", inspection_panel_review_path(@inspection), class: "btn btn-primary" %>
+        <% end %>
+        <%= link_to "異常候補をレビューする（未確定 #{@inspection.candidate_count} 件）", review_inspection_path(@inspection), class: @inspection.panel_candidates.exists? ? "btn btn-secondary" : "btn btn-primary" %>
         <% if @inspection.completed? %>
           <span class="text-xs text-gray-400 ml-2">レビュー完了: <%= @inspection.reviewed_at.strftime("%Y/%m/%d %H:%M") %></span>
         <% end %>

@@ -1,0 +1,83 @@
+<% content_for :title, "パネルごとの候補 - #{@inspection.conducted_at&.strftime('%Y/%m/%d')}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🧩 パネルごとの候補</h2>
+    <p class="text-sm text-gray-500 mt-1">
+      同じパネルの同じ場所の異常（画像ごとの観測）を 1 行にまとめています。未判断 <%= @pending_total %> 件。
+      判定（重大度）は観測ごとのままです。種類・位置の修正は、画像ごとのレビュー画面で行ってください。
+    </p>
+  </div>
+  <div class="flex gap-2" style="white-space:nowrap;">
+    <%= button_to "作り直す", rebuild_inspection_panel_review_path(@inspection), class: "btn btn-secondary", form: { data: { turbo_confirm: "未判断の候補を作り直します（判断済みの候補は変えません）" } } %>
+    <%= link_to "画像ごとのレビュー", review_inspection_path(@inspection), class: "btn btn-secondary" %>
+    <%= link_to "点検に戻る", inspection_path(@inspection), class: "btn btn-secondary" %>
+  </div>
+</div>
+
+<div class="p-6 space-y-4">
+  <div class="card p-3 text-sm" id="filters">
+   <div class="flex flex-wrap gap-2 items-center" style="white-space:nowrap;">
+    <span class="form-label" style="margin:0;">絞り込み:</span>
+    <%= link_to "未判断すべて（#{@pending_total}）", inspection_panel_review_path(@inspection), class: "btn btn-sm #{@flag.nil? && @status == 'pending' ? 'btn-primary' : 'btn-secondary'}" %>
+    <% PanelCandidate::FLAGS.each do |key, label| %>
+      <%= link_to "#{label}（#{@counts[key].to_i}）", inspection_panel_review_path(@inspection, flag: key), class: "btn btn-sm #{@flag == key ? 'btn-primary' : 'btn-secondary'}" %>
+    <% end %>
+    <%= link_to "目印なし", inspection_panel_review_path(@inspection, flag: "none"), class: "btn btn-sm #{@flag == 'none' ? 'btn-primary' : 'btn-secondary'}" %>
+    <%= link_to "判断済みも表示", inspection_panel_review_path(@inspection, status: "all", flag: @flag), class: "btn btn-sm #{@status == 'all' ? 'btn-primary' : 'btn-secondary'}" %>
+   </div>
+    <p class="text-xs text-gray-400 mt-2">目印は絞り込みのためのもので、判定は変えません。「1 枚だけ」= 3 枚以上に写って異常が出たのは 1 枚。「写る位置で変わる」= 異常が出た画像と出なかった画像で、画像内の縦位置が大きく違う。「多くの架台の同じ位置」= 点状の発熱が多くの架台の同じ位置（例: 端の列）に出ている</p>
+  </div>
+
+  <%= form_with url: bulk_reject_inspection_panel_review_path(@inspection), id: "bulk-form" do %>
+    <%= hidden_field_tag :status, @status %>
+    <%= hidden_field_tag :flag, @flag %>
+    <div class="card p-3 flex flex-wrap gap-2 items-center text-sm" id="bulk" style="white-space:nowrap;">
+      <span>選んだ候補を</span>
+      <%= select_tag :reason, options_for_select(AnomalyReview::REJECTION_REASONS.except("duplicate").invert), prompt: "却下の理由", class: "form-select", style: "width:auto; font-size:0.8rem;" %>
+      <%= submit_tag "まとめて却下", class: "btn btn-sm btn-danger", data: { turbo_confirm: "選んだ候補の観測をすべて却下します。よろしいですか？" } %>
+      <label class="text-xs"><input type="checkbox" onclick="document.querySelectorAll('input[name=&quot;candidate_ids[]&quot;]').forEach(c => c.checked = this.checked)"> 表示中をすべて選ぶ</label>
+    </div>
+
+    <div class="card p-0" style="overflow-x:auto;">
+      <table class="table text-sm" id="candidates">
+        <thead style="white-space:nowrap;"><tr><th></th><th>パネル</th><th>種類</th><th>画像（枚中）</th><th>最大 ΔT</th><th>目印</th><th>写った画像（赤枠 = 異常が出た画像）</th><th>判断</th></tr></thead>
+        <tbody>
+          <% @candidates.each do |c| %>
+            <tr id="candidate_<%= c.id %>">
+              <td><%= check_box_tag "candidate_ids[]", c.id, false, disabled: !c.pending?, id: "pick_#{c.id}" %></td>
+              <td style="white-space:nowrap;"><strong><%= c.panel.number %></strong><br><span class="text-xs text-gray-400"><%= c.kind == "point" ? "点（パネル内 u=#{c.location&.dig('u')}・v=#{c.location&.dig('v')}）" : "面" %></span></td>
+              <td style="white-space:nowrap;"><%= anomaly_type_label(c.anomaly_type) %><br><span class="text-xs text-gray-400"><%= c.severities.map { |s, n| "#{{ 'mild' => '軽微', 'warning' => '注意', 'critical' => '重大' }[s]} #{n}" }.join("・") %></span></td>
+              <td style="white-space:nowrap;"><%= c.observed_count %> / <%= c.visible_count %></td>
+              <td style="white-space:nowrap;"><%= c.max_delta_t&.round(2) %>℃</td>
+              <td style="min-width:9rem;"><% c.flags.each do |f| %><span class="badge" style="display:inline-block; white-space:nowrap; margin:1px; padding:1px 6px; border-radius:9999px; background:#3f3f46; font-size:0.7rem;"><%= PanelCandidate::FLAGS[f] %></span><% end %></td>
+              <td>
+                <div class="flex flex-wrap gap-1">
+                  <% c.observations.each do |o| %>
+                    <% img = @images[o["image_id"]] %>
+                    <%= link_to review_inspection_path(@inspection, image: o["sequence"]), title: "画像 #{o['sequence']}・縦位置 #{o['y']}#{o['positive'] ? "・ΔT #{o['delta_t']&.round(2)}℃" : '・異常なし'}" do %>
+                      <div style="<%= panel_thumb_style(img, o['bbox']) %> border:2px solid <%= o['positive'] ? '#e24b4a' : '#52525b' %>;"></div>
+                    <% end %>
+                  <% end %>
+                </div>
+              </td>
+              <td style="min-width:13rem;">
+                <% if c.pending? %>
+                  <%= text_field_tag "note[#{c.id}]", nil, class: "form-input", placeholder: "メモ（任意）", style: "font-size:0.75rem;" %>
+                  <div class="flex gap-1 mt-1">
+                    <button type="submit" class="btn btn-sm btn-primary" formaction="<%= confirm_inspection_panel_candidate_path(@inspection, c, status: @status, flag: @flag) %>" formmethod="post">確定</button>
+                    <%= select_tag "row_reason[#{c.id}]", options_for_select(AnomalyReview::REJECTION_REASONS.except("duplicate").invert), prompt: "理由", class: "form-select", style: "font-size:0.75rem; width:auto;" %>
+                    <button type="submit" class="btn btn-sm btn-danger" formaction="<%= reject_inspection_panel_candidate_path(@inspection, c, status: @status, flag: @flag) %>" formmethod="post">却下</button>
+                  </div>
+                <% else %>
+                  <%= { "confirmed" => "確定", "rejected" => "却下（#{AnomalyReview::REJECTION_REASONS[c.rejection_reason]}）" }[c.review_status] %>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+          <% if @candidates.empty? %><tr><td colspan="8" class="text-gray-400">表示する候補はありません</td></tr><% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+</div>

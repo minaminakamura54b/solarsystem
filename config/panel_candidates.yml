@@ -1,0 +1,16 @@
+# パネルの候補（同じパネルの同じ場所の異常を束ねる。docs/LAYOUT_OVERLAY_DESIGN.md の C-1）の設定。
+# 判定（異常か正常か・重大度）は変えない。束ね方と、レビューで絞り込むための目印の条件だけ。値を変えたら version を上げる
+shared:
+  version: "2026-11-08-v1"
+  # 点状の発熱（hotspot / multi_hotspot）を同じ場所とみなす、パネルの中の距離（パネルの幅・高さを 1 とした値）
+  point_merge_distance: 0.2
+  flags:
+    # 「1 枚だけ」: 解析できた画像が single_view_min_visible 枚以上で、異常が出たのは 1 枚
+    single_view_min_visible: 3
+    # 「写る位置で変わる」: 異常が出た画像での縦位置の平均と、出なかった画像での平均の差がこの値以上（画像の高さを 1 とした値）
+    position_bias_min_diff: 0.25
+    # 「多くの架台の同じ位置」: 点状の発熱で、架台の中の同じ位置（段・列・パネルの中の位置を grid_bins 等分した区画）に
+    # 出た架台が、min_blocks 以上かつ候補のある架台の min_block_ratio 以上
+    same_position_grid_bins: 4
+    same_position_min_blocks: 3
+    same_position_min_block_ratio: 0.2

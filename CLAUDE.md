@@ -81,6 +81,7 @@ bin/analyzer-container up      # 開発用: 解析エンジンを動かす Docke
 - `app/services/dataset_exporter.rb` — 学習データの書き出し（`bin/rails "dataset:export[OUT_DIR]"`。顧客の画像を含むのでリポジトリに書き出さない）
 - `app/services/thermal_measurement.rb` / `analyzer/analyzer/thermal/dji_reader.py` / `analyzer/analyzer/thermal/sdk.py` — 測定パラメータ（距離は画像ごとのレーザー距離を優先。出どころを記録）、DJI Thermal SDK の呼び出しと置き場所
 - `app/services/block_layout_import.rb` / `app/controllers/block_layouts_controller.rb` / `app/services/geo_frame.rb` — 架台の CSV（4 隅の緯度経度）による架台とパネルの登録（パネルの置き換えは PanelLayoutImport）。`analyzer/analyzer/layout/` — 画像から架台の地図の候補を作る（build-block-map）
+- `app/services/panel_candidate_builder.rb` / `app/services/panel_candidate_review.rb` / `app/controllers/panel_reviews_controller.rb` — パネルごとの候補（同じパネルの同じ場所の異常を束ね、N 枚中 M 枚と目印を記録。判定は変えない）。設定は `config/panel_candidates.yml`
 - `app/jobs/align_layout_job.rb` / `app/services/layout_alignment.rb` / `analyzer/analyzer/layout/align.py` — 登録した架台を画像に重ねて補正し、グリッドを自動で作る（位置合わせできない画像は要確認・下書き付き）。異常のパネルの割り当ては AnalysisResultImporter（位置合わせのグリッドだけ）
 - `app/services/image_georef.rb` / `app/services/layout_overlay_config.rb` / `analyzer/analyzer/geo/projection.py` — 配置図と位置情報によるパネルの自動特定（設計案 docs/LAYOUT_OVERLAY_DESIGN.md）。画像の位置の記録と、画素と地上の座標の対応。設定は `config/layout_overlay.yml`
 - `docs/PHASE_S_RUNBOOK.md` / `docs/spike_dji_sdk.md` — Phase S の手順書と記録
