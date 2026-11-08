@@ -81,4 +81,22 @@ class RuleSetTest < ActiveSupport::TestCase
     assert_not @initial.reload.active?
     assert_equal copy, RuleSet.active_set
   end
+
+  test "基準温度の取り方を位置の傾向にした暫定の版をシードで作る（自動では有効にしない。閾値は初期値と同じ）" do
+    trend = RuleSet.find_by!(version: "2026-11-trend-provisional")
+
+    assert_not trend.active?
+    assert_equal "position_trend", trend.baseline_method
+    assert_equal "image_median", @initial.baseline_method, "省略時は画像全体の中央値"
+    assert_match "暫定", trend.note
+    assert_equal @initial.severity_rules.map(&:snapshot).map { |h| h.except("version") }, trend.severity_rules.map(&:snapshot).map { |h| h.except("version") }
+    assert_equal "position_trend", trend.to_analyzer_rules["detection_params"]["baseline_method"]
+  end
+
+  test "基準温度の取り方は image_median か position_trend だけ" do
+    copy = @initial.duplicate(version: "bad-method")
+    copy.detection_params = copy.detection_params.merge("baseline_method" => "other")
+    assert_not copy.valid?
+    assert_match "baseline_method", copy.errors.full_messages.join
+  end
 end

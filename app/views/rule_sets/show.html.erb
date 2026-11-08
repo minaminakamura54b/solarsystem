@@ -24,6 +24,7 @@
 
   <div class="card p-4">
     <p class="form-label">検出パラメータ</p>
+    <p class="text-sm mb-1">基準温度の取り方: <%= @rule_set.baseline_method_label %></p>
     <pre class="text-xs" style="white-space:pre-wrap;"><%= JSON.pretty_generate(@rule_set.detection_params) %></pre>
     <p class="text-xs text-gray-400 mt-2">mild は検出の最小値です（これ未満の温度差は異常として出力しません）。</p>
   </div>

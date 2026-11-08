@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 
 from analyzer.analysis import patterns
-from analyzer.analysis.baseline import compute_baseline
+from analyzer.analysis.baseline import compute_baseline, compute_baseline_trend
 from analyzer.analysis.detection import MildThresholds, baseline_regions, hot_regions
 from analyzer.analysis.features import PanelStats, panel_stats
 from analyzer.contract import (
@@ -36,7 +36,12 @@ from analyzer.errors import EXIT_INSUFFICIENT_BASELINE, EXIT_OK, GridError
 from analyzer.params import AnalyzerParams
 from analyzer.thermal import quality
 from analyzer.vision.exclusions import edge_cut
-from analyzer.vision.grid import PanelRegion, panels_from_grids, patch_bbox_to_image, rectify
+from analyzer.vision.grid import (
+    PanelRegion,
+    panels_from_grids,
+    patch_bbox_to_image,
+    rectify,
+)
 
 
 def r(value: float | None, digits: int = 3) -> float | None:
@@ -81,7 +86,12 @@ def analyze(
         rectified[panel.index] = rectify(temps, panel.quad)
         stats[panel.index] = panel_stats(rectified[panel.index].patch)
 
-    baseline = compute_baseline({i: s.t_mean for i, s in stats.items()}, detection)
+    means = {i: s.t_mean for i, s in stats.items()}
+    if detection.baseline_method == "position_trend":
+        centers = {p.index: (float(p.quad[:, 0].mean()) / width, float(p.quad[:, 1].mean()) / height) for p in regions if p.index in stats}
+        baseline = compute_baseline_trend(means, centers, detection)
+    else:
+        baseline = compute_baseline(means, detection)
     result = AnalysisResult(
         status="completed",
         image=image_info(temps, source),
@@ -89,6 +99,8 @@ def analyze(
         rule_version=rules.version,
         baseline=BaselineInfo(
             temp=r(baseline.temp), panel_count=baseline.panel_count, required_count=baseline.required_count,
+            method="position_trend" if baseline.per_panel is not None or detection.baseline_method == "position_trend" else "median_of_normal_panels",
+            trend=baseline.trend,
             mad=r(baseline.mad, 4), mad_used=r(baseline.mad_used, 4),
         ),
         panels=[_panel_result(p, stats.get(p.index), exclusion[p.index], baseline.baseline_indices, width, height) for p in regions],
@@ -103,11 +115,11 @@ def analyze(
         )
         return result, EXIT_INSUFFICIENT_BASELINE
 
-    base = baseline.temp
     module_wide_cells = []
     for panel in regions:
         if panel.index not in stats:
             continue
+        base = baseline.temp_for(panel.index)
         found = _detect_panel(panel, rectified[panel.index], stats[panel.index], base, mild, module, rules, params, width, height)
         result.anomalies.extend(found)
         if any(a.anomaly_type == "module_wide" for a in found):

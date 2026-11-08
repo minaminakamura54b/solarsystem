@@ -28,13 +28,13 @@ def rules():
 def run_analysis(params, rules):
     """合成の温度行列をそのまま解析する。戻り値は (AnalysisResult, 終了コード)。"""
 
-    def _run(scene, module=None, irradiance=None, grids=None, analyzer_params=None):
+    def _run(scene, module=None, irradiance=None, grids=None, analyzer_params=None, rules_override=None):
         return analyze(
             scene.temps,
             "npy",
             [GridSpec.model_validate(g) for g in (scene.grids if grids is None else grids)],
             ModuleSpec.model_validate(module or {}),
-            rules,
+            rules_override or rules,
             IrradianceInput.model_validate(irradiance or {}),
             analyzer_params or params,
         )

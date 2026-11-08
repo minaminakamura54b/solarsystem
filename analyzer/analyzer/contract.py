@@ -76,6 +76,12 @@ class DetectionParams(BaseModel):
     baseline_min_panels: int = Field(gt=0)
     baseline_min_ratio: float = Field(ge=0, le=1)
     row_group_min_panels: int = Field(gt=1)
+    # 基準温度の取り方（2026-11-08 ユーザー承認。暫定）。image_median = 画像全体の正常パネルの中央値（従来）、
+    # position_trend = 画像内のパネルの位置（縦・横）で温度の傾向を平面で表し、各パネルの位置での値を基準温度にする
+    # （見る角度で画像の下側ほど温かく見える影響を除くため）。省略時は image_median
+    baseline_method: Literal["image_median", "position_trend"] = "image_median"
+    # position_trend で、平面（縦・横）や直線（縦）を当てはめるのに要る、パネルの位置の広がり（画像の大きさに対する割合）
+    trend_min_spread: float = Field(default=0.2, gt=0, le=1)
 
 
 class SeverityRuleInput(BaseModel):
@@ -163,8 +169,9 @@ class ImageInfo(BaseModel):
 
 
 class BaselineInfo(BaseModel):
-    temp: float | None
-    method: str = "median_of_normal_panels"
+    temp: float | None  # position_trend のときは、各パネルの基準温度の中央値（表示用）
+    method: str = "median_of_normal_panels"  # position_trend のときは "position_trend"
+    trend: dict | None = None  # position_trend のとき: 当てはめた形（plane / line / constant）と係数
     panel_count: int
     required_count: int
     mad: float | None
