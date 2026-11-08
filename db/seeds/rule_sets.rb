@@ -39,3 +39,18 @@ unless RuleSet.exists?(active: true)
   RuleSet.find_by!(version: initial_version).activate!
   puts "ルールセット #{initial_version} を有効にしました"
 end
+
+# 基準温度の取り方を「画像内の位置の傾向」にした版（2026-11-08 ユーザー承認。暫定）。閾値は初期値と同じ。
+# 自動では有効にしない（判定基準の画面で有効にする。元の方法に戻すときは 2026-09-initial を有効にする）。
+# 次の点検データ（別の日・時間帯）で、今の方法との比べ方をもう一度行うまでは暫定
+trend_version = "2026-11-trend-provisional"
+unless RuleSet.exists?(version: trend_version)
+  source = RuleSet.find_by!(version: initial_version)
+  copy = source.duplicate(version: trend_version)
+  copy.note = "暫定: 基準温度を画像内の位置（縦・横）の温度の傾向から取る（見る角度で画像の下側ほど温かく見える影響を除くため）。" \
+              "閾値は 2026-09-initial と同じ。次の点検データ（別の日・時間帯）で今の方法と比べ直すまでは確定にしない。" \
+              "元の方法に戻すときは 2026-09-initial を有効にする"
+  copy.detection_params = source.detection_params.merge("baseline_method" => "position_trend", "trend_min_spread" => 0.2)
+  copy.save!
+  puts "ルールセット #{trend_version} を作成しました（まだ有効ではありません）"
+end

@@ -268,7 +268,7 @@
               <% end %>
               <% if image.raw_analysis.present? && image.completed? %>
                 <details class="mt-1">
-                  <summary class="text-xs text-gray-400" style="cursor:pointer;">解析結果（基準温度 <%= image.raw_analysis.dig("baseline", "temp") %>℃・パネル <%= Array(image.raw_analysis["panels"]).size %> 枚・候補 <%= image.anomalies.size %> 件）</summary>
+                  <summary class="text-xs text-gray-400" style="cursor:pointer;">解析結果（基準温度 <%= image.raw_analysis.dig("baseline", "method") == "position_trend" ? "（位置の傾向の中央値）" : "" %><%= image.raw_analysis.dig("baseline", "temp") %>℃・パネル <%= Array(image.raw_analysis["panels"]).size %> 枚・候補 <%= image.anomalies.size %> 件）</summary>
                   <% if image.anomalies.any? %>
                     <table class="text-xs mt-1" style="width:100%;">
                       <tr class="text-gray-400"><th>パネル</th><th>種類</th><th>重大度</th><th>ΔT</th><th>判定</th><th>状態</th></tr>

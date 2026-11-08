@@ -8,6 +8,12 @@ class RuleSet < ApplicationRecord
     row_group_min_panels
   ].freeze
 
+  # 基準温度の取り方（detection_params の baseline_method。省略時は image_median。2026-11-08 ユーザー承認）
+  BASELINE_METHODS = {
+    "image_median" => "画像全体の正常パネルの中央値",
+    "position_trend" => "画像内の位置（縦・横）の温度の傾向（暫定）"
+  }.freeze
+
   # 作成フォームで検出パラメータを JSON 文字列として受け取るための仮想属性
   attr_accessor :detection_params_json
 
@@ -58,6 +64,9 @@ class RuleSet < ApplicationRecord
     }
   end
 
+  def baseline_method = detection_params.to_h.fetch("baseline_method", "image_median")
+  def baseline_method_label = BASELINE_METHODS.fetch(baseline_method, baseline_method)
+
   private
 
   def all_anomaly_types_present
@@ -71,7 +80,14 @@ class RuleSet < ApplicationRecord
     params = detection_params.is_a?(Hash) ? detection_params : {}
     missing = DETECTION_PARAM_KEYS.reject { |k| params[k].is_a?(Numeric) }
     errors.add(:detection_params, "に数値が未設定の項目があります: #{missing.join(', ')}") if missing.any?
+    if params.key?("baseline_method") && !BASELINE_METHODS.key?(params["baseline_method"])
+      errors.add(:detection_params, "の baseline_method は #{BASELINE_METHODS.keys.join(' / ')} のどちらかにしてください")
+    end
+    if params.key?("trend_min_spread") && !(params["trend_min_spread"].is_a?(Numeric) && params["trend_min_spread"].between?(0.01, 1))
+      errors.add(:detection_params, "の trend_min_spread は 0.01〜1 の数にしてください")
+    end
   end
+
 
   def only_active_can_change
     changed_keys = changed - %w[active updated_at]

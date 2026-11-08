@@ -250,7 +250,7 @@ Python は `analyzer/` に置き、Rails のジョブから `Open3` で呼ぶ。
 
 `raw_*` も初期値は同じ値を入れる。ただし生ΔTは日射条件で大きく変わるため、**`raw` で判定した異常は `critical` でも自動でアラートを出さず、レビューで確定したときにだけ出す**。`raw_*` の値は依頼元と合意したうえで見直す。
 
-`detection_params` の初期値:
+`detection_params` の初期値（`baseline_method`・`trend_min_spread` は任意。2026-11-08 追加。セクション 5.6）:
 ```json
 {"panel_mad_k": 4, "panel_mad_floor_c": 0.3, "min_region_offset_c": 1.0,
  "baseline_mad_k": 3, "baseline_mad_floor_c": 0.5,
@@ -370,7 +370,9 @@ Python は severity を出さない。群の構成パネルは `anomalies` に�
 
 **MAD の下限**: 温度がほぼ均一だと MAD ≈ 0 になり、わずかな揺らぎで外れ値・異常と判定されてしまう。そのため MAD を使うときは常に `mad_used = max(MAD × 1.4826, floor)` とする（1.4826 は正規分布の標準偏差相当への換算係数）。下限は基準温度用 `baseline_mad_floor_c = 0.5℃`、パネル内用 `panel_mad_floor_c = 0.3℃`。
 
-**基準温度** = 除外パネルと異常候補パネルを除いた「正常パネル」の t_mean の中央値
+**基準温度の取り方（`detection_params.baseline_method`。2026-11-08 ユーザー承認・暫定）**: `image_median`（下の 1〜4。省略時）と `position_trend` を選べる。`position_trend` は、画像内のパネルの中心の位置（縦・横）で t_mean を平面（位置の広がりが `trend_min_spread` に足りなければ縦の直線、それも足りなければ定数）で表し、外れ値（傾向からの差が `baseline_mad_k × mad_used` を超えるパネル）を除いて当てはめ直し、各パネルの位置での値をそのパネルの基準温度にする。正常パネルの必要数は 4 と同じ。見る角度で画像の下側ほど温かく見える影響（2026-11 の実データ）を除くため。ルールセット `2026-11-trend-provisional` が `position_trend`（閾値は 2026-09-initial と同じ）。**次の点検データ（別の日・時間帯）で今の方法と比べ直すまでは暫定**。元に戻すときは 2026-09-initial を有効にする
+
+**基準温度（image_median）** = 除外パネルと異常候補パネルを除いた「正常パネル」の t_mean の中央値
 1. 除外されていない全パネルの t_mean の中央値 `m` と `mad_used` を出す
 2. `m ± baseline_mad_k(3) × mad_used` を外れるパネルを除外する
 3. 残りの中央値を基準温度にする
