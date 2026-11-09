@@ -103,9 +103,12 @@ class InspectionsController < ApplicationController
       all_images_checked: params[:all_images_checked] == "1", acknowledge_pending: params[:acknowledge_pending] == "1"
     )
     if result.completed?
-      if @inspection.claude_enabled?
+      if @inspection.claude_enabled? && (problems = FindingsStatus.config_problems).any?
+        # 設定が足りないときは送らない（作れないまま気づかないことがないよう、完了の知らせに出す）
+        notice = "レビューを完了しました（重要度: #{@inspection.reload.severity_label}）。ただし Claude の設定が足りないため、所見・総括文は作っていません（#{problems.join('・')}）"
+      elsif @inspection.claude_enabled?
         ExplainInspectionJob.perform_later(@inspection.id)
-        notice = "レビューを完了しました（重要度: #{@inspection.reload.severity_label}）。確定した異常の所見と総括文を Claude で作成します"
+        notice = "レビューを完了しました（重要度: #{@inspection.reload.severity_label}）。確定した異常の所見と総括文を Claude で作成します（結果は点検の画面の上に出ます）"
       else
         notice = "レビューを完了しました（重要度: #{@inspection.reload.severity_label}）。所見と総括文は「所見・総括」の欄に書いてください"
       end
@@ -121,6 +124,8 @@ class InspectionsController < ApplicationController
   def explain
     if !@inspection.claude_enabled?
       redirect_to inspection_path(@inspection, anchor: "findings"), alert: "この点検は Claude を使わない設定です"
+    elsif (problems = FindingsStatus.config_problems).any?
+      redirect_to inspection_path(@inspection, anchor: "findings-status"), alert: "Claude の設定が足りないため作れません（#{problems.join('・')}）"
     elsif @inspection.completed? && @inspection.reviewed_at.present?
       ExplainInspectionJob.perform_later(@inspection.id, force: true)
       redirect_to inspection_path(@inspection, anchor: "findings"), notice: "所見と総括文を作り直しています"
@@ -138,8 +143,13 @@ class InspectionsController < ApplicationController
     end
 
     @inspection.update_columns(claude_enabled: enable, claude_enabled_changed_at: Time.current, updated_at: Time.current)
-    redirect_to inspection_path(@inspection, anchor: "claude"),
-                notice: enable ? "この点検では Claude で所見・総括文を作ります（送った内容は記録します）" : "この点検では Claude を使いません（所見・総括文は人が書きます）"
+    notice =
+      if !enable then "この点検では Claude を使いません（所見・総括文は人が書きます）"
+      elsif @inspection.completed? && @inspection.reviewed_at.present?
+        "この点検では Claude で所見・総括文を作ります。レビューはもう完了しているので、「所見を作る」を押すと作ります（送った内容は記録します）"
+      else "この点検では Claude で所見・総括文を作ります。レビュー完了のときに作ります（送った内容は記録します）"
+      end
+    redirect_to inspection_path(@inspection, anchor: enable ? "findings-status" : "claude"), notice:
   end
 
   # 人が書く所見（確定した異常・群）と総括文を保存する（Claude を使わない点検。判定・重大度は変えない）

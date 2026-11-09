@@ -84,6 +84,9 @@
     <% end %>
   </div>
 
+  <% if @inspection.completed? && @inspection.reviewed_at.present? %>
+    <%= render "inspections/findings_status", inspection: @inspection %>
+  <% end %>
   <%= render "claude_setting" %>
 
   <%# ── 所見・総括（レビュー完了後） ─────────────────────────────── %>

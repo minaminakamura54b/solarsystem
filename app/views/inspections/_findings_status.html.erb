@@ -1,0 +1,17 @@
+<%# Claude の所見・総括文の作成の状態（修正案 13）。レビュー完了の欄と点検の画面に出す。inspection を渡す %>
+<% status = FindingsStatus.new(inspection) %>
+<% unless status.state == :disabled %>
+  <div class="card p-3 text-sm" id="findings-status" style="<%= 'border:1px solid #ef9f27;' if status.problem? %>">
+    <p style="<%= 'color:#ef9f27; font-weight:600;' if status.problem? %>"><%= status.label %></p>
+    <% if status.state == :config_missing %>
+      <ul class="text-xs list-disc ml-5"><% FindingsStatus.config_problems.each do |p| %><li><%= p %></li><% end %></ul>
+      <p class="text-xs text-gray-400">外部のサービスには何も送っていません。設定を直してアプリを起動し直したあと、「所見を作る」を押してください。</p>
+    <% end %>
+    <% if status.failures.any? %>
+      <ul class="text-xs list-disc ml-5"><% status.failures.each do |f| %><li><%= f.label %>: <%= f.reason %></li><% end %></ul>
+    <% end %>
+    <% if %i[failed not_requested].include?(status.state) %>
+      <%= button_to(status.state == :failed ? "所見を作り直す" : "所見を作る", explain_inspection_path(inspection), class: "btn btn-sm btn-secondary mt-2") %>
+    <% end %>
+  </div>
+<% end %>
