@@ -103,4 +103,23 @@ class PanelReviewsControllerTest < ActionDispatch::IntegrationTest
     post bulk_reject_inspection_panel_review_path(@inspection, site_id: @site.id), params: { candidate_ids: ids, reason: "glare", register_structure: "1" }
     assert_equal 0, @site.structure_positions.count
   end
+
+  test "未判断の候補が無くなったら知らせ、パネルごとの候補の画面からレビュー完了できる。完了できないときはこの画面に戻る" do
+    get path
+    assert_select "#complete input[type=submit][value='レビューを完了する']"
+    assert_select "#all-judged", 0
+
+    post bulk_reject_inspection_panel_review_path(@inspection, site_id: @site.id), params: { candidate_ids: @inspection.panel_candidates.pluck(:id), reason: "other" }
+    get path
+    assert_select "#all-judged"
+
+    post complete_review_inspection_path(@inspection, site_id: @site.id), params: { return_to: "panel_review" }
+    assert_redirected_to inspection_panel_review_path(@inspection, anchor: "complete")
+    assert_not @inspection.reload.completed?
+
+    post complete_review_inspection_path(@inspection, site_id: @site.id), params: { return_to: "panel_review", all_images_checked: "1" }
+    assert @inspection.reload.completed?
+    get path
+    assert_select "#complete", text: /レビューは完了しています/
+  end
 end

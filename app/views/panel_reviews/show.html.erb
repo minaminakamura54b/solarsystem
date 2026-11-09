@@ -16,6 +16,9 @@
 </div>
 
 <div class="p-6 space-y-4">
+  <% if @pending_total.zero? && @inspection.block_row_findings.candidates.where(review_status: "pending").none? && !@inspection.completed? %>
+    <p class="card p-3 text-sm" id="all-judged">未判断の候補はありません。<%= link_to "下の「レビュー完了」へ", "#complete" %>（すべての画像を確認したうえで完了してください）</p>
+  <% end %>
   <%= render "panel_reviews/block_rows" %>
 
   <div class="card p-3 text-sm" id="filters">
@@ -90,4 +93,5 @@
       </table>
     </div>
   <% end %>
+  <%= render "inspections/review/complete", inspection: @inspection, review: InspectionReview.new(@inspection), return_to: "panel_review" %>
 </div>
