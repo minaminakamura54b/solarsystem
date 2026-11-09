@@ -7,9 +7,50 @@ class FindingsFlowTest < ActionDispatch::IntegrationTest
     load_initial_rule_set
     @inspection = analyzable_inspection
     @inspection.update_columns(claude_enabled: true) # Claude を「使う」にした点検（既定は使わない）
+    # Claude の設定（モデル名・クライアント）がそろった状態にする。設定が足りない場合は個別のテストで外す
+    @previous_claude = [ ClaudeStructuredOutput.default_client, ENV["SOLARSIGHT_CLAUDE_MODEL"] ]
+    ClaudeStructuredOutput.default_client = fake_claude_for_findings
+    ENV["SOLARSIGHT_CLAUDE_MODEL"] = "test-model"
     @image = @inspection.inspection_images.first
     with_fake_analyzer(analyze: analyzer_result(output: analyzer_output)) { AnalyzeInspectionImageJob.perform_now(@image.id) }
     @anomaly = @image.anomalies.sole
+  end
+
+  teardown do
+    ClaudeStructuredOutput.default_client, ENV["SOLARSIGHT_CLAUDE_MODEL"] = @previous_claude
+  end
+
+  test "Claude の設定が足りないと、レビュー完了のときに送らず知らせる。点検の画面にも作れない理由を出す" do
+    ENV.delete("SOLARSIGHT_CLAUDE_MODEL")
+    get review_inspection_path(@inspection, site_id: @site.id)
+    assert_match "完了しても所見・総括文は作られません", response.body
+
+    assert_no_enqueued_jobs(only: ExplainInspectionJob) { confirm_and_complete }
+    assert_match "Claude の設定が足りないため、所見・総括文は作っていません", flash[:notice]
+    get inspection_path(@inspection, site_id: @site.id)
+    assert_select "#findings-status", text: /Claude の設定が足りない/
+  end
+
+  test "作れなかったら、点検の画面とレビュー完了の欄に理由（日本語の分類）と「所見を作り直す」を出す" do
+    confirm_and_complete
+    error = Anthropic::Errors::APIConnectionError.new(url: URI("https://api.anthropic.com/v1/messages"))
+    with_fake_claude(FakeAnthropicClient.raising(error)) { perform_enqueued_jobs(only: ExplainInspectionJob) }
+
+    get inspection_path(@inspection, site_id: @site.id)
+    assert_select "#findings-status", text: /2 件を作れませんでした/
+    assert_select "#findings-status", text: /接続できませんでした/
+    assert_select "#findings-status button", text: "所見を作り直す"
+    get inspection_panel_review_path(@inspection, site_id: @site.id)
+    assert_select "#complete #findings-status", text: /作れませんでした/
+  end
+
+  test "レビュー完了の後に「使う」にしたら、「所見を作る」で作るよう知らせる" do
+    @inspection.update_columns(claude_enabled: false)
+    confirm_and_complete
+    patch claude_setting_inspection_path(@inspection, site_id: @site.id), params: { claude_enabled: "1", agreement_confirmed: "1" }
+    assert_match "「所見を作る」を押すと作ります", flash[:notice]
+    get inspection_path(@inspection, site_id: @site.id)
+    assert_select "#findings-status button", text: "所見を作る"
   end
 
   def confirm_and_complete
