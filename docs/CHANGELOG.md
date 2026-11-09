@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-11-09 — 外部のサービスに送った記録にトークン数を残す（ブランチ `transmission-usage`）
+
+- `external_transmissions` に応答のトークン数（入力・出力・キャッシュ）を追加（可逆なマイグレーション）。実際にかかった費用を出すため（ユーザー指示）。拒否・JSON でない応答でも、応答があれば課金されるので残す。送信の記録の表に表示
+
 ## 2026-11-09 — Claude の所見・総括文を点検ごとに切り替え、人が書けるようにし、送った内容を記録する（ブランチ `claude-per-inspection`）
 
 - `inspections.claude_enabled`（既定 false）・人が書く総括文 `manual_summary`、異常・群の人が書く所見 `manual_finding`、送った記録 `external_transmissions` を追加（可逆なマイグレーション。既存の点検も「使わない」になる）（ユーザー指示）
