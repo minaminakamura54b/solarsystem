@@ -1,0 +1,59 @@
+<% content_for :title, "点検の対象範囲 - #{@inspection.conducted_at&.strftime('%Y/%m/%d')}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🗺 点検の対象範囲</h2>
+    <p class="text-sm text-gray-500 mt-1">
+      今回の点検で対象にした架台を決めます。写ったパネルの数・解析できなかった範囲・総括文・報告書の配置図は、この範囲の中で数えます。
+      範囲の外の架台は「今回の点検の対象外」になります。案は、画像に少しでも写った架台（使わなかった画像も含む）です。
+    </p>
+  </div>
+  <div style="white-space:nowrap;"><%= link_to "点検に戻る", inspection_path(@inspection), class: "btn btn-secondary" %></div>
+</div>
+
+<div class="p-6 space-y-4">
+  <p class="card p-3 text-sm" id="scope-state">
+    <% if @inspection.scope_confirmed? %>
+      確定済み（<%= @inspection.scope_source == "proposal" ? "案のまま" : "人が選んだ" %>・<%= @inspection.scope_confirmed_at.in_time_zone(ImageQualityConfig.current.capture_time_zone).strftime("%Y/%m/%d %H:%M") %>）: <%= @scope.description %>
+    <% else %>
+      まだ確定していません。今は発電所全体（<%= @blocks.size %> 基）として数えています。下の案を確かめて確定してください。
+    <% end %>
+  </p>
+
+  <% if @blocks.empty? %>
+    <p class="text-sm text-gray-400">この発電所には架台が登録されていません（配置図を登録すると対象範囲を決められます）。</p>
+  <% else %>
+    <%= form_with url: inspection_scope_path(@inspection), method: :patch, data: { controller: "scope-map", scope_map_proposal_value: @proposal.to_json } do %>
+      <%= hidden_field_tag :source, "proposal" %>
+      <div class="card p-3">
+        <% points = @blocks.flat_map(&:corners_local) %>
+        <% e0, e1 = points.map(&:first).minmax; n0, n1 = points.map(&:last).minmax; pad = 5.0 %>
+        <svg viewBox="0 0 <%= (e1 - e0 + 2 * pad).round(2) %> <%= (n1 - n0 + 2 * pad).round(2) %>" style="width:100%; max-height:460px; background:#18181b;" role="img" aria-label="架台の配置図（北が上）">
+          <% @blocks.each do |b| %>
+            <polygon points="<%= b.corners_local.map { |e, n| "#{(e - e0 + pad).round(2)},#{(n1 - n + pad).round(2)}" }.join(' ') %>" fill="#3f3f46" stroke="#71717a" stroke-width="0.2"
+                     style="cursor:pointer;" data-scope-map-target="block" data-block-id="<%= b.id %>" data-action="click->scope-map#toggle"><title><%= b.label %><%= "（案）" if @proposal.include?(b.id) %></title></polygon>
+          <% end %>
+        </svg>
+        <p class="text-xs text-gray-400 mt-1">北が上。緑 = 対象に入れる架台。架台をクリックすると切り替わります。<span data-scope-map-target="count"></span></p>
+      </div>
+      <div class="card p-3 text-sm">
+        <div class="flex flex-wrap gap-2 mb-2">
+          <button class="btn btn-sm btn-secondary" data-action="scope-map#selectProposal">案（<%= @proposal.size %> 基）をすべて選ぶ</button>
+          <button class="btn btn-sm btn-secondary" data-action="scope-map#selectAll">すべて選ぶ</button>
+          <button class="btn btn-sm btn-secondary" data-action="scope-map#clearAll">すべて外す</button>
+        </div>
+        <div class="flex flex-wrap gap-x-3 gap-y-1">
+          <% @blocks.each do |b| %>
+            <label class="text-xs" style="white-space:nowrap;"><%= check_box_tag "block_ids[]", b.id, @selected.include?(b.id), id: "block_#{b.id}", data: { scope_map_target: "checkbox", action: "change->scope-map#refresh" } %> <%= b.label %></label>
+          <% end %>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <%= submit_tag "この範囲で確定する", class: "btn btn-primary" %>
+      </div>
+    <% end %>
+    <% if @inspection.scope_confirmed? %>
+      <%= button_to "確定を取り消す（発電所全体に戻す）", inspection_scope_path(@inspection), method: :delete, class: "btn btn-sm btn-secondary" %>
+    <% end %>
+  <% end %>
+</div>

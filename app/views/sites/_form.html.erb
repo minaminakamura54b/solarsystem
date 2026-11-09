@@ -16,6 +16,10 @@
       <label class="form-label">所在地 <span class="text-red-500">*</span></label>
       <%= f.text_field :location, class: "form-input", placeholder: "例：山梨県甲府市" %>
     </div>
+    <div>
+      <label class="form-label">報告書の宛先（会社名） <span class="text-xs text-gray-400">（報告書の表紙の既定値。発行の画面で直せます。個人名は書かない）</span></label>
+      <%= f.text_field :client_name, class: "form-input", placeholder: "例：株式会社〇〇エナジー" %>
+    </div>
     <div class="grid grid-cols-2 gap-4">
       <div>
         <label class="form-label">パネル枚数</label>

@@ -12,9 +12,13 @@
 <%# ── 表紙 ── %>
 <section class="cover">
   <p class="muted"><%= @preview ? "プレビュー（未発行）" : "#{@report.title}（発行 #{report_time(issue['issued_at'])}）" %></p>
+  <% addressee = @preview ? s["default_addressee"] : issue["addressee"] %>
+  <% if addressee %><p style="font-size:12pt;"><%= addressee %> 御中</p><% end %>
   <h1>熱異常スクリーニング報告書</h1>
   <p style="font-size:14pt;"><%= s["site_name"] %></p>
+  <% if s["site_location"].present? %><p>所在地: <%= s["site_location"] %></p><% end %>
   <p>点検日: <%= s["inspection_date"] %></p>
+  <% if s.dig("scope", "description") %><p>点検した範囲: <%= s["scope"]["description"] %></p><% end %>
   <p>作成: <%= s["business_name"] %></p>
   <% if issue["company_name"] || issue["qualification"] %>
     <p class="muted"><%= [ issue["company_name"], issue["qualification"] ].compact.join("・") %></p>
@@ -61,7 +65,7 @@
   <tr><th>画像</th><td>全 <%= c["images"]["total"] %> 枚（判定に使った <%= c["images"]["used"] %> 枚・除外した <%= c["images"]["excluded"] %> 枚）</td></tr>
   <tr><th>品質チェック</th><td><%= c["quality"].map { |k, n| "#{ReportsHelper::QUALITY_LABELS.fetch(k, k)} #{n} 枚" }.join("、") %></td></tr>
   <tr><th>測定パラメータ</th><td><%= safe_join(c["measurement"].map { |line, n| "#{line}（#{n} 枚）" }, tag.br) %></td></tr>
-  <% if c["weather_note"] %><tr><th>気象の備考</th><td><%= c["weather_note"] %></td></tr><% end %>
+  <% if s["report_remarks"] %><tr><th>備考</th><td><%= s["report_remarks"] %></td></tr><% end %>
 </table>
 
 <%# ── 判定基準 ── %>

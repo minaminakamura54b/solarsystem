@@ -32,7 +32,7 @@ class ReportIssue
     errors
   end
 
-  def issue!(acknowledge_warnings: false, revision_reason: nil, company_name: nil, qualification: nil)
+  def issue!(acknowledge_warnings: false, revision_reason: nil, company_name: nil, qualification: nil, addressee: nil)
     @inspection.with_lock do
       errors = blockers
       warnings = snapshot["warnings"]
@@ -42,6 +42,7 @@ class ReportIssue
       number = (latest&.version_number || 0) + 1
       issue_meta = { "version_number" => number, "issued_at" => @now.iso8601,
                      "company_name" => company_name.to_s.strip.presence, "qualification" => qualification.to_s.strip.presence,
+                     "addressee" => (addressee.nil? ? snapshot["default_addressee"] : addressee.to_s.strip.presence),
                      "revision_reason" => revision_reason.to_s.strip.presence }
       @inspection.inspection_reports.create!(version_number: number, issued_at: @now, snapshot: snapshot.merge("issue" => issue_meta),
                                              content_digest: digest, revision_reason: revision_reason.to_s.strip.presence,

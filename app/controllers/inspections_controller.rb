@@ -6,7 +6,7 @@ class InspectionsController < ApplicationController
   }.freeze
 
   before_action :require_site
-  before_action :find_inspection, only: %i[show destroy rejudge review complete_review explain measurement claude_setting findings]
+  before_action :find_inspection, only: %i[show destroy rejudge review complete_review explain measurement claude_setting findings report_settings]
 
   def index
     @inspections = current_site.inspections.recent.includes(:site, :inspection_images, image_attachment: :blob)
@@ -184,6 +184,12 @@ class InspectionsController < ApplicationController
       end
     end
     redirect_to inspection_path(@inspection, anchor: "findings"), notice: "所見と総括文を保存しました"
+  end
+
+  # 報告書に載せる備考を保存する（見直し R1。社内メモ＝気象の備考とは別。発行した版は変わらない）
+  def report_settings
+    @inspection.update_columns(report_remarks: params[:report_remarks].to_s.strip.presence, updated_at: Time.current)
+    redirect_to inspection_path(@inspection, anchor: "report-settings"), notice: "報告書に載せる備考を保存しました"
   end
 
   # 測定パラメータ（放射率・反射温度・距離）を保存する。解析済みの画像に反映するには再解析が必要（自動では解析し直さない）

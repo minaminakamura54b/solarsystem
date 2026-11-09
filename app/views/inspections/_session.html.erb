@@ -77,7 +77,7 @@
       </p>
     <% end %>
     <% if @inspection.weather_note.present? %>
-      <p style="font-size:0.8rem; color:var(--gray-400); margin-top:0.75rem;">天候メモ: <%= @inspection.weather_note %></p>
+      <p style="font-size:0.8rem; color:var(--gray-400); margin-top:0.75rem;">社内メモ（報告書に載りません）: <%= @inspection.weather_note %></p>
     <% end %>
     <% if @inspection.in_progress? %>
       <p style="font-size:0.8rem; color:#5DCAA5; margin-top:0.75rem;"><span class="animate-spin">⚙</span> 品質チェック・解析を行っています...</p>
@@ -88,6 +88,7 @@
     <%= render "inspections/findings_status", inspection: @inspection %>
   <% end %>
   <%= render "claude_setting" %>
+  <%= render "report_settings" %>
 
   <%# ── 所見・総括（レビュー完了後） ─────────────────────────────── %>
   <% if @inspection.completed? && @inspection.reviewed_at.present? %>
