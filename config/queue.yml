@@ -16,3 +16,12 @@ test:
 
 production:
   <<: *default
+
+# 実案件用。解析エンジンを同時に動かす数 = threads（既定 4。Mac の 8 コアで Docker のエミュレーションと取り合わない数）
+work:
+  <<: *default
+  workers:
+    - queues: "*"
+      threads: <%= ENV.fetch("SOLARSIGHT_ANALYZE_THREADS", 4) %>
+      processes: 1
+      polling_interval: 0.1

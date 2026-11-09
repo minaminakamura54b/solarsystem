@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# 実案件用（ローカル運用）のアプリを Mac の上で動かす（docs/LOCAL_OPERATION.md）。
+#   bin/local setup    最初の 1 回だけ。データの置き場所・設定ファイル・データベースを作り、判定基準（ルールセット）を入れる
+#   bin/local start    画面と裏の解析（Solid Queue）を起動する（http://127.0.0.1:3000。この Mac からだけ開ける）
+#   bin/local stop     停止する
+#   bin/local restart  停止して起動する
+#   bin/local status   動いているか・解析待ちの画像・画像の置き場所の使用量と残りの容量・最後のバックアップ
+#   bin/local logs     ログを表示する（Ctrl-C で終わる）
+# 開発用（bin/dev・RAILS_ENV=development）とは、データベースも画像の置き場所も別。
+# 解析エンジンの Docker は bin/analyzer-container up で用意する（start の前に）
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DATA="${SOLARSIGHT_DATA_DIR:-$HOME/SolarSightData}"
+ENV_FILE="$DATA/config/work.env"
+PID_FILE="$DATA/tmp/pids/server.pid"
+PORT="${SOLARSIGHT_PORT:-3000}"
+# 残りの容量がこれより少なければ status で警告する（GB。1 回の飛行で約 3〜13 GB 使う）
+MIN_FREE_GB="${SOLARSIGHT_MIN_FREE_GB:-30}"
+export PATH="/opt/homebrew/bin:$HOME/.rbenv/shims:$HOME/.local/bin:/Applications/Docker.app/Contents/Resources/bin:/usr/local/bin:$PATH"
+export RAILS_ENV=work SOLARSIGHT_DATA_DIR="$DATA"
+cd "$ROOT"
+
+load_env() {
+  if [ ! -f "$ENV_FILE" ]; then
+    echo "設定ファイルがありません: $ENV_FILE（先に bin/local setup を実行してください）" >&2
+    exit 1
+  fi
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+}
+
+running() { [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; }
+# 解析エンジンのコンテナが動いているか（SDK の場所の確認は bin/analyzer-container status）
+analyzer_running() {
+  [ "$(docker container inspect -f '{{.State.Running}}' "${ANALYZER_CONTAINER:-solarsight-analyzer}" 2>/dev/null)" = "true" ]
+}
+
+case "${1:-}" in
+  setup)
+    case "$DATA" in
+      "$ROOT"*) echo "データの置き場所をリポジトリの中にはできません: $DATA" >&2; exit 1 ;;
+      "$HOME/Library/Mobile Documents"*|"$HOME/Desktop"*|"$HOME/Documents"*)
+        echo "データの置き場所が iCloud で同期される場所の可能性があります: $DATA（~/SolarSightData などにしてください）" >&2; exit 1 ;;
+    esac
+    mkdir -p "$DATA/storage" "$DATA/log" "$DATA/tmp/analyzer" "$DATA/tmp/pids" "$DATA/config"
+    chmod 700 "$DATA"
+    if [ ! -f "$ENV_FILE" ]; then
+      umask 077
+      cat > "$ENV_FILE" <<EOF
+# 実案件用（RAILS_ENV=work）の設定。リポジトリには入れない（bin/local が読み込む）
+SECRET_KEY_BASE=$(openssl rand -hex 64)
+# DJI Thermal SDK の dji_irp（ホストのパス。解析エンジンのコンテナにも同じパスでマウントされている）
+DJI_IRP_PATH=
+# Claude の所見・総括文を使う点検があるときだけ（点検ごとに「使う」にした案件だけ送る）
+ANTHROPIC_API_KEY=
+CLAUDE_MODEL=
+EOF
+      echo "設定ファイルを作りました: $ENV_FILE（DJI_IRP_PATH を書いてください）"
+    fi
+    if ! fdesetup status 2>/dev/null | grep -q "On"; then
+      echo "注意: FileVault（ディスクの暗号化）が有効になっていません。顧客の画像を置く前に有効にしてください" >&2
+    fi
+    load_env
+    bin/rails db:prepare
+    bin/rails db:seed # 実案件用では判定基準（ルールセット）だけを入れる（db/seeds.rb）
+    echo "準備ができました。bin/analyzer-container up のあと bin/local start で起動します"
+    ;;
+
+  start)
+    load_env
+    if running; then echo "すでに動いています（http://127.0.0.1:$PORT）"; exit 0; fi
+    if ! analyzer_running; then
+      echo "注意: 解析エンジンのコンテナが動いていません（bin/analyzer-container up）。画像は解析されずに失敗します" >&2
+    fi
+    mkdir -p "$DATA/log" "$DATA/tmp/pids"
+    rm -f "$PID_FILE"
+    # Solid Queue は Puma の中で動かす（1 つのプロセスで画面と裏の解析）
+    SOLID_QUEUE_IN_PUMA=1 nohup bin/rails server -b 127.0.0.1 -p "$PORT" -P "$PID_FILE" >> "$DATA/log/server.log" 2>&1 &
+    for _ in $(seq 1 60); do
+      if curl -s -o /dev/null "http://127.0.0.1:$PORT/up" && sleep 3 && running; then
+        echo "起動しました: http://127.0.0.1:$PORT （止めるときは bin/local stop）"
+        exit 0
+      fi
+      sleep 1
+    done
+    echo "起動を確かめられませんでした。bin/local logs で確認してください" >&2
+    exit 1
+    ;;
+
+  stop)
+    if ! running; then echo "動いていません"; rm -f "$PID_FILE"; exit 0; fi
+    kill -TERM "$(cat "$PID_FILE")"
+    for _ in $(seq 1 30); do
+      running || { echo "停止しました（解析の途中だった画像は、次の起動のあと「失敗（長時間終わらなかった）」になります。正常にはなりません。画面の再解析でやり直せます）"; exit 0; }
+      sleep 1
+    done
+    echo "30 秒たっても止まりません。bin/local logs を確認してください" >&2
+    exit 1
+    ;;
+
+  restart)
+    "$0" stop
+    "$0" start
+    ;;
+
+  status)
+    if running; then echo "アプリ: 動いています（http://127.0.0.1:$PORT、pid $(cat "$PID_FILE")）"; else echo "アプリ: 停止しています"; fi
+    if analyzer_running; then echo "解析エンジン: 動いています"; else echo "解析エンジン: 動いていません（bin/analyzer-container up）"; fi
+    if [ -f "$ENV_FILE" ] && running; then
+      load_env
+      bin/rails runner 'n = InspectionImage.where(analysis_status: %w[pending analyzing]).count; puts "解析待ち・解析中の画像: #{n} 枚"' 2>/dev/null || true
+    fi
+    if [ -d "$DATA/storage" ]; then
+      used=$(du -sh "$DATA/storage" 2>/dev/null | cut -f1)
+      avail_kb=$(df -k "$DATA" | awk 'NR==2 {print $4}')
+      avail_gb=$((avail_kb / 1024 / 1024))
+      echo "画像の置き場所: $DATA/storage（使用 $used、ディスクの残り ${avail_gb} GB）"
+      if [ "$avail_gb" -lt "$MIN_FREE_GB" ]; then
+        echo "警告: ディスクの残りが ${MIN_FREE_GB} GB を下回っています。バックアップを取ってから、古い案件の扱いを決めてください" >&2
+      fi
+    fi
+    if [ -f "$DATA/config/last_backup" ]; then echo "最後のバックアップ: $(cat "$DATA/config/last_backup")"; else echo "最後のバックアップ: まだありません（bin/local-backup /Volumes/<ディスク名>）"; fi
+    ;;
+
+  logs)
+    tail -n 50 -f "$DATA/log/work.log" "$DATA/log/server.log"
+    ;;
+
+  *)
+    sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+    ;;
+esac

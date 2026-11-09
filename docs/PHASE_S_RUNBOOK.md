@@ -5,7 +5,7 @@ R-JPEG と DJI Thermal SDK が届いたら、この手順で進める。結果�
 
 **守ること**
 
-- SDK のバイナリ・顧客の画像はコミットしない（`analyzer/bin/` と `tmp/spike/` は `.gitignore` 済み）
+- SDK のバイナリ・顧客の画像はコミットしない（`analyzer/bin/` は `.gitignore` 済み）。顧客の画像はリポジトリの外の `~/SolarSightData/development/spike/`（以下 `$SPIKE`。`SPIKE=~/SolarSightData/development/spike`）に置く（2026-11-09 に `$SPIKE/` から移した）
 - SDK のオプション名・出力形式・測定パラメータの渡し方は、**SDK 同梱の README とヘルプの出力で確かめてから**記録する。推測で書かない
 - 温度行列が取れない場合は、ここで止めて方針を相談する（機材の変更、別形式への対応など）
 
@@ -15,8 +15,8 @@ R-JPEG と DJI Thermal SDK が届いたら、この手順で進める。結果�
 
 | もの | 内容 | 置き場所 |
 |---|---|---|
-| R-JPEG（サーモ） | 使用予定の機体・カメラで撮影したもの。**できれば 3 組以上**（高度・角度・時刻が違うもの） | `tmp/spike/`（例: `DJI_0001_T.JPG`） |
-| 同時撮影の RGB | サーモと同じ番号の `_V` | `tmp/spike/`（例: `DJI_0001_V.JPG`） |
+| R-JPEG（サーモ） | 使用予定の機体・カメラで撮影したもの。**できれば 3 組以上**（高度・角度・時刻が違うもの） | `$SPIKE/`（例: `DJI_0001_T.JPG`） |
+| 同時撮影の RGB | サーモと同じ番号の `_V` | `$SPIKE/`（例: `DJI_0001_V.JPG`） |
 | DJI Thermal SDK | DJI の開発者サイトから取得した zip。**版番号と利用規約を確認**する | 展開して `analyzer/bin/dji_thermal_sdk/` |
 | 機体・カメラの情報 | 機体名・カメラ名・ファームウェアの版 | 記録用紙（spike_dji_sdk.md） |
 | 撮影時の条件 | 日時・天候・雲量・風速・日射量（POA か GHI か）・気温・湿度 | 記録用紙 |
@@ -48,10 +48,10 @@ R-JPEG と DJI Thermal SDK が届いたら、この手順で進める。結果�
 ## 2. メタデータの確認（Mac でそのまま実行できる）
 
 ```bash
-exiftool -a -G1 -s tmp/spike/DJI_0001_T.JPG > tmp/spike/DJI_0001_T.exif.txt
-exiftool -a -G1 -s tmp/spike/DJI_0001_V.JPG > tmp/spike/DJI_0001_V.exif.txt
-grep -i -E "thermal|emissiv|distance|humid|reflect|ambient|calib|raw" tmp/spike/DJI_0001_T.exif.txt
-grep -i -E "altitude|gimbal|pitch|yaw|gps|datetime|focal|fov" tmp/spike/DJI_0001_T.exif.txt
+exiftool -a -G1 -s $SPIKE/DJI_0001_T.JPG > $SPIKE/DJI_0001_T.exif.txt
+exiftool -a -G1 -s $SPIKE/DJI_0001_V.JPG > $SPIKE/DJI_0001_V.exif.txt
+grep -i -E "thermal|emissiv|distance|humid|reflect|ambient|calib|raw" $SPIKE/DJI_0001_T.exif.txt
+grep -i -E "altitude|gimbal|pitch|yaw|gps|datetime|focal|fov" $SPIKE/DJI_0001_T.exif.txt
 ```
 
 確かめること:
@@ -73,7 +73,7 @@ chmod +x analyzer/bin/dji_thermal_sdk/*/utility/bin/linux/release_x64/dji_*
 
 # UV_PROJECT_ENVIRONMENT を付けないと、マウントした analyzer/.venv（Mac 用）を Linux 用で上書きしてしまう
 docker run --rm -it --platform linux/amd64 -e UV_PROJECT_ENVIRONMENT=/opt/venv \
-  -v "$PWD/analyzer:/work/analyzer:ro" -v "$PWD/tmp/spike:/work/spike" \
+  -v "$PWD/analyzer:/work/analyzer:ro" -v "$SPIKE:/work/spike" \
   -w /work/analyzer python:3.12-slim bash
 
 # コンテナの中で（libgomp1 は dji_irp が使う OpenMP。無いと起動しない）
@@ -142,7 +142,7 @@ PY
 3. 変換を求める（Mac でそのまま実行できる）:
 
 ```bash
-cd analyzer && uv run python scripts/fit_rgb_alignment.py ../tmp/spike/points_0001.json
+cd analyzer && uv run python scripts/fit_rgb_alignment.py $SPIKE/points_0001.json
 ```
 
 4. 「拡大率＋ずれ」と「アフィン変換」の誤差（RGB 画像上のピクセル）を見る。**別の画像（高度・角度が違うもの）でも同じ値で合うか**を確かめる
@@ -179,7 +179,7 @@ cd analyzer && uv run python scripts/fit_rgb_alignment.py ../tmp/spike/points_00
 
 位置情報を使った画像の選び方と異常の重複のまとめは、11 月の案件の後に着手する。それまでは次の手順で進める。
 
-1. 撮影フォルダの `_T` のメタデータ（位置）から、`analyzer/scripts/select_images.py` で解析する画像を選ぶ（飛行ラインを原則 2 本おき・撮影を原則 3 枚おき。使い方は analyzer/README.md）。一覧は `tmp/spike/` に置き、コミットしない
+1. 撮影フォルダの `_T` のメタデータ（位置）から、`analyzer/scripts/select_images.py` で解析する画像を選ぶ（飛行ラインを原則 2 本おき・撮影を原則 3 枚おき。使い方は analyzer/README.md）。一覧は `$SPIKE/` に置き、コミットしない
 2. 選んだ画像の `_T` と `_V` を点検に登録する（組み合わせは番号と撮影時刻の差 2 秒以内）
 3. 人が架台ごとに 1 回だけグリッドを指定する（同じ架台が 2 枚に丸ごと写っていれば、片方だけでよい）。パネルが写っていない画像は「この点検では使わない」にする
 4. ~~最初の 5 枚でグリッド入力の時間を測り、全体の作業時間の見込みを直す~~（2026-11-06 中止。配置図と位置情報でパネルを自動で特定する方式に切り替える。設計案は [LAYOUT_OVERLAY_DESIGN.md](LAYOUT_OVERLAY_DESIGN.md)。この手順は自動で特定できない場合の予備）

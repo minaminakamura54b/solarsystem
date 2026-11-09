@@ -2,9 +2,15 @@ test:
   service: Disk
   root: <%= Rails.root.join("tmp/storage") %>
 
+# 開発用の画像（顧客の画像を含む。検出の調整・業者の報告書との比較に使う）はリポジトリの外に置く（2026-11-09 ユーザー指示）
 local:
   service: Disk
-  root: <%= Rails.root.join("storage") %>
+  root: <%= ENV.fetch("SOLARSIGHT_DEV_STORAGE") { File.join(ENV.fetch("SOLARSIGHT_DATA_DIR", File.expand_path("~/SolarSightData")), "development", "storage") } %>
+
+# 実案件用（RAILS_ENV=work）の画像の置き場所（Mac の内蔵ディスク。docs/LOCAL_OPERATION.md）
+work_data:
+  service: Disk
+  root: <%= File.join(ENV.fetch("SOLARSIGHT_DATA_DIR", File.expand_path("~/SolarSightData")), "storage") %>
 
 amazon:
   service: S3

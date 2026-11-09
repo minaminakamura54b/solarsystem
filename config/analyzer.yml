@@ -38,7 +38,8 @@ development:
   # コンテナは bin/analyzer-container up で用意する（docs/LAYOUT_OVERLAY_DESIGN.md の F）
 <% if ENV["ANALYZER_DOCKER"] == "1" %>
   command: ["<%= Rails.root.join("bin/analyzer-docker") %>"]
-  work_dir: "tmp/analyzer"
+  # 一時ファイル（画像の写し）はリポジトリの外に置く（開発用の画像も顧客の画像を含むため）
+  work_dir: "<%= File.join(ENV.fetch("SOLARSIGHT_DATA_DIR", File.expand_path("~/SolarSightData")), "development", "tmp", "analyzer") %>"
 <% end %>
 
 test:
@@ -47,3 +48,11 @@ test:
 production:
   # Docker イメージ内の解析エンジンの仮想環境の Python を直接使う（Dockerfile 参照）
   command: ["/rails/analyzer/.venv/bin/python", "-m", "analyzer"]
+
+# 実案件用（RAILS_ENV=work）。Mac では解析エンジンを Docker（linux/amd64）で動かす（bin/analyzer-container）。
+# 一時ファイル（画像の写し）はリポジトリの外に置く（コンテナには ~/SolarSightData もマウントする）。
+# 合成データ（.npy）は実案件では受け付けない（確かめるときだけ SOLARSIGHT_ALLOW_NPY=1）
+work:
+  command: ["<%= Rails.root.join("bin/analyzer-docker") %>"]
+  work_dir: "<%= File.join(ENV.fetch("SOLARSIGHT_DATA_DIR", File.expand_path("~/SolarSightData")), "tmp", "analyzer") %>"
+  allow_npy_thermal: <%= ENV["SOLARSIGHT_ALLOW_NPY"] == "1" %>
