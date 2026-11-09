@@ -54,8 +54,9 @@ SECRET_KEY_BASE=$(openssl rand -hex 64)
 # DJI Thermal SDK の dji_irp（ホストのパス。解析エンジンのコンテナにも同じパスでマウントされている）
 DJI_IRP_PATH=
 # Claude の所見・総括文を使う点検があるときだけ（点検ごとに「使う」にした案件だけ送る）
-ANTHROPIC_API_KEY=
-CLAUDE_MODEL=
+# アプリ専用の名前（シェルの ANTHROPIC_API_KEY は使わない）
+SOLARSIGHT_ANTHROPIC_API_KEY=
+SOLARSIGHT_CLAUDE_MODEL=
 EOF
       echo "設定ファイルを作りました: $ENV_FILE（DJI_IRP_PATH を書いてください）"
     fi
@@ -120,6 +121,12 @@ EOF
       if [ "$avail_gb" -lt "$MIN_FREE_GB" ]; then
         echo "警告: ディスクの残りが ${MIN_FREE_GB} GB を下回っています。バックアップを取ってから、古い案件の扱いを決めてください" >&2
       fi
+    fi
+    if [ -f "$ENV_FILE" ]; then
+      ( set -a; . "$ENV_FILE"; set +a
+        model="${SOLARSIGHT_CLAUDE_MODEL:-}"; key="${SOLARSIGHT_ANTHROPIC_API_KEY:-}"
+        fp=""; [ -n "$key" ] && fp="（指紋 $(printf '%s' "$key" | shasum -a 256 | cut -c1-8)）"
+        echo "Claude: モデル名 ${model:-なし}・API キー $([ -n "$key" ] && echo "あり$fp" || echo "なし")（「使う」にした点検だけ送ります）" )
     fi
     if [ -f "$DATA/config/last_backup" ]; then echo "最後のバックアップ: $(cat "$DATA/config/last_backup")"; else echo "最後のバックアップ: まだありません（bin/local-backup /Volumes/<ディスク名>）"; fi
     ;;

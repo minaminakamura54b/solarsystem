@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-11-09 — Claude のキーとモデル名をアプリ専用の名前にし、キーの指紋を記録する（修正案 12・案 A。ブランチ `claude-env-names`）
+
+- 環境変数を `SOLARSIGHT_ANTHROPIC_API_KEY`・`SOLARSIGHT_CLAUDE_MODEL` に変更（ユーザー承認）。開発サーバーを起動したシェルの `ANTHROPIC_API_KEY` が `.env` より優先され、意図しないキーで送っていたため
+- アプリの起動時に `ANTHROPIC_API_KEY`・`ANTHROPIC_AUTH_TOKEN`・`ANTHROPIC_BASE_URL`・`ANTHROPIC_CUSTOM_HEADERS`・`ANTHROPIC_PROFILE` をプロセスから取り除く（公式 SDK が暗黙に読むため）。SDK にはキーと送り先（`config/claude.yml` の base_url）を明示して渡す
+- 送った記録にキーの指紋（SHA-256 の先頭 8 文字。キーそのものは残さない）を追加（可逆なマイグレーション）。送信の記録の表と `bin/local status` に表示
+- 開発の `.env` と実案件の `~/SolarSightData/config/work.env` の変数名を書き換えた（キーの値は空にした。ユーザーが入れ直す）。`.env.example`・`bin/local setup` の雛形・README・CLAUDE.md・手順書も新しい名前に
+
 ## 2026-11-09 — パネルごとの候補の画面からもレビュー完了できる（通しのテストの問題点 1。ブランチ `panel-review-complete`）
 
 - パネルごとの候補の画面の下に「レビュー完了」の欄（画像ごとのレビュー画面と同じ確認つき）。未判断の候補が無くなったら画面の上で知らせる。完了できなかったときはこの画面に戻る。完了済みなら完了日時と重要度を表示

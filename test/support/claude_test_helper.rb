@@ -1,15 +1,15 @@
 module ClaudeTestHelper
-  # ブロック内だけ ClaudeStructuredOutput が偽クライアントを使い、CLAUDE_MODEL を設定する。
+  # ブロック内だけ ClaudeStructuredOutput が偽クライアントを使い、SOLARSIGHT_CLAUDE_MODEL を設定する。
   # ジョブ内部で ClaudeStructuredOutput.new が呼ばれる場合もこれで差し替わる（本物の API は呼ばない）
   def with_fake_claude(client, model: "test-model")
     previous_client = ClaudeStructuredOutput.default_client
-    previous_model = ENV["CLAUDE_MODEL"]
+    previous_model = ENV["SOLARSIGHT_CLAUDE_MODEL"]
     ClaudeStructuredOutput.default_client = client
-    ENV["CLAUDE_MODEL"] = model
+    ENV["SOLARSIGHT_CLAUDE_MODEL"] = model
     yield client
   ensure
     ClaudeStructuredOutput.default_client = previous_client
-    ENV["CLAUDE_MODEL"] = previous_model
+    ENV["SOLARSIGHT_CLAUDE_MODEL"] = previous_model
   end
 
   # AnomalyExplainer の応答（固定スキーマの JSON）。extra で余計な項目（severity など）を足せる

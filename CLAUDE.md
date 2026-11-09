@@ -24,7 +24,7 @@
 4. **パネルへの紐付けは位置情報か人の指定でのみ行う。** 並び順などによる機械的な割り当ては禁止。
 5. **人が確定・修正・却下した異常（`locked`）を自動で書き換えない。** 閾値を変えても確定済みの severity は変わらない。
 6. **確信度（%）を表示・保存しない。** 代わりに証拠レベル（A/B/C）を使う。
-7. **閾値・モデル名・パスをハードコードしない。** 閾値は DB のルールセット、モデル名は `CLAUDE_MODEL`、SDK のパスは `DJI_IRP_PATH`。
+7. **閾値・モデル名・パスをハードコードしない。** 閾値は DB のルールセット、モデル名は `SOLARSIGHT_CLAUDE_MODEL`（キーは `SOLARSIGHT_ANTHROPIC_API_KEY`）、SDK のパスは `DJI_IRP_PATH`。
 8. **報告書に個人名を載せない。** 会社名・屋号のみ。
 9. **コミットしないもの**: 秘密情報（`.env`、`config/*.key`）、DJI Thermal SDK のバイナリ（`analyzer/bin/`）、顧客の画像。テストには合成データを使う。**顧客の画像はリポジトリの中に置かない**（開発用は `~/SolarSightData/development/`、実案件用は `~/SolarSightData/storage`。2026-11-09 ユーザー指示）。
 10. R-JPEG の原本は変換・縮小・削除しない。Claude に送る場合は派生画像を作る。
@@ -58,7 +58,7 @@ bin/analyzer-container up      # 開発用: 解析エンジンを動かす Docke
 - **exiftool が必要**（画像のメタデータ読み取り。テストでも実際に使う）。gem は使わず `ExifReader` がコマンドを呼ぶ
 - 品質チェックの閾値・温度データの手がかりにするタグ・撮影時刻のタイムゾーンは `config/image_quality.yml`。重大度の閾値は DB のルールセット（初期値は `db/seeds/rule_sets.rb`）
 - ジョブ: 開発は `:inline`（アップロードと同時に同期実行）、本番は `solid_queue`（Puma 内で実行）
-- Claude は**公式 Ruby SDK**（`anthropic` 1.x。Phase 6 で非公式 gem 0.4.1 から移行済み）。呼び出しは `ClaudeStructuredOutput`（structured outputs で固定スキーマの JSON を1回もらう）に集め、モデル名は `CLAUDE_MODEL`、上限トークン数・タイムアウト・再試行は `config/claude.yml`。テストは `ClaudeStructuredOutput.default_client` を偽クライアントに差し替え、本物の API を呼ばない。SDK の使い方は推測せず、インストール済みの gem のソースで確かめる。
+- Claude は**公式 Ruby SDK**（`anthropic` 1.x。Phase 6 で非公式 gem 0.4.1 から移行済み）。呼び出しは `ClaudeStructuredOutput`（structured outputs で固定スキーマの JSON を1回もらう）に集め、モデル名は `SOLARSIGHT_CLAUDE_MODEL`・キーは `SOLARSIGHT_ANTHROPIC_API_KEY`（シェルの `ANTHROPIC_*` は使わない）、上限トークン数・タイムアウト・再試行は `config/claude.yml`。テストは `ClaudeStructuredOutput.default_client` を偽クライアントに差し替え、本物の API を呼ばない。SDK の使い方は推測せず、インストール済みの gem のソースで確かめる。
 - `inspections.analysis_status` は `pending` / `analyzing` / `completed` / `needs_review` / `failed`、画像（`inspection_images`）はこれに `excluded` が加わる。**`completed` を `analyzed` などに改名しない**。
 - 点検には新方式（`inspection_images` を持つ）と旧方式（画像1枚・Claude 判定。`Inspection#legacy?`）がある。旧方式は表示だけで、新しく作らない（判定の処理は Phase 6 で削除済み）。旧方式の結果は `legacy_anomalies`（読み取り専用）。
 - 本番サーバーは **linux/amd64** 前提（DJI Thermal SDK の制約）。
