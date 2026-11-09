@@ -4,7 +4,7 @@
   <div>
     <h2 class="page-title">📏 ルールセット <%= @rule_set.version %></h2>
     <p class="text-sm text-gray-500 mt-1">
-      <%= @rule_set.active? ? "有効" : "無効" %> ／ 作成 <%= @rule_set.created_at.strftime("%Y/%m/%d %H:%M") %> ／ 作成済みのため編集できません
+      <%= @rule_set.active? ? "有効" : "無効" %><% if @rule_set.provisional? %> ／ <span class="badge badge-warning">暫定の版</span>（報告書に「暫定の判定基準」と載せます）<% end %> ／ 作成 <%= @rule_set.created_at.strftime("%Y/%m/%d %H:%M") %> ／ 作成済みのため編集できません
     </p>
   </div>
   <div class="flex gap-2">

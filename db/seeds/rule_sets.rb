@@ -51,6 +51,7 @@ unless RuleSet.exists?(version: trend_version)
               "閾値は 2026-09-initial と同じ。次の点検データ（別の日・時間帯）で今の方法と比べ直すまでは確定にしない。" \
               "元の方法に戻すときは 2026-09-initial を有効にする"
   copy.detection_params = source.detection_params.merge("baseline_method" => "position_trend", "trend_min_spread" => 0.2)
+  copy.provisional = true
   copy.save!
   puts "ルールセット #{trend_version} を作成しました（まだ有効ではありません）"
 end
@@ -67,6 +68,7 @@ unless RuleSet.exists?(version: row_version)
   copy.severity_rules.build(anomaly_type: "block_row", measure: "row_effect",
                             normalized_mild: 0.8, normalized_warning: 1.5, normalized_critical: 3.0,
                             raw_mild: 0.8, raw_warning: 1.5, raw_critical: 3.0)
+  copy.provisional = true
   copy.save!
   puts "ルールセット #{row_version} を作成しました（まだ有効ではありません）"
 end

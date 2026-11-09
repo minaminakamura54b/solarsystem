@@ -112,4 +112,18 @@ class RuleSetTest < ActiveSupport::TestCase
     assert_not_includes row.to_analyzer_rules["severity_rules"].map { |r| r["anomaly_type"] }, "block_row"
     assert @initial.valid?, "block_row の無い版も有効なまま"
   end
+
+  test "暫定の 2 つの版はシードで暫定の印が付き、初期値には付かない。複製した版は暫定のまま" do
+    assert RuleSet.find_by!(version: "2026-11-trend-provisional").provisional?
+    assert RuleSet.find_by!(version: "2026-11-trend-row-provisional").provisional?
+    assert_not @initial.provisional?
+    assert RuleSet.find_by!(version: "2026-11-trend-provisional").duplicate(version: "copy").provisional
+  end
+
+  test "暫定の印は付けられるが、ほかの項目は変えない（作成後は編集できない）" do
+    @initial.mark_provisional!
+
+    assert @initial.reload.provisional?
+    assert_equal "2026-09-initial", @initial.version
+  end
 end
