@@ -2,14 +2,16 @@ import { Controller } from "@hotwired/stimulus"
 
 // レビュー画面（docs/IMPROVEMENT_PLAN.md Phase 5）。
 // - サーモ画像に候補の bbox を重ねて描き、選んだ候補を強調する
-// - 候補ごとに、サーモ画像・RGB 画像の同じ位置（bbox の周りを広めに）を切り出して描く
+// - 候補ごとに、サーモ画像・RGB 画像の同じ位置（bbox の周りを広めに）を切り出して描く。
+//   RGB は、カメラの画角の比が分かれば中心をその比で移す（おおよその位置。Phase 7 の決定事項 2026-11-09）
 // - キーボード: j / k で候補を移動、c で確定、x で却下（理由を選んでいなければ理由の選択にフォーカス）
 // - 「位置を描き直す」「範囲を指定」のあと、画像の上をドラッグすると bbox（0〜1 正規化）を指定したフォームの欄に入れる
 const COLORS = { pending: "#f59e0b", confirmed: "#22c55e", corrected: "#22c55e", rejected: "#6b7280" }
 
 export default class extends Controller {
   static targets = ["image", "rgb", "overlay", "card", "crop", "message"]
-  static values = { boxes: Array }
+  // RGB の切り出しの中心を画角の比で求める材料（RgbCropMapping#data_attributes。無ければ同じ正規化座標）
+  static values = { boxes: Array, rgbThermalFovX: Number, rgbThermalFovY: Number, rgbFovX: Number }
 
   connect() {
     this.selectedIndex = this.cardTargets.length ? 0 : -1
@@ -68,10 +70,11 @@ export default class extends Controller {
   drawCrops() {
     this.cropTargets.forEach((canvas) => {
       const source = canvas.dataset.source === "rgb" ? (this.hasRgbTarget ? this.rgbTarget : null) : this.imageTarget
-      const bbox = JSON.parse(canvas.dataset.bbox || "null")
+      let bbox = JSON.parse(canvas.dataset.bbox || "null")
       if (!source || !bbox || !source.naturalWidth) return
       const iw = source.naturalWidth
       const ih = source.naturalHeight
+      if (canvas.dataset.source === "rgb") bbox = this.toRgb(bbox, iw, ih)
       // bbox の中心から、bbox の3倍（最低 48px）の正方形を切り出す
       const cx = ((bbox.x1 + bbox.x2) / 2) * iw
       const cy = ((bbox.y1 + bbox.y2) / 2) * ih
@@ -87,6 +90,14 @@ export default class extends Controller {
       ctx.lineWidth = 1.5
       ctx.strokeRect((bbox.x1 * iw - sx) * scale, (bbox.y1 * ih - sy) * scale, (bbox.x2 - bbox.x1) * iw * scale, (bbox.y2 - bbox.y1) * ih * scale)
     })
+  }
+
+  // サーモの正規化座標 → RGB のおおよその正規化座標（app/services/rgb_crop_mapping.rb と同じ式）
+  toRgb(bbox, rgbWidth, rgbHeight) {
+    if (!this.rgbFovXValue || !this.rgbThermalFovXValue || !this.rgbThermalFovYValue) return bbox
+    const sx = this.rgbThermalFovXValue / this.rgbFovXValue
+    const sy = this.rgbThermalFovYValue / (this.rgbFovXValue * rgbHeight / rgbWidth)
+    return { x1: 0.5 + (bbox.x1 - 0.5) * sx, x2: 0.5 + (bbox.x2 - 0.5) * sx, y1: 0.5 + (bbox.y1 - 0.5) * sy, y2: 0.5 + (bbox.y2 - 0.5) * sy }
   }
 
   // ── 候補の選択とキーボード ─────────────────────────────

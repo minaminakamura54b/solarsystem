@@ -25,6 +25,22 @@ class AnomalyReviewFlowTest < ActionDispatch::IntegrationTest
     assert_select "input[type=submit][value='レビューを完了する']"
   end
 
+  test "RGB の切り出しの中心を、設定のカメラの画角の比で求める材料を画面に渡す（おおよその位置の注記は残す）" do
+    @image.rgb.attach(io: file_fixture("rgb_V.jpg").open, filename: "rgb_V.jpg")
+    @image.update_columns(camera_model: "DJI M4T", width: 640, height: 512)
+
+    get review_path
+
+    assert_select "[data-controller='review'][data-review-rgb-fov-x-value][data-review-rgb-thermal-fov-x-value='624.0']"
+    assert_match "中心はカメラの画角の比から求めています", response.body
+    assert_match "おおよその位置", response.body
+
+    @image.update_columns(camera_model: "UNKNOWN")
+    get review_path
+    assert_select "[data-review-rgb-fov-x-value]", 0
+    assert_match "サーモと同じ位置の割合で切り出しています", response.body
+  end
+
   test "「他の画像と重複」で却下するとき、別の画像の異常をまとめ先に選べる" do
     other = @inspection.inspection_images.create!(sequence: 2, thermal_filename: "y_T.jpg", thermal: @image.thermal.blob)
     target = other.anomalies.create!(inspection: @inspection, anomaly_type: "hotspot", severity: "warning")

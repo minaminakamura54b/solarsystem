@@ -278,7 +278,7 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 | N | 発電所フォームの `defined?(method)` が Ruby 組み込みの `method` メソッドを指し、**新規登録画面が開けなかった**（Phase 2 以前から） | `sites/_form.html.erb` | **Phase 2 で修正**（`local_assigns.fetch(:method, :post)`） |
 | O | 解析エンジンが、パネルの 50〜80% が温まったケースを検出できない（仕様のすき間） | `analyzer/analyzer/pipeline.py` | **Phase 3b で対応済み**（ユーザー承認: 基準温度からの判定を追加。指示書 5.6） |
 | R | レビューのパネルの割り当てで、`panel_grids` の `start_panel_ref` からの自動提案が未実装。`start_panel_ref` の形式が決まっておらず、登録済みのパネルがすべて仮配置のため | `AnomalyReview#assign_panel!` | 人がパネルを選ぶ割り当てだけ。**Phase 5b で形式（`{"panel_number": ...}`）と実配置の登録を決めた**。自動提案は範囲外（実案件で必要になってから） |
-| S | レビュー画面の RGB の切り出しは、サーモと同じ正規化座標の「おおよその位置」 | `review_controller.js` | Phase S でサーモと RGB の変換を決めてから対応 |
+| S | レビュー画面の RGB の切り出しは「おおよその位置」 | `review_controller.js` / `RgbCropMapping` | **2026-11-09 に中心を画角の比で求める方式に変更**（Phase 7 の決定事項。値は `config/layout_overlay.yml` のカメラごとの `rgb_ifov_mrad`・`rgb_reference_width`。公称値で、位置合わせを調整した値ではないので「おおよその位置」のまま。設定に無いカメラは従来どおり同じ正規化座標）。位置合わせの調整は、サーモと RGB の対応点で確かめてから |
 | T | `csv` は Ruby 3.4 で標準の gem から外れる（Ruby 3.3.10 では警告のみ） | `app/services/dataset_exporter.rb` | Ruby 3.4 に上げるときに Gemfile へ追加（新しい gem の追加のため、そのとき確認） |
 | P | Dockerfile の `RUBY_VERSION` が 3.2.9 で、`.ruby-version`（3.3.10）と食い違っていた（Phase 0 以前から） | `Dockerfile` | **Phase 4 で修正**（3.3.10 に合わせた） |
 | Q | 解析エンジンの DJI Thermal SDK の呼び出しが未実装のため、実際の R-JPEG は `needs_review（sdk_unavailable）` になる | `analyzer/analyzer/thermal/dji_reader.py` | **2026-11-06 に実装済み**（Phase S の記録どおり。本番サーバーへの SDK の配置はユーザーの確認を得てから） |
