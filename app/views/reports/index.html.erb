@@ -51,6 +51,24 @@
     </table>
   </div>
 
+  <% overview = ReportOverview.new(@inspection) %>
+  <% chosen = overview.selected_ids.filter_map { |id| overview.candidate(id) } %>
+  <div class="card p-4 text-sm" id="overview">
+    <div class="flex justify-between items-center">
+      <p class="form-label">発電所の様子（サーモ画像・最大 <%= overview.limit %> 枚）<span class="text-xs text-gray-400"><%= overview.manual? ? "人が選んだ画像" : "自動の提案" %></span></p>
+      <%= link_to "差し替える", inspection_report_overview_path(@inspection), class: "btn btn-sm btn-secondary" %>
+    </div>
+    <% if chosen.any? %>
+      <div class="flex gap-2 flex-wrap mt-2">
+        <% chosen.each do |c| %>
+          <div class="text-xs text-gray-500" style="width:160px;"><%= image_tag url_for(c.image.display_image), width: 160, alt: "" %>画像 <%= c.image.sequence %>・<%= c.image.captured_at&.in_time_zone(ImageQualityConfig.current.capture_time_zone)&.strftime("%H:%M") %><%= "・架台 #{c.blocks}" if c.blocks.present? %></div>
+        <% end %>
+      </div>
+    <% else %>
+      <p class="text-xs text-gray-400 mt-2">載せられる画像がありません（解析できた・異常の無い画像が候補です）。報告書にはこの節を載せません。</p>
+    <% end %>
+  </div>
+
   <div class="card p-4 text-sm" id="issue">
     <p class="form-label">報告書を発行する<%= "（#{@reports.size + 1} 版目）" %></p>
     <% if @blockers.any? %>
