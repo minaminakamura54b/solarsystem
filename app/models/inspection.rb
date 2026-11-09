@@ -28,6 +28,11 @@ class Inspection < ApplicationRecord
   scope :completed, -> { where(analysis_status: "completed") }
   scope :recent, -> { order(conducted_at: :desc) }
 
+  # 点検の対象範囲（見直し R1）を確定したか。確定していなければ発電所全体として扱う
+  def scope_confirmed?
+    scope_confirmed_at.present? && Array(scope_block_ids).any?
+  end
+
   def severity_label
     { "normal" => "正常", "mild" => "軽微", "warning" => "注意", "critical" => "重大" }.fetch(severity, "判定なし")
   end

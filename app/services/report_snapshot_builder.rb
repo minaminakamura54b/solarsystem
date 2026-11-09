@@ -24,6 +24,11 @@ class ReportSnapshotBuilder
       "schema" => SCHEMA_VERSION,
       "business_name" => @config.business_name,
       "site_name" => @site.name,
+      "site_location" => @site.location,
+      "default_addressee" => @site.client_name.presence,
+      "scope" => scope_entry,
+      "report_remarks" => @inspection.report_remarks.presence,
+      "internal_note" => @inspection.weather_note.presence,
       "inspection_date" => @inspection.conducted_at.to_date.iso8601,
       "reviewed_at" => @inspection.reviewed_at&.iso8601,
       "severity" => @inspection.severity,
@@ -68,8 +73,7 @@ class ReportSnapshotBuilder
       "images" => { "total" => @images.size, "used" => @used.size, "excluded" => @images.size - @used.size },
       "quality" => @used.map { |i| i.quality_status || "unknown" }.tally,
       "measurement" => measurement_lines,
-      "camera_default_params" => camera_default_params?,
-      "weather_note" => @inspection.weather_note.presence
+      "camera_default_params" => camera_default_params?
     }
   end
 
@@ -84,6 +88,14 @@ class ReportSnapshotBuilder
         [ text, list.size ]
       end
     end.to_h
+  end
+
+  # 点検の対象範囲（見直し R1）。確定していなければ発電所全体
+  def scope_entry
+    scope = InspectionScope.new(@inspection)
+    blocks = @inspection.scope_confirmed? ? @site.pv_blocks.where(id: @inspection.scope_block_ids) : @site.pv_blocks
+    { "confirmed" => @inspection.scope_confirmed?, "source" => @inspection.scope_source, "description" => scope.description,
+      "block_labels" => blocks.order(:label).pluck(:label) }
   end
 
   def camera_default_params?
@@ -310,6 +322,7 @@ class ReportSnapshotBuilder
       list << "総括文が書かれていません（総括文の欄は空になります）" unless summary["state"] == "manual"
     end
     list << "モジュールの定格出力が未登録のため、影響容量を算定できません" if @site.module_rated_w.nil?
+    list << "点検の対象範囲が確定していません（発電所全体として数えています）" if @site.pv_blocks.exists? && !@inspection.scope_confirmed?
     list << "暫定の判定基準（#{criteria['versions'].select { |v| v['provisional'] }.map { |v| v['version'] }.join('、')}）を使っています" if criteria["provisional"]
     list
   end

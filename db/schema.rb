@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_09_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_09_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -337,6 +337,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_150000) do
     t.datetime "claude_enabled_changed_at"
     t.text "manual_summary"
     t.datetime "manual_summary_updated_at"
+    t.jsonb "scope_block_ids"
+    t.string "scope_source"
+    t.datetime "scope_confirmed_at"
+    t.text "report_remarks"
     t.index ["analysis_status"], name: "index_inspections_on_analysis_status"
     t.index ["conducted_at"], name: "index_inspections_on_conducted_at"
     t.index ["severity"], name: "index_inspections_on_severity"
@@ -469,6 +473,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_150000) do
     t.decimal "fit_price_yen_per_kwh", precision: 6, scale: 2
     t.decimal "geo_origin_lat", precision: 10, scale: 7
     t.decimal "geo_origin_lng", precision: 10, scale: 7
+    t.string "client_name"
     t.index ["status"], name: "index_sites_on_status"
   end
 

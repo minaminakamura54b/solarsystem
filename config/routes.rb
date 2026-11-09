@@ -35,6 +35,8 @@ Rails.application.routes.draw do
         post :reject
       end
     end
+    # 点検の対象範囲（見直し R1）
+    resource :scope, only: %i[show update destroy], controller: "inspection_scopes"
     # 報告書の版（Phase 7）
     resources :reports, only: %i[index show create] do
       get :preview, on: :collection
@@ -60,6 +62,7 @@ Rails.application.routes.draw do
       patch :measurement
       patch :claude_setting
       patch :findings
+      patch :report_settings
     end
     resources :anomalies, only: %i[create] do
       member do

@@ -64,6 +64,7 @@
         <% if @reports.any? %>
           <div><label class="form-label">改訂の理由（必須）</label><%= text_field_tag :revision_reason, nil, class: "form-input", required: true %></div>
         <% end %>
+        <div><label class="form-label">宛先（顧客の会社名。発電所の既定値を直せます）</label><%= text_field_tag :addressee, @inspection.site.client_name, class: "form-input", placeholder: "例：株式会社〇〇エナジー" %></div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div><label class="form-label">会社名（任意）</label><%= text_field_tag :company_name, nil, class: "form-input" %></div>
           <div><label class="form-label">資格の種別（任意）</label><%= text_field_tag :qualification, nil, class: "form-input" %></div>

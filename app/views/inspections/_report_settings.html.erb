@@ -1,0 +1,22 @@
+<%# 報告書の設定（見直し R1）: 点検の対象範囲と、報告書に載せる備考。社内メモ（今の「気象の備考」）は報告書に載らない %>
+<div class="card p-4 text-sm space-y-3" id="report-settings">
+  <p class="form-label">報告書の設定</p>
+  <div>
+    <p style="font-weight:600;">点検の対象範囲</p>
+    <% if @inspection.site.pv_blocks.exists? %>
+      <p><%= @inspection.scope_confirmed? ? "確定済み" : "未確定（発電所全体として数えています）" %>: <%= InspectionScope.new(@inspection).description %></p>
+      <%= link_to(@inspection.scope_confirmed? ? "対象範囲を直す" : "対象範囲を決める", inspection_scope_path(@inspection), class: "btn btn-sm btn-secondary mt-1") %>
+    <% else %>
+      <p class="text-gray-400">架台が登録されていないため、対象範囲は決められません（発電所全体として扱います）。</p>
+    <% end %>
+  </div>
+  <%= form_with url: report_settings_inspection_path(@inspection), method: :patch do %>
+    <label class="block" style="font-weight:600;">報告書に載せる備考 <span class="text-xs text-gray-400" style="font-weight:400;">（顧客向けの報告書の「撮影条件」に載ります）</span></label>
+    <%= text_area_tag :report_remarks, @inspection.report_remarks, class: "form-textarea", rows: 2, placeholder: "例: 撮影時は薄曇り。北側の一部は立ち入りできず撮影していません" %>
+    <%= submit_tag "保存", class: "btn btn-sm btn-secondary mt-1" %>
+  <% end %>
+  <div>
+    <p style="font-weight:600;">社内メモ <span class="text-xs text-gray-400" style="font-weight:400;">（報告書に載りません）</span></p>
+    <p class="text-gray-400"><%= @inspection.weather_note.presence || "なし" %></p>
+  </div>
+</div>

@@ -51,7 +51,7 @@ class SitesController < ApplicationController
 
   def site_params
     params.require(:site).permit(
-      :name, :location, :panel_count, :capacity_kw, :status, :description,
+      :name, :location, :client_name, :panel_count, :capacity_kw, :status, :description,
       :module_model, :module_rated_w, :cell_layout, :substring_count, :bypass_pattern_json
     )
   end

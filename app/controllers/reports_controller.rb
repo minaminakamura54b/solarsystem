@@ -26,7 +26,7 @@ class ReportsController < ApplicationController
   def create
     report = ReportIssue.new(@inspection).issue!(
       acknowledge_warnings: params[:acknowledge_warnings] == "1", revision_reason: params[:revision_reason],
-      company_name: params[:company_name], qualification: params[:qualification]
+      company_name: params[:company_name], qualification: params[:qualification], addressee: params[:addressee]
     )
     ReportPdfJob.perform_later(report.id)
     redirect_to inspection_reports_path(@inspection), notice: "報告書の#{report.title}を発行しました（PDF を作ります）"

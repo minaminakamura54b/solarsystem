@@ -125,6 +125,8 @@ class InspectionSummaryWriter
     excluded = images.select(&:excluded?)
     insufficient = inspection.block_row_findings.insufficient.count
     lines = []
+    scope = InspectionScope.new(inspection).description
+    lines << "点検の対象範囲: #{scope}" if scope
     lines << if coverage.registered.positive?
       "点検の範囲: 登録したパネル #{coverage.registered} 枚のうち、解析できた画像に写ったパネル #{coverage.covered} 枚（写っていない #{coverage.uncovered} 枚）"
     else
