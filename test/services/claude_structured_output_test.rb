@@ -49,4 +49,26 @@ class ClaudeStructuredOutputTest < ActiveSupport::TestCase
     assert_not log.destroy
     assert_not @inspection.destroy, "送った記録のある点検は削除しない"
   end
+
+  test "キーはアプリ専用の SOLARSIGHT_ANTHROPIC_API_KEY だけを使い、送った記録にキーの指紋を残す（キーそのものは残さない）" do
+    @inspection.update_columns(claude_enabled: true)
+    previous = ENV.to_h.slice("SOLARSIGHT_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY")
+    ENV["SOLARSIGHT_ANTHROPIC_API_KEY"] = "test-key-for-fingerprint"
+    request(FakeAnthropicClient.replying('{"a":"x"}'))
+    log = @inspection.external_transmissions.sole
+    assert_equal Digest::SHA256.hexdigest("test-key-for-fingerprint")[0, 8], log.key_fingerprint
+    assert_not_includes log.attributes.values.map(&:to_s).join, "test-key-for-fingerprint"
+
+    # 本物のクライアントを作るときも、シェルの ANTHROPIC_API_KEY には切り替えない
+    ENV.delete("SOLARSIGHT_ANTHROPIC_API_KEY")
+    ENV["ANTHROPIC_API_KEY"] = "shell-key"
+    error = with_fake_claude(nil) do
+      assert_raises(ClaudeStructuredOutput::Error) do
+        ClaudeStructuredOutput.new.request(system: "s", input: "x", schema: @schema, audit: { inspection: @inspection, purpose: "inspection_summary" })
+      end
+    end
+    assert_match "SOLARSIGHT_ANTHROPIC_API_KEY", error.message
+  ensure
+    %w[SOLARSIGHT_ANTHROPIC_API_KEY ANTHROPIC_API_KEY].each { |k| previous&.key?(k) ? ENV[k] = previous[k] : ENV.delete(k) }
+  end
 end

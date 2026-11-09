@@ -1,5 +1,6 @@
 # Claude API の呼び出し設定（docs/IMPROVEMENT_PLAN.md Phase 6）。
-# モデル名はここに書かず、環境変数 CLAUDE_MODEL で指定する（未設定なら所見を作らず、エラーとして記録する）
+# モデル名はここに書かず、環境変数 SOLARSIGHT_CLAUDE_MODEL で指定する（未設定なら所見を作らず、エラーとして記録する）。
+# API キーは環境変数 SOLARSIGHT_ANTHROPIC_API_KEY（シェルの ANTHROPIC_API_KEY は使わない。config/initializers/anthropic_env.rb）
 shared:
   # 1回の応答の上限トークン数（思考を含む）。所見の JSON が途中で切れたら失敗として記録する
   max_tokens: 8000
@@ -7,3 +8,5 @@ shared:
   timeout_seconds: 120
   # 接続エラー・429・5xx のときに SDK が自動で再試行する回数
   max_retries: 2
+  # 送り先（環境変数 ANTHROPIC_BASE_URL で変わらないよう、ここで決める）
+  base_url: "https://api.anthropic.com"

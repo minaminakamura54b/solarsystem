@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_09_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_09_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -231,6 +231,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_140000) do
     t.integer "output_tokens"
     t.integer "cache_creation_input_tokens"
     t.integer "cache_read_input_tokens"
+    t.string "key_fingerprint"
     t.index ["inspection_id", "sent_at"], name: "index_external_transmissions_on_inspection_id_and_sent_at"
     t.index ["inspection_id"], name: "index_external_transmissions_on_inspection_id"
   end

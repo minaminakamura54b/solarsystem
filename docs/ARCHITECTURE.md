@@ -85,7 +85,7 @@ RuleSet ──< SeverityRule（閾値。Anomaly / AnomalyGroup が判定時の�
 | `InspectionImage` | thermal（R-JPEG 原本。変換・縮小しない）、rgb（任意）、sequence、thermal_filename、メタデータ（captured_at、camera_model、width / height、GPS、altitude_m、gimbal_pitch / gimbal_yaw、metadata JSON）、is_radiometric（**メタデータによる仮判定**。NULL = 判定できない）、気象データ（irradiance_w_m2 / irradiance_type / wind / 気温 / 湿度）、quality_report、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed` / `excluded`）、review_reason、exclusion_note、measurement_params（解析エンジンに渡した測定パラメータと出どころ）、panel_grids・grid_proposal・raw_analysis・analyzer_version（Phase 3〜4） |
 | `WeatherReading` | observed_at、irradiance_w_m2（入力したら irradiance_type = `poa` / `ghi` / `unknown` 必須）、wind_speed_m_s、air_temp_c、humidity、cloud_cover_okta（雲量 0〜8。記録のみで画像には割り当てない。雲量だけの記録では品質チェックをやり直さない） |
 | `RuleSet` | version（一意）、active（全体で1つ。部分ユニークインデックス）、note、detection_params（JSON。必須キーあり）、provisional（暫定の版。印は付けるだけで外さない）。**作成後は active・provisional の印以外変更不可、削除不可** |
-| `ExternalTransmission` | 外部のサービスに送った内容の記録（点検ごと）。service（anthropic）・purpose（異常の所見・点検の総括文）・target（異常・群）・model・prompt_version・input_text（送った入力）・input_bytes・input_tokens / output_tokens / cache_*（応答のトークン数。費用の計算に使う）・status（sending / sent / failed）・error・sent_at。`ClaudeStructuredOutput#request` が送る前に作り、結果で更新する。**削除不可**。記録のある点検は削除できない |
+| `ExternalTransmission` | 外部のサービスに送った内容の記録（点検ごと）。service（anthropic）・purpose（異常の所見・点検の総括文）・target（異常・群）・model・prompt_version・input_text（送った入力）・input_bytes・key_fingerprint（キーの SHA-256 の先頭 8 文字）・input_tokens / output_tokens / cache_*（応答のトークン数。費用の計算に使う）・status（sending / sent / failed）・error・sent_at。`ClaudeStructuredOutput#request` が送る前に作り、結果で更新する。**削除不可**。記録のある点検は削除できない |
 | `InspectionReport` | 報告書の版（Phase 7）。version_number（点検内で一意）、issued_at、snapshot（発行時の内容の固定コピー。報告書はこれだけから描く）、content_digest（発行後の変更の検知）、revision_reason（第 2 版から必須）、acknowledged_warnings、pdf（Active Storage）・pdf_generated_at・pdf_error。**発行後は変更不可、削除不可**。版のある点検は削除できない |
 | `SeverityRule` | anomaly_type（6種類すべて必須）、measure、normalized_mild / warning / critical、raw_mild / warning / critical（各系列で mild < warning < critical）。**作成後は読み取り専用** |
 | `Anomaly` / `AnomalyGroup` / `GridTemplate` | 項目は IMPROVEMENT_PLAN 4.2〜4.4 のとおり。所見（Claude）: cause_candidates・explanation（= reasoning）・additional_checks・recommended_action・report_text・prompt_version・explanation_input_digest・explained_at・explanation_error（群にも同じ列）。人が書く所見: manual_finding・manual_finding_updated_at（Claude を使わない点検。群にも同じ列）。パネルの紐付けの履歴: panel_assignment_history（配置の置き換えで外れた元のパネル番号など）・panel_reassignment_required（割り当て直しが必要） |
@@ -230,7 +230,7 @@ InspectionReview（レビュー完了。2026-10-15 ユーザー承認）
   InspectionSummaryWriter（app/prompts/inspection_summary_v2.txt）
     入力: 点検日・画像枚数（除外）・日射量・気象・モジュール構成・点検の重要度・確定した異常の件数と内訳と一覧・未確定の候補の件数
     出力: summary_text、priority_actions[]、additional_checks[]
-  ClaudeStructuredOutput: モデルは CLAUDE_MODEL（未設定ならリクエストしない）、上限トークン数・タイムアウト・再試行は config/claude.yml
+  ClaudeStructuredOutput: モデルは SOLARSIGHT_CLAUDE_MODEL、キーは SOLARSIGHT_ANTHROPIC_API_KEY（未設定ならリクエストしない。シェルの ANTHROPIC_* はアプリの起動時に取り除く）、上限トークン数・タイムアウト・再試行は config/claude.yml
     出力の JSON スキーマに severity は無い（additionalProperties: false）。余計な項目が返っても保存しない
     API エラー・拒否・途中で切れた応答・JSON でない応答・所見文が空 → explanation_error / summary_error に記録
   入力（＋プロンプトの版）の SHA-256 を保存し、同じなら作り直さない。失敗時、入力が変わっていたら古い所見を消す
@@ -304,7 +304,7 @@ severity は出さない。終了コード: 0=成功、1=その他エラー、2=
 - 解析エンジンのタイムアウトのテストは、子プロセスが片付くまで最大 5 秒待ってから確かめる（終了済みで回収待ちのゾンビは残っていないとみなす。Phase 6b）
 - 偽の解析エンジン: `AnalyzeInspectionImageJob.client` を `with_fake_analyzer` で差し替える（本番では常に `ThermalAnalyzerClient`）
 - 解析エンジン: `cd analyzer && uv run pytest`（82件）。合成の温度行列（`analyzer/tests/fixtures/make_synthetic.py`）だけを使う。CI の `analyzer-test` ジョブでも実行する
-- Claude API は呼ばない。`ClaudeStructuredOutput.default_client` に偽クライアント（`FakeAnthropicClient`。SDK の `Anthropic::Message` を返す）を渡し、`CLAUDE_MODEL` もテスト用の値にする（`with_fake_claude`）
+- Claude API は呼ばない。`ClaudeStructuredOutput.default_client` に偽クライアント（`FakeAnthropicClient`。SDK の `Anthropic::Message` を返す）を渡し、`SOLARSIGHT_CLAUDE_MODEL` もテスト用の値にする（`with_fake_claude`）
 - exiftool は**実際に動かす**テストと、**偽の読み取りクラスに差し替える**テストがある。本物の R-JPEG の熱画像タグは exiftool で書き込めないため、温度データありの場合は `ProcessInspectionImageJob.exif_reader` を `with_fake_exif(tags:)` で差し替える（本番では常に `ExifReader`）。開発機・CI とも exiftool が必要（CI は apt で導入）
 - テスト用画像はすべて合成: `panel.png`（8×8）、`thermal_plain_T.jpg`（640×512、EXIF あり・温度データなし）、`lowres_T.jpg`（320×256）、`rgb_V.jpg`、`memo.txt`（画像以外）。顧客画像は使わない
 - 受け入れ確認「温度データの無い JPEG が needs_review（no_radiometric）になり、理由が画面に表示される」は、実際の exiftool を使うジョブのテストと結合テストで確認している

@@ -112,7 +112,7 @@
 - フロントエンド: Propshaft、importmap、Turbo、Stimulus、Chartkick
 - ジョブ: 開発は `:inline`（同期実行）、本番は Solid Queue（Puma 内で実行）
 - キャッシュ・WebSocket: Solid Cache / Solid Cable（本番）
-- AI: Anthropic Claude（公式 Ruby SDK `anthropic` 1.x。structured outputs で固定スキーマの所見を作成。モデルは `CLAUDE_MODEL`、呼び出し設定は `config/claude.yml`）
+- AI: Anthropic Claude（公式 Ruby SDK `anthropic` 1.x。structured outputs で固定スキーマの所見を作成。モデルは `SOLARSIGHT_CLAUDE_MODEL`、呼び出し設定は `config/claude.yml`）
 - デプロイ: Kamal（Docker、linux/amd64）
 - 解析エンジン: Python 3.12・uv（numpy / OpenCV / pydantic）。`analyzer/`。DJI Thermal SDK の呼び出しは Phase S 後に実装
 
@@ -175,7 +175,7 @@ git clone <このリポジトリ>
 cd solarsystem
 
 # 環境変数を設定（下表）
-cp .env.example .env   # ANTHROPIC_API_KEY などを記入
+cp .env.example .env   # SOLARSIGHT_ANTHROPIC_API_KEY などを記入（シェルの ANTHROPIC_API_KEY は使いません）
 
 bin/setup    # gem のインストール、DB の作成・マイグレーション、サーバー起動
 ```
@@ -188,8 +188,8 @@ bin/setup    # gem のインストール、DB の作成・マイグレーショ�
 
 | 変数 | 必須 | 用途 |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | ○ | Claude API キー。未設定だと所見・総括文が作れません（判定・レビューには影響しません） |
-| `CLAUDE_MODEL` | ○ | 所見の作成に使う Claude のモデル名（例: `claude-opus-5-5`）。未設定なら所見を作らず、エラーとして表示します |
+| `SOLARSIGHT_ANTHROPIC_API_KEY` | ○ | Claude API キー。未設定だと所見・総括文が作れません（判定・レビューには影響しません） |
+| `SOLARSIGHT_CLAUDE_MODEL` | ○ | 所見の作成に使う Claude のモデル名（例: `claude-opus-5-5`）。未設定なら所見を作らず、エラーとして表示します |
 | `DJI_IRP_PATH` | 実画像の解析 | DJI Thermal SDK の `dji_irp` のパス（[docs/PHASE_S_RUNBOOK.md](docs/PHASE_S_RUNBOOK.md)）。SDK の呼び出し本体は Phase S の後に実装 |
 | `DJI_IRP_LIB_DIR` | 任意 | SDK の共有ライブラリのディレクトリ（`dji_irp` と同じ場所なら不要） |
 | `DATABASE_URL` | 本番 | 本番 DB の接続先 |

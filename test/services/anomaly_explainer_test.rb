@@ -47,7 +47,7 @@ class AnomalyExplainerTest < ActiveSupport::TestCase
     assert_not_includes @anomaly.attributes.values.compact.map(&:to_s).join, "is_anomaly"
   end
 
-  test "送るのは構造化データの文字だけ。固定スキーマに severity は無く、モデル名は CLAUDE_MODEL、人のメモは送らない" do
+  test "送るのは構造化データの文字だけ。固定スキーマに severity は無く、モデル名は SOLARSIGHT_CLAUDE_MODEL、人のメモは送らない" do
     client = FakeAnthropicClient.replying(explainer_json)
 
     with_fake_claude(client, model: "model-from-env") { AnomalyExplainer.new.explain(@anomaly) }
@@ -87,7 +87,7 @@ class AnomalyExplainerTest < ActiveSupport::TestCase
     assert_equal 3, client.requests.size
   end
 
-  test "CLAUDE_MODEL が未設定なら API を呼ばずに失敗として記録し、判定は変えない" do
+  test "SOLARSIGHT_CLAUDE_MODEL が未設定なら API を呼ばずに失敗として記録し、判定は変えない" do
     client = FakeAnthropicClient.replying(explainer_json)
 
     result = with_fake_claude(client, model: nil) { AnomalyExplainer.new.explain(@anomaly) }
@@ -95,7 +95,7 @@ class AnomalyExplainerTest < ActiveSupport::TestCase
     assert_equal :failed, result
     assert_empty client.requests
     @anomaly.reload
-    assert_match "CLAUDE_MODEL", @anomaly.explanation_error
+    assert_match "SOLARSIGHT_CLAUDE_MODEL", @anomaly.explanation_error
     assert_nil @anomaly.report_text
     assert_equal [ "warning", "confirmed" ], [ @anomaly.severity, @anomaly.review_status ]
   end

@@ -1,5 +1,6 @@
 # 公式 Anthropic Ruby SDK で、決まった JSON スキーマの応答を1回もらう（structured outputs。docs/IMPROVEMENT_PLAN.md Phase 6）。
-# - モデル名は環境変数 CLAUDE_MODEL。未設定ならリクエストせず Error にする（コードにモデル名を書かない）
+# - モデル名は環境変数 SOLARSIGHT_CLAUDE_MODEL、API キーは SOLARSIGHT_ANTHROPIC_API_KEY（アプリ専用の名前。シェルの ANTHROPIC_API_KEY は使わない）。
+#   未設定ならリクエストせず Error にする（コードにモデル名を書かない）。送った記録にキーの指紋（SHA-256 の先頭 8 文字）を残す
 # - 送るのは文字だけ（画像は送らない。2026-10-15 ユーザー承認）
 # - API エラー・拒否・途中で切れた応答・JSON でない応答は、すべて Error にする（呼び出し側で失敗として記録する）
 # - Claude を「使う」にした点検（inspections.claude_enabled）のものだけ送る。既定は使わない（2026-11-09 ユーザー指示）
@@ -18,7 +19,16 @@ class ClaudeStructuredOutput
   end
 
   def self.model
-    ENV["CLAUDE_MODEL"].presence
+    ENV["SOLARSIGHT_CLAUDE_MODEL"].presence
+  end
+
+  def self.api_key
+    ENV["SOLARSIGHT_ANTHROPIC_API_KEY"].presence
+  end
+
+  # キーの指紋（キーそのものは表示・保存しない）。キーが無ければ nil
+  def self.key_fingerprint
+    api_key && Digest::SHA256.hexdigest(api_key)[0, 8]
   end
 
   # system: プロンプト本文、input: 入力の文章、schema: 出力の JSON スキーマ。戻り値は文字列キーの Hash
@@ -28,11 +38,12 @@ class ClaudeStructuredOutput
     raise Error, "この点検は Claude を使わない設定です（点検の画面で「使う」にしたときだけ送ります）" unless inspection.claude_enabled?
 
     model = self.class.model
-    raise Error, "環境変数 CLAUDE_MODEL が設定されていません" unless model
-    raise Error, "環境変数 ANTHROPIC_API_KEY が設定されていません" if @client.nil? && ENV["ANTHROPIC_API_KEY"].blank?
+    raise Error, "環境変数 SOLARSIGHT_CLAUDE_MODEL が設定されていません" unless model
+    raise Error, "環境変数 SOLARSIGHT_ANTHROPIC_API_KEY が設定されていません" if @client.nil? && self.class.api_key.nil?
 
     log = ExternalTransmission.create!(inspection:, service: "anthropic", purpose: audit.fetch(:purpose), target: audit[:target],
                                        model:, prompt_version: audit[:prompt_version], input_text: input, input_bytes: input.bytesize,
+                                       key_fingerprint: self.class.key_fingerprint,
                                        status: "sending", sent_at: Time.current)
     @last_usage = nil
     begin
@@ -74,7 +85,9 @@ class ClaudeStructuredOutput
   end
 
   def client
-    @client ||= Anthropic::Client.new(timeout: @config.fetch(:timeout_seconds).to_f, max_retries: @config.fetch(:max_retries).to_i)
+    # キーと送り先を明示して渡す（SDK が環境変数 ANTHROPIC_* を暗黙に読まないようにする）
+    @client ||= Anthropic::Client.new(api_key: self.class.api_key, base_url: @config.fetch(:base_url),
+                                      timeout: @config.fetch(:timeout_seconds).to_f, max_retries: @config.fetch(:max_retries).to_i)
   end
 
   def parse(message)

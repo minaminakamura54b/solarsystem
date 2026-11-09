@@ -14,7 +14,7 @@
             <td><%= ExternalTransmission::SERVICES.fetch(log.service, log.service) %></td>
             <td><%= log.purpose_label %></td>
             <td><%= log.target_label %></td>
-            <td><%= log.model %><br><span class="text-gray-400"><%= log.prompt_version %></span></td>
+            <td><%= log.model %><br><span class="text-gray-400"><%= log.prompt_version %><%= "・キーの指紋 #{log.key_fingerprint}" if log.key_fingerprint %></span></td>
             <td><%= log.status_label %><% if log.error.present? %><br><span style="color:#e24b4a;"><%= log.error %></span><% end %></td>
             <td style="white-space:nowrap;"><%= log.input_tokens ? "#{number_with_delimiter(log.input_tokens)}・#{number_with_delimiter(log.output_tokens)}" : "—" %></td>
             <td><details><summary style="cursor:pointer;"><%= number_with_delimiter(log.input_bytes) %> バイト</summary><pre style="white-space:pre-wrap; max-width:36rem;"><%= log.input_text %></pre></details></td>

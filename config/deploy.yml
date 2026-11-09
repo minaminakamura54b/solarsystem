@@ -48,8 +48,8 @@ env:
     # SDK 内の dji_irp の位置と、ライブラリの場所（DJI_IRP_LIB_DIR。省略時は dji_irp と同じ場所）は Phase S で確定する
     # DJI_IRP_PATH: /opt/dji_thermal_sdk/<SDK 内の dji_irp のパス>
     # DJI_IRP_LIB_DIR: /opt/dji_thermal_sdk/<SDK 内のライブラリのディレクトリ>
-    # 所見の作成に使う Claude のモデル名（ANTHROPIC_API_KEY は secret に追加する。Phase 8 で本番の設定を確定）
-    # CLAUDE_MODEL: claude-opus-5-5
+    # 所見の作成に使う Claude のモデル名（SOLARSIGHT_ANTHROPIC_API_KEY は secret に追加する。Phase 8 で本番の設定を確定）
+    # SOLARSIGHT_CLAUDE_MODEL: claude-opus-5-5
 
     # Set number of processes dedicated to Solid Queue (default: 1)
     # JOB_CONCURRENCY: 3
