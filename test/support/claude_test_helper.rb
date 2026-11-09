@@ -28,7 +28,7 @@ module ClaudeTestHelper
     {
       "summary_text" => "確定した熱異常は 1 件でした。",
       "priority_actions" => [ "重大の異常のパネルを電気測定で確認する" ],
-      "additional_checks" => [ "除外した画像の撮り直し" ]
+      "internal_improvements" => [ "除外した画像の範囲を撮り直す" ]
     }.merge(extra.stringify_keys).to_json
   end
 
