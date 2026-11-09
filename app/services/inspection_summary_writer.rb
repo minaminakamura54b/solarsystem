@@ -36,7 +36,8 @@ class InspectionSummaryWriter
     digest = digest_for(input)
     return :skipped if !force && inspection.summary_input_digest == digest && inspection.summary_generated_at.present? && inspection.summary_error.blank?
 
-    result = @output.request(system: PROMPT_PATH.read, input: input, schema: SCHEMA)
+    result = @output.request(system: PROMPT_PATH.read, input: input, schema: SCHEMA,
+                             audit: { inspection: inspection, purpose: "inspection_summary", prompt_version: PROMPT_VERSION })
     summary_text = result["summary_text"].to_s
     raise ClaudeStructuredOutput::Error, "Claude の応答に総括文（summary_text）がありません" if summary_text.blank?
 

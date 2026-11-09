@@ -2,6 +2,8 @@
 # - モデル名は環境変数 CLAUDE_MODEL。未設定ならリクエストせず Error にする（コードにモデル名を書かない）
 # - 送るのは文字だけ（画像は送らない。2026-10-15 ユーザー承認）
 # - API エラー・拒否・途中で切れた応答・JSON でない応答は、すべて Error にする（呼び出し側で失敗として記録する）
+# - Claude を「使う」にした点検（inspections.claude_enabled）のものだけ送る。既定は使わない（2026-11-09 ユーザー指示）
+# - 送る前に、いつ・何を送るか（目的・対象・入力）を点検ごとに記録し（ExternalTransmission）、結果で更新する
 class ClaudeStructuredOutput
   class Error < StandardError; end
 
@@ -20,11 +22,31 @@ class ClaudeStructuredOutput
   end
 
   # system: プロンプト本文、input: 入力の文章、schema: 出力の JSON スキーマ。戻り値は文字列キーの Hash
-  def request(system:, input:, schema:)
+  # audit: { inspection:, purpose:, target:, prompt_version: }（送った記録に残す。点検が「使わない」なら送らない）
+  def request(system:, input:, schema:, audit:)
+    inspection = audit.fetch(:inspection)
+    raise Error, "この点検は Claude を使わない設定です（点検の画面で「使う」にしたときだけ送ります）" unless inspection.claude_enabled?
+
     model = self.class.model
     raise Error, "環境変数 CLAUDE_MODEL が設定されていません" unless model
     raise Error, "環境変数 ANTHROPIC_API_KEY が設定されていません" if @client.nil? && ENV["ANTHROPIC_API_KEY"].blank?
 
+    log = ExternalTransmission.create!(inspection:, service: "anthropic", purpose: audit.fetch(:purpose), target: audit[:target],
+                                       model:, prompt_version: audit[:prompt_version], input_text: input, input_bytes: input.bytesize,
+                                       status: "sending", sent_at: Time.current)
+    begin
+      result = call_api(model:, system:, input:, schema:)
+    rescue Error => e
+      log.update!(status: "failed", error: e.message)
+      raise
+    end
+    log.update!(status: "sent")
+    result
+  end
+
+  private
+
+  def call_api(model:, system:, input:, schema:)
     message = client.messages.create(
       model: model,
       max_tokens: @config.fetch(:max_tokens),
@@ -40,8 +62,6 @@ class ClaudeStructuredOutput
   rescue Anthropic::Errors::Error => e
     raise Error, "Claude API の呼び出しに失敗しました（#{e.class.name.demodulize}）"
   end
-
-  private
 
   def client
     @client ||= Anthropic::Client.new(timeout: @config.fetch(:timeout_seconds).to_f, max_retries: @config.fetch(:max_retries).to_i)

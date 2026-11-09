@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-11-09 — Claude の所見・総括文を点検ごとに切り替え、人が書けるようにし、送った内容を記録する（ブランチ `claude-per-inspection`）
+
+- `inspections.claude_enabled`（既定 false）・人が書く総括文 `manual_summary`、異常・群の人が書く所見 `manual_finding`、送った記録 `external_transmissions` を追加（可逆なマイグレーション。既存の点検も「使わない」になる）（ユーザー指示）
+- 点検の画面に「Claude（外部のサービス）による所見・総括文」の切り替え（「使う」には顧客との取り決めの確認の印が必須）と「外部のサービスへの送信の記録」（日時・送り先・内容・対象・モデル・結果・送った入力）
+- 使わない点検: レビュー完了のときに所見のジョブを登録しない。「所見・総括（人が書く）」の欄で所見と総括文を書いて保存。報告書にはその内容を載せ、書いていなければ「所見は作成していません」と警告
+- `ClaudeStructuredOutput#request` は audit（点検・目的・対象・プロンプトの版）を必須にし、使わない点検なら送らずに断る。送る前に記録を作り、応答・失敗で更新する
+- Claude を使った点検の報告書の総括の欄に「生成 AI（Claude）が作成した文章で、判定には使っていない」旨を載せる
+- 送った記録のある点検は削除できない（記録を残すため）
+
 ## 2026-11-09 — ローカル運用（実案件を Mac で扱う。ブランチ `local-operation`）
 
 - 実案件用の環境 `RAILS_ENV=work`（ユーザー承認の案 A。Rails が `local` を予約しているため、ユーザーの選択で `work`）。データベースは `solarsystem_work`（キューは `solarsystem_work_queue`）、画像は `~/SolarSightData/storage`、ログ・解析の一時ファイルも `~/SolarSightData` の下。解析は Solid Queue（Puma の中）で裏で並列に（既定 4）。画面は 127.0.0.1 だけ

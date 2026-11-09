@@ -1,0 +1,18 @@
+<%# Claude の所見・総括文を、この点検で使うか（既定は使わない。2026-11-09 ユーザー指示） %>
+<div class="card p-4 text-sm" id="claude">
+  <p class="form-label">Claude（外部のサービス）による所見・総括文</p>
+  <% if @inspection.claude_enabled? %>
+    <p><span class="badge badge-warning">使う</span> レビュー完了のときに、確定した異常の数値・種類・パネル番号を Anthropic の API に送り、所見と総括文を作ります（画像・撮影位置は送りません）。送った内容は下の「外部のサービスへの送信の記録」に残ります。</p>
+    <%= button_to "使わないにする", claude_setting_inspection_path(@inspection), method: :patch, params: { claude_enabled: "0" }, class: "btn btn-sm btn-secondary mt-2" %>
+  <% else %>
+    <p><span class="badge badge-gray">使わない</span> 外部のサービスには何も送りません。所見と総括文は、レビュー完了のあと「所見・総括」の欄に人が書きます。</p>
+    <%= form_with url: claude_setting_inspection_path(@inspection), method: :patch, class: "mt-2 flex flex-wrap gap-2 items-center" do %>
+      <%= hidden_field_tag :claude_enabled, "1" %>
+      <label class="text-xs"><%= check_box_tag :agreement_confirmed, "1", false %> 顧客との取り決めで、外部のサービス（Anthropic）での処理が認められていることを確認した</label>
+      <%= submit_tag "使うにする", class: "btn btn-sm btn-secondary" %>
+    <% end %>
+  <% end %>
+  <% if @inspection.claude_enabled_changed_at %>
+    <p class="text-xs text-gray-400 mt-1">最後に切り替えた日時: <%= @inspection.claude_enabled_changed_at.in_time_zone(ImageQualityConfig.current.capture_time_zone).strftime("%Y/%m/%d %H:%M") %></p>
+  <% end %>
+</div>

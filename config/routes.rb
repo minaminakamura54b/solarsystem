@@ -58,6 +58,8 @@ Rails.application.routes.draw do
       post :complete_review
       post :explain
       patch :measurement
+      patch :claude_setting
+      patch :findings
     end
     resources :anomalies, only: %i[create] do
       member do

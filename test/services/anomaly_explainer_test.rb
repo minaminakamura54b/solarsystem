@@ -3,6 +3,7 @@ require "test_helper"
 class AnomalyExplainerTest < ActiveSupport::TestCase
   setup do
     @inspection = analyzable_inspection
+    @inspection.update_columns(claude_enabled: true) # Claude を「使う」にした点検（既定は使わない）
     @image = @inspection.inspection_images.first
     @image.update_columns(irradiance_w_m2: 742, irradiance_type: "poa")
     @inspection.site.update!(cell_layout: "full_cell", substring_count: 3)

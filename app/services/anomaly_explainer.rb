@@ -61,7 +61,8 @@ class AnomalyExplainer
     digest = digest_for(input)
     return :skipped if !force && record.explanation_input_digest == digest && record.explained_at.present? && record.explanation_error.blank?
 
-    result = @output.request(system: prompt, input: input, schema: SCHEMA)
+    result = @output.request(system: prompt, input: input, schema: SCHEMA,
+                             audit: { inspection: record.inspection, purpose: "anomaly_explanation", target: record, prompt_version: PROMPT_VERSION })
     record.update_columns(**sanitize(result), prompt_version: PROMPT_VERSION, explanation_input_digest: digest,
                           explained_at: @now, explanation_error: nil, updated_at: @now)
     :explained

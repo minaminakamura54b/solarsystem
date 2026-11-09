@@ -8,6 +8,7 @@ class ExplainInspectionJob < ApplicationJob
   def perform(inspection_id, force: false)
     inspection = Inspection.find_by(id: inspection_id)
     return unless inspection&.completed? && inspection.reviewed_at.present?
+    return unless inspection.claude_enabled? # Claude を「使う」にした点検だけ（既定は使わない。人が所見を書く）
 
     output = ClaudeStructuredOutput.new
     explainer = AnomalyExplainer.new(output: output)
