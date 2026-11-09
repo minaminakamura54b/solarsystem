@@ -2,7 +2,7 @@ module RuleSetsHelper
   ANOMALY_TYPE_LABELS = {
     "hotspot" => "ホットスポット", "multi_hotspot" => "複数ホットスポット",
     "substring_bypass" => "サブストリングのバイパス", "module_wide" => "モジュール全体",
-    "partial_module" => "部分的な発熱", "panel_row_group" => "隣接パネル群", "other" => "その他"
+    "partial_module" => "部分的な発熱", "panel_row_group" => "隣接パネル群", "block_row" => "架台の段の温度上昇", "other" => "その他"
   }.freeze
 
   MEASURE_LABELS = {

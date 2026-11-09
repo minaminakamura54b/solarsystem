@@ -27,7 +27,7 @@ class InspectionSummaryWriterTest < ActiveSupport::TestCase
     assert_equal "確定した熱異常は 1 件でした。", @inspection.summary_text
     assert_equal [ "重大の異常のパネルを電気測定で確認する" ], @inspection.summary_priority_actions
     assert_equal [ "除外した画像の撮り直し" ], @inspection.summary_additional_checks
-    assert_equal "inspection_summary_v2", @inspection.summary_prompt_version
+    assert_equal "inspection_summary_v3", @inspection.summary_prompt_version
     assert_equal [ "completed", "critical" ], [ @inspection.analysis_status, @inspection.severity ]
   end
 
@@ -49,6 +49,44 @@ class InspectionSummaryWriterTest < ActiveSupport::TestCase
     assert_includes input, "未確定のまま残った候補: 1 件（重要度に含めていない）"
     assert_equal InspectionSummaryWriter::PROMPT_PATH.read, request[:system_]
     assert_equal %w[summary_text priority_actions additional_checks], request[:output_config][:format_][:schema][:properties].keys.map(&:to_s)
+  end
+
+  test "点検の範囲と、解析できなかった範囲の有無・内訳を入力に入れる。プロンプトで必ず触れさせ、入力にない数字を作らせない" do
+    @second.update_columns(review_reason: "alignment_failed", alignment: { "review_reason" => "no_blocks_in_view" })
+    client = FakeAnthropicClient.replying(summary_json)
+    write(client)
+
+    request = client.requests.first
+    input = request[:messages].first[:content]
+    assert_includes input, "点検の範囲: 配置図（架台とパネル）が登録されていないため、写ったパネルの数は出していない"
+    assert_includes input, "除外した画像（判定に使っていない）: 1 枚（位置合わせ不可（登録した架台が写っていない） 1 枚）"
+    assert_includes input, "配置図に登録されていない所に写った画像（点検の対象外）: 1 枚"
+    assert_includes input, "解析できなかった範囲: あり（除外した画像 1 枚・配置図に登録されていない所に写った画像 1 枚）"
+    assert_includes request[:system_], "「解析できなかった範囲」が「あり」のときは、総括文で必ずそのことに触れ"
+    assert_includes request[:system_], "入力にない数字を作らない"
+  end
+
+  test "確定した架台の段は 1 件と数え、写ったパネル・判断の材料が足りない段の数も渡す" do
+    blocks = register_blocks(@inspection.site, %w[A01])
+    analyzed_image(@first, [ blocks["A01"] ], y0: 0.4)
+    @second.update_columns(analysis_status: "completed")
+    @inspection.block_row_findings.create!(pv_block: blocks["A01"], block_row: 1, status: "evaluated", effect_c: 1.62, severity: "warning", review_status: "confirmed", locked: true)
+    @inspection.block_row_findings.create!(pv_block: blocks["A01"], block_row: 2, status: "insufficient", insufficient_reason: "画像の上側にしか写っておらず")
+    InspectionReview.new(@inspection).complete!(all_images_checked: true, acknowledge_pending: true)
+    client = FakeAnthropicClient.replying(summary_json)
+    write(client)
+
+    input = client.requests.first[:messages].first[:content]
+    assert_includes input, "確定した異常: 2 件（隣接パネル群・架台の段は 1 件と数える）"
+    assert_includes input, "- 架台の段の温度上昇 / 重大度 注意 / 段の効果 +1.6℃ / 架台 A01 1 段目（10 枚）"
+    assert_includes input, "点検の範囲: 登録したパネル 20 枚のうち、解析できた画像に写ったパネル 20 枚（写っていない 0 枚）"
+    assert_includes input, "判断の材料が足りない架台の段（写った位置が偏っているなど）: 1 段"
+    assert_includes input, "解析できなかった範囲: あり（判断の材料が足りない架台の段 1 段）"
+
+    @inspection.block_row_findings.insufficient.delete_all
+    client = FakeAnthropicClient.replying(summary_json)
+    write(client, force: true)
+    assert_includes client.requests.first[:messages].first[:content], "解析できなかった範囲: なし"
   end
 
   test "確定した異常が0件なら、正常（確定した異常なし）として渡す" do
