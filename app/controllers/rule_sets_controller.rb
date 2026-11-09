@@ -42,7 +42,7 @@ class RuleSetsController < ApplicationController
   private
 
   def rule_set_params
-    params.require(:rule_set).permit(:version, :note, severity_rules_attributes: SeverityRule::COPYABLE_ATTRIBUTES)
+    params.require(:rule_set).permit(:version, :note, :provisional, severity_rules_attributes: SeverityRule::COPYABLE_ATTRIBUTES)
   end
 
   # [値, エラーメッセージ] を返す

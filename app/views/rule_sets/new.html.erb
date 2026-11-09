@@ -30,6 +30,9 @@
         <label class="form-label">メモ（変更理由・合意先など）</label>
         <%= f.text_area :note, class: "form-textarea", rows: 2 %>
       </div>
+      <div class="md:col-span-2">
+        <label class="text-sm"><%= f.check_box :provisional %> 暫定の判定基準の版（報告書の表紙と判定基準の欄に「暫定」と載せ、発行のときに警告します）</label>
+      </div>
     </div>
 
     <div class="card mb-4">

@@ -47,11 +47,17 @@ class RuleSet < ApplicationRecord
 
   # 既存のルールセットを複製した、新しいルールセット（未保存）
   def duplicate(version:)
-    RuleSet.new(version: version, detection_params: detection_params.deep_dup).tap do |copy|
+    # 暫定の版を複製した版は暫定のまま（暫定でなくするときは、作成の画面で外す）
+    RuleSet.new(version: version, detection_params: detection_params.deep_dup, provisional: provisional).tap do |copy|
       severity_rules.each do |rule|
         copy.severity_rules.build(rule.attributes.slice(*SeverityRule::COPYABLE_ATTRIBUTES))
       end
     end
+  end
+
+  # 暫定の版の印を付ける（作成後は編集できないため、印を付けるだけの操作。外すことはしない）
+  def mark_provisional!
+    update_columns(provisional: true, updated_at: Time.current) unless provisional?
   end
 
   def rule_for(anomaly_type)
