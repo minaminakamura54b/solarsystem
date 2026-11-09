@@ -23,9 +23,27 @@ class BulkImageExclusion
 
   def groups
     targets = @inspection.inspection_images.reload.select { |img| img.needs_review? || img.failed? }
-    targets.group_by { |img| key_for(img) }
-           .map { |key, images| Group.new(key:, label: label_for(key, images.first), images:) }
+    targets.group_by { |img| self.class.key_for(img) }
+           .map { |key, images| Group.new(key:, label: "#{key.start_with?('failed:') ? '失敗' : '要確認'}: #{self.class.reason_label(images.first)}", images:) }
            .sort_by { |g| -g.images.size }
+  end
+
+  # 理由のまとまりのキー（状態:理由、位置合わせ不可は 状態:alignment_failed:位置合わせの理由）
+  def self.key_for(image)
+    reason = image.review_reason.presence || "unknown"
+    reason = "#{reason}:#{image.alignment.to_h['review_reason'] || 'other'}" if reason == "alignment_failed"
+    "#{image.analysis_status}:#{reason}"
+  end
+
+  # 画像の要確認・失敗の理由の名前。除外した画像にも使う（除外しても review_reason と位置合わせの記録は残る）
+  def self.reason_label(image)
+    reason = image.review_reason.presence
+    return "理由の記録なし" if reason.nil?
+    # 解析エンジンのメッセージは画像ごとに違う（ファイル名など）ので使わない
+    return "位置合わせ不可（#{ALIGNMENT_REASONS.fetch(image.alignment.to_h['review_reason'].to_s) { "その他: #{image.alignment.to_h['review_reason']}" }}）" if reason == "alignment_failed"
+
+    check = Array(image.quality_report&.dig("checks")).find { |c| c["key"] == reason && c["result"] == "rejected" }
+    check&.dig("message") || InspectionsHelper::REVIEW_REASON_MESSAGES[reason] || image.error_message.presence || reason
   end
 
   def group(key)
@@ -51,29 +69,5 @@ class BulkImageExclusion
       @inspection.refresh_status!
       images.size
     end
-  end
-
-  private
-
-  def key_for(image)
-    reason = image.review_reason.presence || "unknown"
-    reason = "#{reason}:#{image.alignment.to_h['review_reason'] || 'other'}" if reason == "alignment_failed"
-    "#{image.analysis_status}:#{reason}"
-  end
-
-  def label_for(key, image)
-    status, reason, sub = key.split(":", 3)
-    head = status == "failed" ? "失敗" : "要確認"
-    text =
-      if reason == "alignment_failed"
-        "位置合わせ不可（#{ALIGNMENT_REASONS.fetch(sub) { "その他: #{sub}" }}）" # 解析エンジンのメッセージは画像ごとに違う（ファイル名など）ので使わない
-      else
-        quality_message(image, reason) || InspectionsHelper::REVIEW_REASON_MESSAGES[reason] || image.error_message.presence || reason
-      end
-    "#{head}: #{text}"
-  end
-
-  def quality_message(image, reason)
-    Array(image.quality_report&.dig("checks")).find { |c| c["key"] == reason && c["result"] == "rejected" }&.dig("message")
   end
 end
