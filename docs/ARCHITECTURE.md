@@ -44,6 +44,7 @@ Rails 8.1（Puma）
 | `/sites/:id/panel_layout` | `panel_layouts` | 実配置の登録（`new` → `preview`（確認画面）→ `create`）、雛形の CSV（`template`）、割り当て直しが必要な異常の一覧（`show`） |
 | `/inspections` | `inspections` | 点検の一覧・詳細・新規（複数画像）・削除。詳細は JSON でステータス（`in_progress` を含む）も返す |
 | `/inspections/:id/images/:id` | `inspection_images` | RGB の手動添付・差し替え・削除、画像の除外・除外の取り消し、グリッド入力画面（`grid`）・グリッドの保存（`grids`）・再解析（`reanalyze`） |
+| `/inspections/:id/bulk_exclusion` | `bulk_exclusions` | 要確認・失敗の画像を理由ごとにまとめて除外（`show` の一覧 → `?reason=` で確認（除外すると写っていないまま残るパネルの数）→ `create`）。点検の範囲は `InspectionCoverage` |
 | `/inspections/:id/grid_templates` | `grid_templates` | グリッドテンプレートの保存・一括適用（`apply`） |
 | `/inspections/:id/rejudge` | `inspections#rejudge` | 未確定の異常・群を現在の判定基準で判定し直す |
 | `/inspections/:id/review` | `inspections#review` | レビュー画面（画像ごと。`?image=番号`）。候補の確定・修正・却下・手動追加、レビュー完了 |
