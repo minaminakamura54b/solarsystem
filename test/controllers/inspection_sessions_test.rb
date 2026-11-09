@@ -179,4 +179,24 @@ class InspectionSessionsTest < ActionDispatch::IntegrationTest
     end
     assert_not WeatherReading.exists?(reading.id)
   end
+
+  test "点検の画面の画像の一覧は状態で絞り込める（画像が多い点検でも速いよう、ページに分ける）" do
+    inspection = analyzable_inspection(files: %w[thermal_plain_T.jpg thermal_plain_T.jpg thermal_plain_T.jpg])
+    a, b, c = inspection.inspection_images.order(:sequence).to_a
+    a.update_columns(analysis_status: "completed")
+    b.update_columns(analysis_status: "needs_review", review_reason: "insufficient_baseline")
+    c.update_columns(analysis_status: "excluded", exclusion_note: "雲")
+
+    get inspection_path(inspection, site_id: inspection.site_id)
+    assert_select "tr[id^=image_]", 3
+    assert_select "#images a", text: "要確認・失敗（1）"
+    assert_select "#image-pages", 0, "50 枚以下ならページの切り替えは出さない"
+
+    get inspection_path(inspection, site_id: inspection.site_id, images: "unresolved")
+    assert_select "tr[id^=image_]", 1
+    assert_select "tr#image_#{b.id}"
+
+    get inspection_path(inspection, site_id: inspection.site_id, images: "unresolved", page: 99)
+    assert_select "tr#image_#{b.id}", 1, "ページの番号が大きすぎれば最後のページ"
+  end
 end

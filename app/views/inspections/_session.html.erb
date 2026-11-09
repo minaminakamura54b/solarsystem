@@ -18,12 +18,12 @@
       <div>
         <p style="font-size:0.65rem; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em;">画像</p>
         <p style="font-size:0.9rem;">
-          全 <%= @images.size %> 枚
+          全 <%= counts.values.sum %> 枚
           <% counts.except("pending").each do |status, n| %>
             ／ <%= { "analyzing" => "解析中", "completed" => "解析完了", "needs_review" => "要確認", "failed" => "失敗", "excluded" => "除外" }[status] %> <%= n %>
           <% end %>
           <% waiting = @inspection.images_waiting_for_analyzer %>
-          <% checking = @images.count(&:quality_pending?) %>
+          <% checking = @inspection.images_quality_pending_count %>
           <% if checking > 0 %>／ 品質チェック中 <%= checking %><% end %>
           <% if waiting > 0 %>／ 解析待ち <%= waiting %><% end %>
         </p>
@@ -44,7 +44,7 @@
     <% if (review_message = inspection_review_message(@inspection)) %>
       <p style="font-size:0.8rem; color:#ef9f27; margin-top:0.75rem;"><%= review_message %></p>
     <% end %>
-    <% if (unresolved = @images.count { |i| i.needs_review? || i.failed? }).positive? %>
+    <% if (unresolved = counts["needs_review"].to_i + counts["failed"].to_i).positive? %>
       <p class="text-xs mt-2"><%= link_to "要確認・失敗の画像 #{unresolved} 枚を、理由ごとにまとめて除外する", inspection_bulk_exclusion_path(@inspection) %></p>
     <% end %>
     <% if @inspection.inspection_images.any?(&:completed?) %>
@@ -206,7 +206,17 @@
     <% end %>
   </div>
 
-  <%# ── 画像ごとの状況 ─────────────────────────────── %>
+  <%# ── 画像ごとの状況（ページに分ける。状態で絞り込む） ─────────────────────────────── %>
+  <% filter_labels = { "all" => "すべて", "unresolved" => "要確認・失敗", "completed" => "解析完了", "excluded" => "除外", "waiting" => "解析待ち・解析中" } %>
+  <% filter_counts = { "all" => counts.values.sum, "unresolved" => counts["needs_review"].to_i + counts["failed"].to_i, "completed" => counts["completed"].to_i,
+                       "excluded" => counts["excluded"].to_i, "waiting" => counts["pending"].to_i + counts["analyzing"].to_i } %>
+  <div class="flex flex-wrap gap-2 items-center text-sm" id="images">
+    <span class="form-label" style="margin:0;">画像:</span>
+    <% filter_labels.each do |key, label| %>
+      <%= link_to "#{label}（#{filter_counts[key]}）", inspection_path(@inspection, images: key, anchor: "images"), class: "btn btn-sm #{@image_filter == key ? 'btn-primary' : 'btn-secondary'}" %>
+    <% end %>
+    <span class="text-xs text-gray-400 ml-2"><%= @image_total %> 枚中 <%= (@image_page - 1) * InspectionsController::IMAGES_PER_PAGE + 1 if @image_total.positive? %>〜<%= [ @image_page * InspectionsController::IMAGES_PER_PAGE, @image_total ].min %> 枚目</span>
+  </div>
   <div class="card">
     <table class="table">
       <thead>
@@ -337,7 +347,15 @@
             </td>
           </tr>
         <% end %>
+        <% if @images.empty? %><tr><td colspan="7" class="text-gray-400">この状態の画像はありません</td></tr><% end %>
       </tbody>
     </table>
   </div>
+  <% if @image_pages > 1 %>
+    <div class="flex flex-wrap gap-1 items-center text-sm" id="image-pages">
+      <% (1..@image_pages).each do |n| %>
+        <%= link_to n, inspection_path(@inspection, images: @image_filter, page: n, anchor: "images"), class: "btn btn-sm #{n == @image_page ? 'btn-primary' : 'btn-secondary'}" %>
+      <% end %>
+    </div>
+  <% end %>
 </div>

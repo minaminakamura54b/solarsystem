@@ -1,4 +1,10 @@
 class InspectionsController < ApplicationController
+  IMAGES_PER_PAGE = 50
+  IMAGE_FILTERS = {
+    "all" => nil, "unresolved" => %w[needs_review failed], "completed" => %w[completed], "excluded" => %w[excluded],
+    "waiting" => %w[pending analyzing]
+  }.freeze
+
   before_action :require_site
   before_action :find_inspection, only: %i[show destroy rejudge review complete_review explain measurement claude_setting findings]
 
@@ -11,7 +17,16 @@ class InspectionsController < ApplicationController
     if @inspection.legacy?
       prepare_legacy_display
     else
-      @images = @inspection.inspection_images.includes(thermal_attachment: :blob, rgb_attachment: :blob)
+      # 画像の一覧はページに分ける（1 回の飛行で約 1,900 枚。問題点 4）。状態で絞り込める
+      @image_filter = params[:images].presence_in(IMAGE_FILTERS.keys) || "all"
+      scope = @inspection.inspection_images
+      scope = scope.where(analysis_status: IMAGE_FILTERS[@image_filter]) unless @image_filter == "all"
+      @image_total = scope.count
+      @image_page = [ params[:page].to_i, 1 ].max
+      @image_pages = [ (@image_total.to_f / IMAGES_PER_PAGE).ceil, 1 ].max
+      @image_page = [ @image_page, @image_pages ].min
+      @images = scope.offset((@image_page - 1) * IMAGES_PER_PAGE).limit(IMAGES_PER_PAGE)
+                     .includes(:anomalies, thermal_attachment: :blob, rgb_attachment: :blob)
       @new_reading = @inspection.weather_readings.build
       @capture_time_zone = ImageQualityConfig.current.capture_time_zone
       @confirmed_anomalies = @inspection.anomalies.where(review_status: InspectionReview::CONFIRMED).countable
