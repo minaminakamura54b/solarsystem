@@ -1,6 +1,6 @@
 class InspectionsController < ApplicationController
   before_action :require_site
-  before_action :find_inspection, only: %i[show destroy rejudge review complete_review explain measurement]
+  before_action :find_inspection, only: %i[show destroy rejudge review complete_review explain measurement claude_setting findings]
 
   def index
     @inspections = current_site.inspections.recent.includes(:site, :inspection_images, image_attachment: :blob)
@@ -103,8 +103,12 @@ class InspectionsController < ApplicationController
       all_images_checked: params[:all_images_checked] == "1", acknowledge_pending: params[:acknowledge_pending] == "1"
     )
     if result.completed?
-      ExplainInspectionJob.perform_later(@inspection.id)
-      notice = "レビューを完了しました（重要度: #{@inspection.reload.severity_label}）。確定した異常の所見と総括文を作成します"
+      if @inspection.claude_enabled?
+        ExplainInspectionJob.perform_later(@inspection.id)
+        notice = "レビューを完了しました（重要度: #{@inspection.reload.severity_label}）。確定した異常の所見と総括文を Claude で作成します"
+      else
+        notice = "レビューを完了しました（重要度: #{@inspection.reload.severity_label}）。所見と総括文は「所見・総括」の欄に書いてください"
+      end
       notice += "。#{result.warnings.join('。')}" if result.warnings.any?
       redirect_to inspection_path(@inspection), notice: notice
     else
@@ -115,12 +119,46 @@ class InspectionsController < ApplicationController
 
   # 確定した異常の所見と総括文を作り直す（入力が変わっていなくても作り直す）。レビューを完了した点検だけ
   def explain
-    if @inspection.completed? && @inspection.reviewed_at.present?
+    if !@inspection.claude_enabled?
+      redirect_to inspection_path(@inspection, anchor: "findings"), alert: "この点検は Claude を使わない設定です"
+    elsif @inspection.completed? && @inspection.reviewed_at.present?
       ExplainInspectionJob.perform_later(@inspection.id, force: true)
       redirect_to inspection_path(@inspection, anchor: "findings"), notice: "所見と総括文を作り直しています"
     else
       redirect_to inspection_path(@inspection), alert: "所見はレビューを完了した点検だけ作れます"
     end
+  end
+
+  # Claude の所見・総括文を、この点検で「使う／使わない」（既定は使わない。2026-11-09 ユーザー指示）。
+  # 使うにするのは、顧客との取り決めで外部のサービスでの処理が認められていることを確認したときだけ
+  def claude_setting
+    enable = params[:claude_enabled] == "1"
+    if enable && params[:agreement_confirmed] != "1"
+      return redirect_to inspection_path(@inspection, anchor: "claude"), alert: "顧客との取り決めを確認したうえで「使う」にしてください"
+    end
+
+    @inspection.update_columns(claude_enabled: enable, claude_enabled_changed_at: Time.current, updated_at: Time.current)
+    redirect_to inspection_path(@inspection, anchor: "claude"),
+                notice: enable ? "この点検では Claude で所見・総括文を作ります（送った内容は記録します）" : "この点検では Claude を使いません（所見・総括文は人が書きます）"
+  end
+
+  # 人が書く所見（確定した異常・群）と総括文を保存する（Claude を使わない点検。判定・重大度は変えない）
+  def findings
+    now = Time.current
+    Inspection.transaction do
+      if params.key?(:manual_summary) && @inspection.manual_summary.to_s != params[:manual_summary].to_s.strip
+        @inspection.update_columns(manual_summary: params[:manual_summary].to_s.strip.presence, manual_summary_updated_at: now, updated_at: now)
+      end
+      { anomaly_findings: @inspection.anomalies, group_findings: @inspection.anomaly_groups }.each do |key, scope|
+        params.fetch(key, {}).each_pair do |id, text|
+          record = scope.find(id)
+          next if record.manual_finding.to_s == text.to_s.strip
+
+          record.update_columns(manual_finding: text.to_s.strip.presence, manual_finding_updated_at: now, updated_at: now)
+        end
+      end
+    end
+    redirect_to inspection_path(@inspection, anchor: "findings"), notice: "所見と総括文を保存しました"
   end
 
   # 測定パラメータ（放射率・反射温度・距離）を保存する。解析済みの画像に反映するには再解析が必要（自動では解析し直さない）

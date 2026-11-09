@@ -1,0 +1,25 @@
+<%# 外部のサービスに送った内容の記録（点検ごと。いつ・何を。2026-11-09 ユーザー指示） %>
+<% logs = @inspection.external_transmissions.recent_first.includes(:target).to_a %>
+<div class="card p-4 text-sm" id="transmissions">
+  <p class="form-label">外部のサービスへの送信の記録（<%= logs.size %> 件）</p>
+  <% if logs.empty? %>
+    <p class="text-xs text-gray-400">この点検のデータを外部のサービスに送ったことはありません。</p>
+  <% else %>
+    <table class="table text-xs">
+      <thead><tr><th>日時</th><th>送り先</th><th>内容</th><th>対象</th><th>モデル・プロンプト</th><th>結果</th><th>送った入力</th></tr></thead>
+      <tbody>
+        <% logs.each do |log| %>
+          <tr>
+            <td style="white-space:nowrap;"><%= log.sent_at.in_time_zone(ImageQualityConfig.current.capture_time_zone).strftime("%Y/%m/%d %H:%M:%S") %></td>
+            <td><%= ExternalTransmission::SERVICES.fetch(log.service, log.service) %></td>
+            <td><%= log.purpose_label %></td>
+            <td><%= log.target_label %></td>
+            <td><%= log.model %><br><span class="text-gray-400"><%= log.prompt_version %></span></td>
+            <td><%= log.status_label %><% if log.error.present? %><br><span style="color:#e24b4a;"><%= log.error %></span><% end %></td>
+            <td><details><summary style="cursor:pointer;"><%= number_with_delimiter(log.input_bytes) %> バイト</summary><pre style="white-space:pre-wrap; max-width:36rem;"><%= log.input_text %></pre></details></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% end %>
+</div>

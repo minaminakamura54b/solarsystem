@@ -27,6 +27,7 @@ class ReportSnapshotBuilder
       "inspection_date" => @inspection.conducted_at.to_date.iso8601,
       "reviewed_at" => @inspection.reviewed_at&.iso8601,
       "severity" => @inspection.severity,
+      "claude_used" => @inspection.claude_enabled?,
       "conditions" => conditions,
       "criteria" => criteria,
       "summary" => summary,
@@ -112,7 +113,13 @@ class ReportSnapshotBuilder
 
   # ── 総括文 ─────────────────────────────
 
+  # Claude を使わない点検は、人が書いた総括文（manual）
   def summary
+    unless @inspection.claude_enabled?
+      text = @inspection.manual_summary.presence
+      return { "state" => text ? "manual" : "none", "text" => text, "priority_actions" => [], "additional_checks" => [] }
+    end
+
     current = InspectionSummaryWriter.new(output: nil).current?(@inspection) if @inspection.completed? && @inspection.reviewed_at
     return { "state" => @inspection.summary_generated_at ? "stale" : "none", "text" => nil } unless current
 
@@ -175,7 +182,13 @@ class ReportSnapshotBuilder
     }
   end
 
+  # Claude を使わない点検は、人が書いた所見（manual）
   def explanation_fields(record)
+    unless @inspection.claude_enabled?
+      text = record.manual_finding.presence
+      return { "explanation_state" => text ? "manual" : "none", "explanation" => text || NO_EXPLANATION }
+    end
+
     current = AnomalyExplainer.new(output: nil).current?(record)
     return { "explanation_state" => record.explained_at ? "stale" : "none", "explanation" => NO_EXPLANATION } unless current
 
@@ -289,8 +302,13 @@ class ReportSnapshotBuilder
     reassign = @inspection.anomalies.where(panel_reassignment_required: true).count
     list << "配置図の置き換えでパネルの割り当てが外れた異常が #{reassign} 件あります" if reassign.positive?
     no_text = items.count { |i| %w[stale none].include?(i["explanation_state"]) }
-    list << "所見が古い、または作れていない異常が #{no_text} 件あります（所見の欄に「#{NO_EXPLANATION}」と載せます）" if no_text.positive?
-    list << "総括文が古い、または作れていません（総括文の欄は空になります）" unless summary["state"] == "current"
+    if @inspection.claude_enabled?
+      list << "所見が古い、または作れていない異常が #{no_text} 件あります（所見の欄に「#{NO_EXPLANATION}」と載せます）" if no_text.positive?
+      list << "総括文が古い、または作れていません（総括文の欄は空になります）" unless summary["state"] == "current"
+    else
+      list << "所見が書かれていない異常が #{no_text} 件あります（所見の欄に「#{NO_EXPLANATION}」と載せます）" if no_text.positive?
+      list << "総括文が書かれていません（総括文の欄は空になります）" unless summary["state"] == "manual"
+    end
     list << "モジュールの定格出力が未登録のため、影響容量を算定できません" if @site.module_rated_w.nil?
     list << "暫定の判定基準（#{criteria['versions'].select { |v| v['provisional'] }.map { |v| v['version'] }.join('、')}）を使っています" if criteria["provisional"]
     list

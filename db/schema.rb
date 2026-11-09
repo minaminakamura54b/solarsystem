@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_09_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_09_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -118,6 +118,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_120000) do
     t.boolean "panel_reassignment_required", default: false, null: false
     t.bigint "duplicate_of_id"
     t.bigint "panel_candidate_id"
+    t.text "manual_finding"
+    t.datetime "manual_finding_updated_at"
     t.index ["anomaly_group_id"], name: "index_anomalies_on_anomaly_group_id"
     t.index ["duplicate_of_id"], name: "index_anomalies_on_duplicate_of_id"
     t.index ["inspection_id"], name: "index_anomalies_on_inspection_id"
@@ -160,6 +162,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_120000) do
     t.string "explanation_input_digest"
     t.datetime "explained_at"
     t.text "explanation_error"
+    t.text "manual_finding"
+    t.datetime "manual_finding_updated_at"
     t.index ["inspection_id"], name: "index_anomaly_groups_on_inspection_id"
     t.index ["inspection_image_id"], name: "index_anomaly_groups_on_inspection_image_id"
     t.index ["rule_set_id"], name: "index_anomaly_groups_on_rule_set_id"
@@ -206,6 +210,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_120000) do
     t.index ["inspection_id"], name: "index_block_row_findings_on_inspection_id"
     t.index ["pv_block_id"], name: "index_block_row_findings_on_pv_block_id"
     t.index ["rule_set_id"], name: "index_block_row_findings_on_rule_set_id"
+  end
+
+  create_table "external_transmissions", force: :cascade do |t|
+    t.bigint "inspection_id", null: false
+    t.string "service", null: false
+    t.string "purpose", null: false
+    t.string "target_type"
+    t.bigint "target_id"
+    t.string "model"
+    t.string "prompt_version"
+    t.text "input_text", null: false
+    t.integer "input_bytes", null: false
+    t.string "status", null: false
+    t.text "error"
+    t.datetime "sent_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["inspection_id", "sent_at"], name: "index_external_transmissions_on_inspection_id_and_sent_at"
+    t.index ["inspection_id"], name: "index_external_transmissions_on_inspection_id"
   end
 
   create_table "grid_templates", force: :cascade do |t|
@@ -305,6 +328,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_120000) do
     t.decimal "reflected_temperature_c", precision: 5, scale: 1
     t.decimal "object_distance_m", precision: 6, scale: 1
     t.jsonb "view_model"
+    t.boolean "claude_enabled", default: false, null: false
+    t.datetime "claude_enabled_changed_at"
+    t.text "manual_summary"
+    t.datetime "manual_summary_updated_at"
     t.index ["analysis_status"], name: "index_inspections_on_analysis_status"
     t.index ["conducted_at"], name: "index_inspections_on_conducted_at"
     t.index ["severity"], name: "index_inspections_on_severity"
@@ -493,6 +520,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_120000) do
   add_foreign_key "block_row_findings", "inspections"
   add_foreign_key "block_row_findings", "pv_blocks"
   add_foreign_key "block_row_findings", "rule_sets"
+  add_foreign_key "external_transmissions", "inspections"
   add_foreign_key "grid_templates", "inspections"
   add_foreign_key "inspection_images", "inspections"
   add_foreign_key "inspection_reports", "inspections"

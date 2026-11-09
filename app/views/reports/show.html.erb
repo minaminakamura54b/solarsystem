@@ -27,8 +27,9 @@
 
 <%# ── 総括 ── %>
 <h2>1. 総括</h2>
-<% if s.dig("summary", "state") == "current" %>
+<% if %w[current manual].include?(s.dig("summary", "state")) %>
   <p><%= s["summary"]["text"] %></p>
+  <% if s["claude_used"] %><p class="muted">所見・総括文は、確定した数値から生成 AI（Claude）が作成した文章です（異常かどうか・重大度の判定には使っていません）。</p><% end %>
 <% else %>
   <p class="muted">総括文は作成していません。</p>
 <% end %>

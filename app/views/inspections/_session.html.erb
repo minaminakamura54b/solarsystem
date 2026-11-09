@@ -84,10 +84,13 @@
     <% end %>
   </div>
 
+  <%= render "claude_setting" %>
+
   <%# ── 所見・総括（レビュー完了後） ─────────────────────────────── %>
   <% if @inspection.completed? && @inspection.reviewed_at.present? %>
     <%= render "findings" %>
   <% end %>
+  <%= render "transmissions" %>
 
   <%# ── 架台の地図（docs/LAYOUT_OVERLAY_DESIGN.md の A-3） ─────────────── %>
   <% usable = @inspection.inspection_images.count { |i| i.georef&.dig("usable") } %>

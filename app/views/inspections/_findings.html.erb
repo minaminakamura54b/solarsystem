@@ -1,4 +1,37 @@
-<%# レビューを完了した点検の総括文と、確定した異常・群の所見（Claude。docs/IMPROVEMENT_PLAN.md Phase 6） %>
+<%# レビューを完了した点検の総括文と、確定した異常・群の所見（docs/IMPROVEMENT_PLAN.md Phase 6）。
+    Claude を使う点検は Claude が作成し、使わない点検（既定）は人が書く（2026-11-09 ユーザー指示） %>
+<% unless @inspection.claude_enabled? %>
+<div class="card p-4 space-y-4" id="findings">
+  <p style="font-size:0.65rem; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em;">所見・総括（人が書く）</p>
+  <p class="text-xs text-gray-400">
+    この点検は Claude を使わない設定です。ここに書いた所見と総括文を報告書に載せます。異常かどうかと重大度は、温度データと判定基準で判定し、レビューで人が確認したもので、ここでは変わりません。
+    赤外線サーモグラフィによるスクリーニングで、確定診断ではないことに注意して書いてください。
+  </p>
+  <%= form_with url: findings_inspection_path(@inspection), method: :patch, class: "space-y-3" do %>
+    <div>
+      <label class="form-label">総括</label>
+      <%= text_area_tag :manual_summary, @inspection.manual_summary, class: "form-textarea", rows: 4, placeholder: "点検の条件、確定した異常の件数と内訳、全体の重要度、解析できなかった範囲など" %>
+    </div>
+    <% if @confirmed_groups.empty? && @confirmed_anomalies.empty? %>
+      <p class="text-sm text-gray-400">確定した異常はありません。</p>
+    <% end %>
+    <% @confirmed_groups.each do |group| %>
+      <div>
+        <label class="text-sm" style="font-weight:600;">画像 <%= group.inspection_image.sequence %>：隣接パネル群（<%= group.panel_count %>枚）・<%= anomaly_severity_label(group.severity) %></label>
+        <%= text_area_tag "group_findings[#{group.id}]", group.manual_finding, class: "form-textarea", rows: 2, id: "group_finding_#{group.id}" %>
+      </div>
+    <% end %>
+    <% @confirmed_anomalies.each do |anomaly| %>
+      <div>
+        <label class="text-sm" style="font-weight:600;">画像 <%= anomaly.inspection_image.sequence %>：<%= anomaly_type_label(anomaly.effective_type) %>・<%= anomaly_severity_label(anomaly.effective_severity) %>
+          <span class="text-xs text-gray-400">パネル <%= anomaly.panel&.number || "未割り当て" %>／ΔT <%= anomaly.delta_t&.round(1) %>℃</span></label>
+        <%= text_area_tag "anomaly_findings[#{anomaly.id}]", anomaly.manual_finding, class: "form-textarea", rows: 2, id: "anomaly_finding_#{anomaly.id}" %>
+      </div>
+    <% end %>
+    <%= submit_tag "所見と総括文を保存", class: "btn btn-primary" %>
+  <% end %>
+</div>
+<% else %>
 <div class="card p-4 space-y-4" id="findings">
   <div class="flex items-center justify-between gap-3">
     <p style="font-size:0.65rem; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:0.1em;">所見・総括（Claude が作成）</p>
@@ -61,3 +94,4 @@
     </div>
   <% end %>
 </div>
+<% end %>

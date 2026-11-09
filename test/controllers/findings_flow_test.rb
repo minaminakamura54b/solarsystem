@@ -6,6 +6,7 @@ class FindingsFlowTest < ActionDispatch::IntegrationTest
     @site = sites(:south)
     load_initial_rule_set
     @inspection = analyzable_inspection
+    @inspection.update_columns(claude_enabled: true) # Claude を「使う」にした点検（既定は使わない）
     @image = @inspection.inspection_images.first
     with_fake_analyzer(analyze: analyzer_result(output: analyzer_output)) { AnalyzeInspectionImageJob.perform_now(@image.id) }
     @anomaly = @image.anomalies.sole
@@ -22,7 +23,57 @@ class FindingsFlowTest < ActionDispatch::IntegrationTest
     end
 
     assert_enqueued_with(job: ExplainInspectionJob, args: [ @inspection.id ]) { confirm_and_complete }
-    assert_match "所見と総括文を作成します", flash[:notice]
+    assert_match "所見と総括文を Claude で作成します", flash[:notice]
+  end
+
+  test "Claude を使わない点検（既定）は、所見のジョブを登録せず、人が所見と総括文を書いて保存できる" do
+    @inspection.update_columns(claude_enabled: false)
+    assert_no_enqueued_jobs(only: ExplainInspectionJob) { confirm_and_complete }
+    assert_match "所見と総括文は「所見・総括」の欄に書いてください", flash[:notice]
+
+    get inspection_path(@inspection, site_id: @site.id)
+    assert_match "所見・総括（人が書く）", response.body
+    assert_select "#claude", text: /使わない/
+    assert_select "#transmissions", text: /送ったことはありません/
+
+    patch findings_inspection_path(@inspection, site_id: @site.id),
+          params: { manual_summary: "  確定した熱異常は 1 件でした。 ", anomaly_findings: { @anomaly.id => "セルの割れの可能性があります" } }
+    assert_redirected_to inspection_path(@inspection, anchor: "findings")
+    assert_equal "確定した熱異常は 1 件でした。", @inspection.reload.manual_summary
+    assert_equal "セルの割れの可能性があります", @anomaly.reload.manual_finding
+    assert_equal "confirmed", @anomaly.review_status, "判定・レビューの状態は変えない"
+
+    snapshot = ReportSnapshotBuilder.new(@inspection).build
+    assert_equal "確定した熱異常は 1 件でした。", snapshot.dig("summary", "text")
+    assert_equal [ "manual", "セルの割れの可能性があります" ], snapshot["items"].first.values_at("explanation_state", "explanation")
+    assert_not snapshot["claude_used"]
+  end
+
+  test "「使う」にするには顧客との取り決めの確認が要る。切り替えると Claude で作り、送った内容を記録する" do
+    @inspection.update_columns(claude_enabled: false)
+    patch claude_setting_inspection_path(@inspection, site_id: @site.id), params: { claude_enabled: "1" }
+    assert_not @inspection.reload.claude_enabled?
+
+    patch claude_setting_inspection_path(@inspection, site_id: @site.id), params: { claude_enabled: "1", agreement_confirmed: "1" }
+    assert @inspection.reload.claude_enabled?
+    assert @inspection.claude_enabled_changed_at
+
+    confirm_and_complete
+    with_fake_claude(fake_claude_for_findings) { perform_enqueued_jobs(only: ExplainInspectionJob) }
+    logs = @inspection.external_transmissions.order(:id).to_a
+    assert_equal %w[anomaly_explanation inspection_summary], logs.map(&:purpose)
+    assert_equal %w[sent sent], logs.map(&:status)
+    assert_equal @anomaly, logs.first.target
+    assert_includes logs.last.input_text, "確定した異常: 1 件"
+    get inspection_path(@inspection, site_id: @site.id)
+    assert_select "#transmissions", text: /点検の総括文/
+
+    patch claude_setting_inspection_path(@inspection, site_id: @site.id), params: { claude_enabled: "0" }
+    assert_not @inspection.reload.claude_enabled?
+    assert_no_difference -> { ExternalTransmission.count } do
+      post explain_inspection_path(@inspection, site_id: @site.id)
+      with_fake_claude(fake_claude_for_findings) { perform_enqueued_jobs(only: ExplainInspectionJob) }
+    end
   end
 
   test "完了後の点検詳細に総括文と所見を表示し、判定に使っていないことを示す" do

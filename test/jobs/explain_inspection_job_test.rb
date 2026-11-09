@@ -3,6 +3,7 @@ require "test_helper"
 class ExplainInspectionJobTest < ActiveJob::TestCase
   setup do
     @inspection = analyzable_inspection
+    @inspection.update_columns(claude_enabled: true) # Claude を「使う」にした点検（既定は使わない）
     @image = @inspection.inspection_images.first
     @image.update_columns(analysis_status: "completed")
     @inspection.refresh_status!

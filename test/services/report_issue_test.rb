@@ -82,7 +82,7 @@ class ReportIssueTest < ActiveSupport::TestCase
     report = ReportIssue.new(@inspection).issue!(acknowledge_warnings: true, company_name: "株式会社テスト", qualification: "サーモグラフィ")
     assert_equal 1, report.version_number
     assert_equal "株式会社テスト", report.snapshot.dig("issue", "company_name")
-    assert_includes report.acknowledged_warnings, "総括文が古い、または作れていません（総括文の欄は空になります）"
+    assert_includes report.acknowledged_warnings, "総括文が書かれていません（総括文の欄は空になります）"
     assert_not ReportIssue.new(@inspection).changed_since_latest?
     error = assert_raises(ReportIssue::Error) { ReportIssue.new(@inspection).issue!(acknowledge_warnings: true, revision_reason: "x") }
     assert_match "内容が変わっていません", error.message

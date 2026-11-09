@@ -3,6 +3,7 @@ require "test_helper"
 class InspectionSummaryWriterTest < ActiveSupport::TestCase
   setup do
     @inspection = analyzable_inspection(files: %w[thermal_plain_T.jpg lowres_T.jpg])
+    @inspection.update_columns(claude_enabled: true) # Claude を「使う」にした点検（既定は使わない）
     @first, @second = @inspection.inspection_images.to_a
     @first.update_columns(analysis_status: "completed", irradiance_w_m2: 800, irradiance_type: "poa", air_temp_c: 21.5)
     @second.update_columns(analysis_status: "excluded")
