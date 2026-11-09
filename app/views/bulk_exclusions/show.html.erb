@@ -1,0 +1,63 @@
+<% content_for :title, "画像のまとめての除外 - #{@inspection.conducted_at&.strftime('%Y/%m/%d')}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">🗂 要確認の画像をまとめて除外</h2>
+    <p class="text-sm text-gray-500 mt-1">
+      要確認・失敗の画像を、理由ごとにまとめて除外します。除外した画像は判定に使わず、正常にもしません（報告書の「点検の範囲と限界」に理由と枚数を載せます）。
+    </p>
+  </div>
+  <div style="white-space:nowrap;">
+    <%= link_to "点検に戻る", inspection_path(@inspection), class: "btn btn-secondary" %>
+  </div>
+</div>
+
+<div class="p-6 space-y-4">
+  <div class="card p-4 text-sm" id="coverage">
+    <p class="form-label">点検の範囲（今の状態）</p>
+    <% if @coverage.registered.zero? %>
+      <p class="text-gray-400">この発電所には、架台とつながったパネルが登録されていません。写ったパネルの数は出せません。</p>
+    <% else %>
+      <p>登録したパネル <%= @coverage.registered %> 枚のうち、解析できた画像に写ったパネル <strong><%= @coverage.covered %></strong> 枚（写っていない <%= @coverage.uncovered %> 枚）</p>
+    <% end %>
+    <% if @coverage.layout_unlinked_images.positive? %>
+      <p class="text-xs text-gray-400 mt-1">手動のグリッドで解析した画像 <%= @coverage.layout_unlinked_images %> 枚は、どのパネルが写ったかを位置で決められないため、写ったパネルに数えていません。</p>
+    <% end %>
+  </div>
+
+  <% if @group %>
+    <div class="card p-4 text-sm" id="preview">
+      <p class="form-label"><%= @group.label %>（<%= @group.images.size %> 枚）</p>
+      <% if @coverage.registered.positive? %>
+        <p>除外すると、<strong>解析できた画像に写っていないパネルが <%= @impact.newly_uncovered %> 枚</strong>残ります（この画像を解析すれば写るはずのパネルのうち、ほかの解析できた画像に写っていないもの）。</p>
+      <% end %>
+      <% if @impact.unknown_position.positive? %>
+        <p class="mt-1" style="color:#ef9f27;">このうち <%= @impact.unknown_position %> 枚は、登録した架台との位置の関係が分からないため、どのパネルが写っているかを数えていません。</p>
+      <% end %>
+      <p class="text-xs text-gray-400 mt-2">画像: <%= @group.images.map(&:sequence).join("・") %></p>
+      <%= form_with url: inspection_bulk_exclusion_path(@inspection), class: "mt-3 flex flex-wrap gap-2 items-center" do %>
+        <%= hidden_field_tag :reason, @group.key %>
+        <% @group.images.each do |img| %><%= hidden_field_tag "image_ids[]", img.id, id: nil %><% end %>
+        <%= text_field_tag :note, nil, class: "form-input", placeholder: "メモ（任意。除外のメモに理由と一緒に残します）", style: "max-width:28rem;" %>
+        <%= submit_tag "#{@group.images.size} 枚を除外する", class: "btn btn-danger", data: { turbo_confirm: "#{@group.images.size} 枚を除外します。よろしいですか？" } %>
+        <%= link_to "やめる", inspection_bulk_exclusion_path(@inspection), class: "btn btn-secondary" %>
+      <% end %>
+    </div>
+  <% end %>
+
+  <div class="card p-0">
+    <table class="table text-sm" id="groups">
+      <thead><tr><th>理由</th><th>枚数</th><th></th></tr></thead>
+      <tbody>
+        <% @groups.each do |g| %>
+          <tr>
+            <td><%= g.label %></td>
+            <td style="white-space:nowrap;"><%= g.images.size %> 枚</td>
+            <td style="white-space:nowrap;"><%= link_to "除外する前に確認", inspection_bulk_exclusion_path(@inspection, reason: g.key), class: "btn btn-sm btn-secondary" %></td>
+          </tr>
+        <% end %>
+        <% if @groups.empty? %><tr><td colspan="3" class="text-gray-400">要確認・失敗の画像はありません</td></tr><% end %>
+      </tbody>
+    </table>
+  </div>
+</div>
