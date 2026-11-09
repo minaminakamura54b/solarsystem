@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# 実案件用（ローカル運用）のデータを外付けディスクにバックアップする（docs/LOCAL_OPERATION.md）。
+#   bin/local-backup /Volumes/<ディスク名>
+# - データベース（solarsystem_work）: pg_dump（日付付き。直近 SOLARSIGHT_BACKUP_KEEP 回分を残す。既定 10）。取ったあと読めるか確かめる
+# - 画像の置き場所（原本の R-JPEG・RGB・報告書の PDF）: rsync で差分だけコピーする。アプリで消したファイルもバックアップには残す
+# - 設定（~/SolarSightData/config）: rsync（SECRET_KEY_BASE などを含むので、バックアップ先は暗号化したディスクにする）
+# 暗号化されていないディスクには書かない（顧客の画像・位置情報を含むため。どうしても使うときは SOLARSIGHT_BACKUP_ALLOW_UNENCRYPTED=1）
+set -euo pipefail
+DATA="${SOLARSIGHT_DATA_DIR:-$HOME/SolarSightData}"
+DB="${SOLARSIGHT_WORK_DB:-solarsystem_work}"
+KEEP="${SOLARSIGHT_BACKUP_KEEP:-10}"
+export PATH="/opt/homebrew/bin:$PATH"
+
+DEST="${1:-}"
+if [ -z "$DEST" ] || [ ! -d "$DEST" ]; then
+  echo "使い方: bin/local-backup /Volumes/<ディスク名>（外付けディスクをつないでから）" >&2
+  exit 1
+fi
+if [ "${SOLARSIGHT_BACKUP_ALLOW_UNENCRYPTED:-}" != "1" ] && ! diskutil info "$DEST" 2>/dev/null | grep -Eq "FileVault: +Yes"; then
+  echo "バックアップ先が暗号化されていません: $DEST（ディスクユーティリティで「APFS（暗号化）」にしてください）" >&2
+  exit 1
+fi
+if [ ! -d "$DATA/storage" ]; then
+  echo "データの置き場所がありません: $DATA（bin/local setup の後に使います）" >&2
+  exit 1
+fi
+
+B="$DEST/SolarSightBackup"
+TS="$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$B/db" "$B/storage" "$B/config"
+
+dump="$B/db/${DB}_${TS}.dump"
+echo "データベースを書き出しています: $dump"
+pg_dump --format=custom --file="$dump" "$DB"
+pg_restore --list "$dump" > /dev/null # 読めることを確かめる
+
+echo "画像をコピーしています（差分だけ）: $B/storage"
+rsync -a "$DATA/storage/" "$B/storage/"
+rsync -a "$DATA/config/" "$B/config/"
+
+# 古いデータベースの書き出しを消す（直近 KEEP 回分を残す）
+ls -1t "$B/db/${DB}_"*.dump | tail -n +"$((KEEP + 1))" | while read -r old; do rm -f "$old"; done
+
+echo "$(date '+%Y/%m/%d %H:%M') → $B" > "$DATA/config/last_backup"
+echo "バックアップしました: データベース $(du -h "$dump" | cut -f1)、画像 $(du -sh "$B/storage" | cut -f1)（$B）"

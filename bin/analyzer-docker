@@ -11,4 +11,5 @@ env_args=()
 for name in DJI_IRP_PATH DJI_IRP_LIB_DIR; do
   if [ -n "${!name:-}" ]; then env_args+=(-e "$name=${!name}"); fi
 done
-exec "$DOCKER" exec -i "${env_args[@]}" -w "$ROOT/analyzer" "$CONTAINER" /opt/venv/bin/python -m analyzer "$@"
+# env_args が空のとき、macOS の bash 3.2 は set -u で "${env_args[@]}" をエラーにするため、空なら何も渡さない
+exec "$DOCKER" exec -i ${env_args[@]+"${env_args[@]}"} -w "$ROOT/analyzer" "$CONTAINER" /opt/venv/bin/python -m analyzer "$@"

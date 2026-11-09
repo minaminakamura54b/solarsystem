@@ -5,6 +5,9 @@
 development:
   adapter: async
 
+work:
+  adapter: async
+
 test:
   adapter: test
 

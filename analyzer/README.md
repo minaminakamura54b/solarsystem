@@ -77,11 +77,11 @@ Phase S の手順は [docs/PHASE_S_RUNBOOK.md](../docs/PHASE_S_RUNBOOK.md)、記
 
 ### 手元の R-JPEG で試す手順（Phase S 以降）
 
-顧客の画像はリポジトリに入れず、`tmp/spike/`（`.gitignore` 済み）などに置いて試してください。
+顧客の画像はリポジトリに入れず、リポジトリの外の `~/SolarSightData/development/spike/`（以下 `$SPIKE`）に置いて試してください。
 
 ```bash
 # linux/amd64 のコンテナの中で（手順は docs/PHASE_S_RUNBOOK.md の手順 3）
-DJI_IRP_PATH=$PWD/bin/dji_thermal_sdk/<版>/utility/bin/linux/release_x64/dji_irp uv run python -m analyzer propose-grid --thermal ../tmp/spike/DJI_0001_T.JPG --out /tmp/proposal.json
+DJI_IRP_PATH=$PWD/bin/dji_thermal_sdk/<版>/utility/bin/linux/release_x64/dji_irp uv run python -m analyzer propose-grid --thermal $SPIKE/DJI_0001_T.JPG --out /tmp/proposal.json
 ```
 
 ## エリア撮影の画像を間引く（11 月の案件の手順）
@@ -94,7 +94,7 @@ exiftool -n -csv -FileName -GPSLatitude -GPSLongitude <撮影フォルダ>/*_T.J
 uv run python scripts/select_images.py meta.csv --out selected.csv   # 間隔は --max-line-gap-m（13.5）・--max-shot-gap-m（11.0）
 ```
 
-顧客の画像の一覧なので、出力はリポジトリに置かないでください（`tmp/spike/` など）。
+顧客の画像の一覧なので、出力はリポジトリに置かないでください（`$SPIKE/` など）。
 
 ## 架台の地図の候補を作る（build-block-map）
 

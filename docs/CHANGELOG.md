@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-11-09 — ローカル運用（実案件を Mac で扱う。ブランチ `local-operation`）
+
+- 実案件用の環境 `RAILS_ENV=work`（ユーザー承認の案 A。Rails が `local` を予約しているため、ユーザーの選択で `work`）。データベースは `solarsystem_work`（キューは `solarsystem_work_queue`）、画像は `~/SolarSightData/storage`、ログ・解析の一時ファイルも `~/SolarSightData` の下。解析は Solid Queue（Puma の中）で裏で並列に（既定 4）。画面は 127.0.0.1 だけ
+- `bin/local`（setup・start・stop・restart・status・logs）。status は動いているか・解析待ちの枚数・画像の置き場所の使用量とディスクの残り（30 GB 未満で警告）・最後のバックアップを表示
+- `bin/local-backup /Volumes/<ディスク>`: データベース（pg_dump。読めることを確かめ、直近 10 回分を残す）・画像（rsync の差分）・設定を外付けディスクに。暗号化されていないディスクには書かない
+- `docs/LOCAL_OPERATION.md`（置き場所・準備・起動と停止・解析時間の目安・バックアップと戻し方・顧客のデータの注意・開発用との違い・困ったとき）
+- 開発用の画像の置き場所を `~/SolarSightData/development/storage` に変更（config/storage.yml の local）。開発の解析の一時ファイルもリポジトリの外へ。`bin/analyzer-container` はデータの置き場所もマウントする（マウントしていない古いコンテナは作り直す）
+- `db/seeds.rb` の開発用のサンプルデータは開発環境だけに入れる（実案件用・本番には判定基準だけ）
+- `bin/analyzer-docker`: DJI_IRP_PATH が空のとき macOS の bash 3.2 でエラーになっていたのを直した
+- 確認（合成データだけ。確認用のデータベース・置き場所を別に作り、終わったら消した）: setup で開発用のサンプルデータが入らないこと、start・status・stop、LAN からは開けないこと、合成データの 4 枚を登録して裏の解析で 3 枚が完了・異常 7 件（1 枚はグリッドなしで要確認）、画像がリポジトリの外に保存され一時ファイルが消えること、暗号化されていない場所へのバックアップを断ること、暗号化した APFS のボリュームへのバックアップと別のデータベースへの戻し（点検・異常・画像の件数が一致）、古い書き出しの削除、ディスクの残りの警告
+
 ## 2026-11-09 — 報告書の PDF（ferrum_pdf）と、初期値の版の暫定の印（Phase 7。ブランチ `phase7-pdf`）
 
 - gem `ferrum_pdf`（~> 3.2。MIT。依存の ferrum も MIT）を追加（ユーザー承認）。発行した版の固定コピーから、報告書の画面と同じテンプレートで HTML を作り、Chromium で A4 の PDF にして版に付ける（`ReportPdf`・`ReportPdfJob`）。ページ番号と版の入ったフッター

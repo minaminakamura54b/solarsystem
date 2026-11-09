@@ -26,7 +26,7 @@
 6. **確信度（%）を表示・保存しない。** 代わりに証拠レベル（A/B/C）を使う。
 7. **閾値・モデル名・パスをハードコードしない。** 閾値は DB のルールセット、モデル名は `CLAUDE_MODEL`、SDK のパスは `DJI_IRP_PATH`。
 8. **報告書に個人名を載せない。** 会社名・屋号のみ。
-9. **コミットしないもの**: 秘密情報（`.env`、`config/*.key`）、DJI Thermal SDK のバイナリ（`analyzer/bin/`）、顧客の画像。テストには合成データを使う。
+9. **コミットしないもの**: 秘密情報（`.env`、`config/*.key`）、DJI Thermal SDK のバイナリ（`analyzer/bin/`）、顧客の画像。テストには合成データを使う。**顧客の画像はリポジトリの中に置かない**（開発用は `~/SolarSightData/development/`、実案件用は `~/SolarSightData/storage`。2026-11-09 ユーザー指示）。
 10. R-JPEG の原本は変換・縮小・削除しない。Claude に送る場合は派生画像を作る。
 
 ## コマンド
@@ -42,6 +42,7 @@ cd analyzer && uv run pytest   # 解析エンジン（Python 3.12・uv）のテ�
 bin/rails test:system     # グリッド入力画面の JS（ヘッドレス Chrome）
 bin/rails dev:synthetic_inspection   # 開発用: 合成シーン（.npy）の点検を登録する
 cd analyzer && uv run python -m analyzer check-sdk   # DJI Thermal SDK の置き場所の確認（DJI_IRP_PATH。SDK の機能は呼ばない）
+bin/local setup|start|stop|status  # 実案件用（RAILS_ENV=work。ローカル運用）。手順は docs/LOCAL_OPERATION.md。バックアップは bin/local-backup /Volumes/<ディスク>
 bin/analyzer-container up      # 開発用: 解析エンジンを動かす Docker（linux/amd64）のコンテナを用意。.env に ANALYZER_DOCKER=1 と DJI_IRP_PATH を設定して bin/dev を起動すると、実画像（R-JPEG）を画面から解析できる
 ```
 

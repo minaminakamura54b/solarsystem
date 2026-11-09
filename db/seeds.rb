@@ -3,7 +3,8 @@ puts "シードデータを作成中..."
 # 判定基準（本番でも必要なデータ）
 load Rails.root.join("db/seeds/rule_sets.rb")
 
-# ここから下は開発用のサンプルデータ
+# ここから下は開発用のサンプルデータ。実案件用（RAILS_ENV=work）・本番には入れない
+return unless Rails.env.development?
 
 # 発電所を2件作成
 sites_data = [

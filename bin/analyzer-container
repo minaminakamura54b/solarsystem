@@ -3,20 +3,34 @@
 #   bin/analyzer-container up      作成して起動し、OS のパッケージと Python の依存関係を入れる（2 回目以降は起動と依存関係の更新だけ）
 #   bin/analyzer-container status  状態と、DJI Thermal SDK の置き場所の確認（check-sdk）
 #   bin/analyzer-container down    停止して削除する
-# プロジェクトを同じパスでマウントする（DJI_IRP_PATH もホストと同じパスで指定できる）。
+# プロジェクトと、リポジトリの外のデータの置き場所（SOLARSIGHT_DATA_DIR。既定 ~/SolarSightData）を同じパスでマウントする
+# （DJI_IRP_PATH もホストと同じパスで指定できる。解析の一時ファイルはデータの置き場所に作る）。
 # Python の仮想環境はコンテナの中の /opt/venv（Mac 用の analyzer/.venv は使わない・上書きしない）
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CONTAINER="${ANALYZER_CONTAINER:-solarsight-analyzer}"
 DOCKER="${DOCKER:-$(command -v docker || echo /Applications/Docker.app/Contents/Resources/bin/docker)}"
 IMAGE="python:3.12-slim"
+DATA="${SOLARSIGHT_DATA_DIR:-$HOME/SolarSightData}"
 
 exec_in() { "$DOCKER" exec -w "$ROOT/analyzer" -e UV_PROJECT_ENVIRONMENT=/opt/venv "$CONTAINER" "$@"; }
 
 case "${1:-}" in
   up)
+    mkdir -p "$DATA"
+    # データの置き場所をマウントしていない古いコンテナは作り直す（Python の依存関係は入れ直しになる）
+    mounted=no
+    if "$DOCKER" container inspect "$CONTAINER" >/dev/null 2>&1; then
+      for m in $("$DOCKER" container inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' "$CONTAINER"); do
+        case "$DATA" in "$m"|"$m"/*) mounted=yes ;; esac
+      done
+    fi
+    if "$DOCKER" container inspect "$CONTAINER" >/dev/null 2>&1 && [ "$mounted" = no ]; then
+      echo "データの置き場所（$DATA）をマウントするため、コンテナを作り直します"
+      "$DOCKER" rm -f "$CONTAINER" >/dev/null
+    fi
     if ! "$DOCKER" container inspect "$CONTAINER" >/dev/null 2>&1; then
-      "$DOCKER" run -d --name "$CONTAINER" --platform linux/amd64 -v "$ROOT:$ROOT" -w "$ROOT/analyzer" "$IMAGE" sleep infinity
+      "$DOCKER" run -d --name "$CONTAINER" --platform linux/amd64 -v "$ROOT:$ROOT" -v "$DATA:$DATA" -w "$ROOT/analyzer" "$IMAGE" sleep infinity
       # libgomp1: dji_irp が使う OpenMP（無いと起動しない）。本番の Dockerfile と同じ
       exec_in sh -c "apt-get update -qq && apt-get install -y -qq --no-install-recommends libgomp1 >/dev/null && pip install -q uv"
     else

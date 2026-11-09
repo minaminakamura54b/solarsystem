@@ -9,7 +9,7 @@
 #     priority: 2
 #     schedule: at 5am every day
 
-production:
+production: &recurring
   # 長時間 analyzing のまま残った画像を failed にする（docs/IMPROVEMENT_PLAN.md Phase 4-9）
   stale_analysis:
     class: StaleAnalysisJob
@@ -17,3 +17,7 @@ production:
   clear_solid_queue_finished_jobs:
     command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
     schedule: every hour at minute 12
+
+# 実案件用も同じ（長時間 analyzing のまま残った画像を failed にする・終わったジョブを消す）
+work:
+  <<: *recurring

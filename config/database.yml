@@ -7,6 +7,19 @@ development:
   <<: *default
   database: solarsystem_development
 
+# 実案件用（RAILS_ENV=work。docs/LOCAL_OPERATION.md）。開発用と別のデータベース。キューも別のデータベース
+work:
+  primary:
+    <<: *default
+    # 画面（Puma のスレッド）と裏の解析（Solid Queue のスレッド）が同じプロセスで接続する
+    pool: <%= ENV.fetch("RAILS_MAX_THREADS", 3).to_i + ENV.fetch("SOLARSIGHT_ANALYZE_THREADS", 4).to_i + 4 %>
+    database: <%= ENV.fetch("SOLARSIGHT_WORK_DB", "solarsystem_work") %>
+  queue:
+    <<: *default
+    pool: <%= ENV.fetch("SOLARSIGHT_ANALYZE_THREADS", 4).to_i + 6 %>
+    database: <%= ENV.fetch("SOLARSIGHT_WORK_DB", "solarsystem_work") %>_queue
+    migrations_paths: db/queue_migrate
+
 test:
   <<: *default
   database: solarsystem_test

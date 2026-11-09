@@ -33,6 +33,8 @@ Rails 8.1（Puma）
 - 解析エンジン（`analyzer/`、Python 3.12・uv）は Phase 4 で Rails に接続した。呼び出し方は `config/analyzer.yml`（開発・テストは `uv run`、本番は Docker イメージ内の `/rails/analyzer/.venv/bin/python`）
 - R-JPEG は解析エンジンが DJI Thermal SDK の `dji_irp` で温度行列（float32・℃）に変換する（2026-11-06。Phase S の記録どおり）。SDK はリポジトリ・イメージに含めず、`DJI_IRP_PATH` で場所を指定する。SDK が無ければ `needs_review（sdk_unavailable）`、SDK の失敗は `needs_review（sdk_failed）`。開発・テストは .npy の合成データと偽の `dji_irp` を使う
 
+実案件はローカル運用（`RAILS_ENV=work`。Mac の上で 1 人で使う。`bin/local`・`docs/LOCAL_OPERATION.md`）。開発用とはデータベース・画像の置き場所（リポジトリの外の `~/SolarSightData`）が別。
+
 ## 2. 画面とルーティング
 
 | パス | コントローラー | 内容 |
