@@ -16,8 +16,10 @@ WORKDIR /rails
 
 # Install base packages
 # libgomp1 は DJI Thermal SDK の dji_irp が使う OpenMP（無いと起動しない。Phase S で確認。SDK 本体はイメージに含めない）
+# chromium・fonts-noto-cjk は報告書の PDF（ferrum_pdf）。Chromium のサンドボックスは外さない（--no-sandbox を使わない）ので、
+# コンテナは root 以外のユーザーで、--security-opt seccomp=config/seccomp/chromium.json を付けて動かす（config/seccomp/README.md）
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y curl libjemalloc2 libvips sqlite3 libimage-exiftool-perl libgomp1 && \
+    apt-get install --no-install-recommends -y curl libjemalloc2 libvips sqlite3 libimage-exiftool-perl libgomp1 chromium fonts-noto-cjk && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 

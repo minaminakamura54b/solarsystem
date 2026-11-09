@@ -43,6 +43,31 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_match "人が確認し、異常ではないと判断した候補の件数", response.body
   end
 
+  test "発行すると PDF を作り、版の一覧からダウンロードできる。作れなかった版は作り直せる" do
+    FerrumPdf.singleton_class.alias_method(:original_render_pdf, :render_pdf)
+    FerrumPdf.define_singleton_method(:render_pdf) { |**| "%PDF-1.7 fake" }
+    perform_enqueued_jobs { post inspection_reports_path(@inspection, site_id: @site.id), params: { acknowledge_warnings: "1" } }
+    report = @inspection.inspection_reports.sole
+    assert report.pdf.attached?, "発行すると PDF のジョブを登録する"
+
+    get inspection_reports_path(@inspection, site_id: @site.id)
+    assert_select "a[href='#{pdf_inspection_report_path(@inspection, report)}']", text: "PDF"
+    get pdf_inspection_report_path(@inspection, report, site_id: @site.id)
+    assert_response :redirect
+    assert_match %r{/rails/active_storage/blobs/}, response.location
+
+    report.pdf.purge
+    report.update_columns(pdf_error: "Ferrum::TimeoutError")
+    get inspection_reports_path(@inspection, site_id: @site.id)
+    assert_match "PDF を作れませんでした", response.body
+    perform_enqueued_jobs { post regenerate_pdf_inspection_report_path(@inspection, report, site_id: @site.id) }
+    assert report.reload.pdf.attached?
+    assert_nil report.pdf_error
+  ensure
+    FerrumPdf.singleton_class.alias_method(:render_pdf, :original_render_pdf)
+    FerrumPdf.singleton_class.remove_method(:original_render_pdf)
+  end
+
   test "所見が今のデータと合わないときは「所見は作成していません」と載せる" do
     get preview_inspection_reports_path(@inspection, site_id: @site.id)
     assert_response :success

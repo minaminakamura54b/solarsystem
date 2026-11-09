@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_09_110000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_09_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -273,6 +273,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_110000) do
     t.jsonb "acknowledged_warnings", default: [], null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "pdf_generated_at"
+    t.text "pdf_error"
     t.index ["inspection_id", "version_number"], name: "index_inspection_reports_on_inspection_id_and_version_number", unique: true
     t.index ["inspection_id"], name: "index_inspection_reports_on_inspection_id"
   end

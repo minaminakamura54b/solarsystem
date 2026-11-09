@@ -162,7 +162,7 @@ class ReportSnapshotBuilder
       "id" => g.id, "type" => g.group_type, "severity" => g.severity, "evidence_level" => nil, "panel" => nil,
       "delta_t" => g.delta_t&.to_f&.round(2), "measure" => g.measure, "normalized_delta_t" => g.normalized_delta_t&.to_f&.round(2),
       "threshold_basis" => g.threshold_basis, "observed" => nil, "visible" => nil,
-      "image" => image_ref(g.inspection_image, nil), "others" => [], **explanation_fields(g)
+      "image" => image_ref(g.inspection_image, union_bbox(g.anomalies.map(&:effective_bbox))), "others" => [], **explanation_fields(g)
     }
   end
 
@@ -181,6 +181,15 @@ class ReportSnapshotBuilder
 
     { "explanation_state" => "current", "explanation" => record.report_text, "causes" => Array(record.cause_candidates).filter_map { |c| c["cause"] if c.is_a?(Hash) },
       "recommended_action" => record.recommended_action, "additional_checks" => Array(record.additional_checks) }
+  end
+
+  # 群の構成パネルの bbox をまとめた範囲（群の切り出しに使う）
+  def union_bbox(boxes)
+    boxes = boxes.compact
+    return nil if boxes.empty?
+
+    { "x1" => boxes.map { |b| b["x1"].to_f }.min, "y1" => boxes.map { |b| b["y1"].to_f }.min,
+      "x2" => boxes.map { |b| b["x2"].to_f }.max, "y2" => boxes.map { |b| b["y2"].to_f }.max }
   end
 
   def image_ref(image, bbox)
@@ -312,7 +321,7 @@ class ReportSnapshotBuilder
   end
 
   def confirmed_groups
-    @confirmed_groups ||= @inspection.anomaly_groups.where(review_status: InspectionReview::CONFIRMED).to_a
+    @confirmed_groups ||= @inspection.anomaly_groups.where(review_status: InspectionReview::CONFIRMED).includes(:anomalies, inspection_image: { rgb_attachment: :blob }).to_a
   end
 
   def confirmed_rows

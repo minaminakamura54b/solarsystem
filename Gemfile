@@ -29,6 +29,9 @@ gem "thruster", require: false
 
 # Image processing + S3
 gem "image_processing", "~> 1.2"
+
+# 報告書の PDF（HTML → PDF。Ruby から Chromium を操作する。Node.js は不要。2026-11-09 ユーザー承認）
+gem "ferrum_pdf", "~> 3.2"
 gem "aws-sdk-s3", require: false
 
 gem "dotenv-rails", groups: [ :development, :test ]
