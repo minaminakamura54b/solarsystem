@@ -33,6 +33,7 @@ class ClaudeStructuredOutputTest < ActiveSupport::TestCase
     assert_equal [ "anthropic", "inspection_summary", "test-model", "v1", "入力 1", "sent" ],
                  log.values_at(:service, :purpose, :model, :prompt_version, :input_text, :status)
     assert_equal "入力 1".bytesize, log.input_bytes
+    assert_equal [ 1, 1 ], [ log.input_tokens, log.output_tokens ], "応答のトークン数（費用の計算に使う）"
     assert log.sent_at
   end
 
@@ -44,6 +45,7 @@ class ClaudeStructuredOutputTest < ActiveSupport::TestCase
     log = @inspection.external_transmissions.sole
     assert_equal "failed", log.status
     assert_match "JSON", log.error
+    assert_equal 1, log.output_tokens, "使えない応答でも課金されるのでトークン数を残す"
     assert_not log.destroy
     assert_not @inspection.destroy, "送った記録のある点検は削除しない"
   end

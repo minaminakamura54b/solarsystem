@@ -34,13 +34,14 @@ class ClaudeStructuredOutput
     log = ExternalTransmission.create!(inspection:, service: "anthropic", purpose: audit.fetch(:purpose), target: audit[:target],
                                        model:, prompt_version: audit[:prompt_version], input_text: input, input_bytes: input.bytesize,
                                        status: "sending", sent_at: Time.current)
+    @last_usage = nil
     begin
       result = call_api(model:, system:, input:, schema:)
     rescue Error => e
-      log.update!(status: "failed", error: e.message)
+      log.update!(status: "failed", error: e.message, **usage_columns)
       raise
     end
-    log.update!(status: "sent")
+    log.update!(status: "sent", **usage_columns)
     result
   end
 
@@ -54,6 +55,7 @@ class ClaudeStructuredOutput
       messages: [ { role: "user", content: input } ],
       output_config: { format_: { type: :json_schema, schema: schema } }
     )
+    @last_usage = message.usage # 応答があれば、使えない応答（拒否・JSON でない）でも課金されるので記録する
     parse(message)
   rescue Anthropic::Errors::APIConnectionError => e
     raise Error, "Claude API に接続できませんでした（#{e.class.name.demodulize}）"
@@ -61,6 +63,14 @@ class ClaudeStructuredOutput
     raise Error, "Claude API がエラーを返しました（HTTP #{e.status}#{" #{e.type}" if e.type}）"
   rescue Anthropic::Errors::Error => e
     raise Error, "Claude API の呼び出しに失敗しました（#{e.class.name.demodulize}）"
+  end
+
+  # 応答のトークン数（思考のトークンは output_tokens に含まれる）
+  def usage_columns
+    return {} unless @last_usage
+
+    { input_tokens: @last_usage.input_tokens, output_tokens: @last_usage.output_tokens,
+      cache_creation_input_tokens: @last_usage.cache_creation_input_tokens, cache_read_input_tokens: @last_usage.cache_read_input_tokens }
   end
 
   def client

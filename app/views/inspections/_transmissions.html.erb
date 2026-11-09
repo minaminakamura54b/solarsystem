@@ -6,7 +6,7 @@
     <p class="text-xs text-gray-400">この点検のデータを外部のサービスに送ったことはありません。</p>
   <% else %>
     <table class="table text-xs">
-      <thead><tr><th>日時</th><th>送り先</th><th>内容</th><th>対象</th><th>モデル・プロンプト</th><th>結果</th><th>送った入力</th></tr></thead>
+      <thead><tr><th>日時</th><th>送り先</th><th>内容</th><th>対象</th><th>モデル・プロンプト</th><th>結果</th><th>トークン（入力・出力）</th><th>送った入力</th></tr></thead>
       <tbody>
         <% logs.each do |log| %>
           <tr>
@@ -16,6 +16,7 @@
             <td><%= log.target_label %></td>
             <td><%= log.model %><br><span class="text-gray-400"><%= log.prompt_version %></span></td>
             <td><%= log.status_label %><% if log.error.present? %><br><span style="color:#e24b4a;"><%= log.error %></span><% end %></td>
+            <td style="white-space:nowrap;"><%= log.input_tokens ? "#{number_with_delimiter(log.input_tokens)}・#{number_with_delimiter(log.output_tokens)}" : "—" %></td>
             <td><details><summary style="cursor:pointer;"><%= number_with_delimiter(log.input_bytes) %> バイト</summary><pre style="white-space:pre-wrap; max-width:36rem;"><%= log.input_text %></pre></details></td>
           </tr>
         <% end %>
