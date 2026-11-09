@@ -21,4 +21,12 @@ class LayoutOverlayConfig
   def ifov_mrad(camera_model)
     cameras.dig(camera_model.to_s, "ifov_mrad")&.to_f
   end
+
+  # 同時撮影の RGB の画素の角度（mrad/画素）と基準の横の画素数。設定に無ければ nil
+  def rgb_optics(camera_model)
+    spec = cameras[camera_model.to_s].to_h
+    return nil unless spec["rgb_ifov_mrad"] && spec["rgb_reference_width"]
+
+    { ifov_mrad: spec["rgb_ifov_mrad"].to_f, reference_width: spec["rgb_reference_width"].to_i }
+  end
 end

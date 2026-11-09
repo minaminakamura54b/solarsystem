@@ -18,7 +18,9 @@
   </div>
 </div>
 
+<% rgb_mapping = RgbCropMapping.for(@image) %>
 <div class="p-6 space-y-6" data-controller="review"
+     <% rgb_mapping&.data_attributes&.each do |key, value| %>data-review-<%= key.to_s.dasherize %>-value="<%= value %>" <% end %>
      data-review-boxes-value="<%= (@groups.flat_map { |g| g.anomalies.map { |a| { id: "group_#{g.id}", bbox: a.effective_bbox } } } + @anomalies.map { |a| { id: "anomaly_#{a.id}", bbox: a.effective_bbox, status: a.review_status } }).to_json %>">
   <p class="text-xs text-gray-400">
     キーボード: <strong>j / k</strong> で候補を移動、<strong>c</strong> で確定、<strong>x</strong> で却下（理由を選んでから）。
@@ -46,7 +48,7 @@
         <div class="card p-3">
           <p class="form-label">RGB 画像（同時撮影）</p>
           <%= image_tag url_for(@image.rgb), data: { review_target: "rgb", action: "load->review#imageLoaded" }, style: "display:block; max-width:100%; height:auto;", alt: "RGB 画像" %>
-          <p class="text-xs text-gray-400 mt-1">サーモと RGB の位置合わせは未設定（Phase S で決める）のため、切り出しは「おおよその位置」です。</p>
+          <p class="text-xs text-gray-400 mt-1">サーモと RGB の位置合わせは調整していないため、切り出しは「おおよその位置」です<%= rgb_mapping ? "（中心はカメラの画角の比から求めています）" : "（このカメラの画角が設定に無いため、サーモと同じ位置の割合で切り出しています）" %>。</p>
         </div>
       <% end %>
     </div>
