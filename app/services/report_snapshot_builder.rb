@@ -150,14 +150,14 @@ class ReportSnapshotBuilder
   def summary
     unless @inspection.claude_enabled?
       text = @inspection.manual_summary.presence
-      return { "state" => text ? "manual" : "none", "text" => text, "priority_actions" => [], "additional_checks" => [] }
+      return { "state" => text ? "manual" : "none", "text" => text, "priority_actions" => [], "internal_improvements" => [] }
     end
 
     current = InspectionSummaryWriter.new(output: nil).current?(@inspection) if @inspection.completed? && @inspection.reviewed_at
     return { "state" => @inspection.summary_generated_at ? "stale" : "none", "text" => nil } unless current
 
     { "state" => "current", "text" => @inspection.summary_text, "priority_actions" => Array(@inspection.summary_priority_actions),
-      "additional_checks" => Array(@inspection.summary_additional_checks), "prompt_version" => @inspection.summary_prompt_version }
+      "internal_improvements" => Array(@inspection.summary_internal_improvements), "prompt_version" => @inspection.summary_prompt_version }
   end
 
   def counts(items)

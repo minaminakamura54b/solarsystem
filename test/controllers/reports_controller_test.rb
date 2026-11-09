@@ -80,6 +80,20 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_no_match "未算定 0 件", response.body
   end
 
+  test "総括文の撮影・解析の改善点は社内向けの作業記録だけに載せ、顧客向けには発電所に対する対応だけを載せる" do
+    @inspection.update_columns(claude_enabled: true)
+    with_fake_claude(FakeAnthropicClient.replying(summary_json(priority_actions: [ "重大度「注意」のパネルを現地で確認する" ],
+                                                               internal_improvements: [ "使わなかった画像の範囲を撮り直す" ]))) do
+      assert_equal :explained, InspectionSummaryWriter.new.write(@inspection.reload)
+    end
+
+    get preview_inspection_reports_path(@inspection, site_id: @site.id)
+    assert_match "重大度「注意」のパネルを現地で確認する", response.body
+    assert_no_match "使わなかった画像の範囲を撮り直す", response.body
+    get preview_inspection_reports_path(@inspection, site_id: @site.id, kind: "internal")
+    assert_match "使わなかった画像の範囲を撮り直す", response.body
+  end
+
   test "所見が今のデータと合わないときは「所見は作成していません」と載せる" do
     get preview_inspection_reports_path(@inspection, site_id: @site.id)
     assert_response :success

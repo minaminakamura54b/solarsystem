@@ -56,13 +56,18 @@
       <% end %>
       <p><%= @inspection.summary_text %></p>
       <% if @inspection.summary_priority_actions.present? %>
-        <p class="text-xs" style="font-weight:600;">優先して行う対応</p>
+        <p class="text-xs" style="font-weight:600;">発電所に対する対応（顧客向け）</p>
         <ol class="text-xs" style="list-style:decimal; padding-left:1.25rem;">
           <% @inspection.summary_priority_actions.each do |action| %><li><%= action %></li><% end %>
         </ol>
       <% end %>
-      <% if @inspection.summary_additional_checks.present? %>
-        <p class="text-xs" style="font-weight:600;">追加の確認</p>
+      <% if @inspection.summary_internal_improvements.present? %>
+        <p class="text-xs" style="font-weight:600;">撮影・解析の改善点（社内向け。顧客向けの報告書には載せない）</p>
+        <ul class="text-xs" style="list-style:disc; padding-left:1.25rem;">
+          <% @inspection.summary_internal_improvements.each do |item| %><li><%= item %></li><% end %>
+        </ul>
+      <% elsif @inspection.summary_additional_checks.present? %>
+        <p class="text-xs" style="font-weight:600;">追加の確認（以前の版の総括文）</p>
         <ul class="text-xs" style="list-style:disc; padding-left:1.25rem;">
           <% @inspection.summary_additional_checks.each do |check| %><li><%= check %></li><% end %>
         </ul>
