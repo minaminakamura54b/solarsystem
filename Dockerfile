@@ -23,6 +23,10 @@ RUN apt-get update -qq && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
+# 報告書の PDF の Chromium は本体を直接使う（Debian の起動スクリプトは /proc/cpuinfo の sse3 を確かめて止まり、
+# Mac の Docker（amd64 のエミュレーション）では起動できないため。本番の amd64 の CPU には sse3 がある）
+ENV BROWSER_PATH="/usr/lib/chromium/chromium"
+
 # Set production environment variables and enable jemalloc for reduced memory usage and latency.
 ENV RAILS_ENV="production" \
     BUNDLE_DEPLOYMENT="1" \

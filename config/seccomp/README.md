@@ -18,6 +18,19 @@ docker run --security-opt seccomp=config/seccomp/chromium.json ...
     必要な 2 つだけを足した。`setns`・`mount` などは既定のまま許可しない
 - 元のプロファイルを更新するときは、同じ手順（元の JSON に上の 1 規則を足す）で作り直し、この README のコミットと日付を書き換える
 
+## 確かめたこと（2026-11-09、Mac の Docker Desktop・linux/amd64 のエミュレーション）
+
+- Docker の既定の seccomp では、Chromium が「No usable sandbox!」で起動しない（`--no-sandbox` を付けない限り動かない）
+- このプロファイルでは、サンドボックスを使ったまま起動し、報告書の HTML から A4 の PDF を作れた（`rails` ユーザー、`--no-sandbox` なし）。
+  PDF には Noto Sans CJK JP が埋め込まれ、日本語は化けなかった
+- Debian の `/usr/bin/chromium`（起動スクリプト）は CPU の sse3 を確かめて止まり、エミュレーションでは起動できないため、
+  Dockerfile で `BROWSER_PATH=/usr/lib/chromium/chromium`（本体）を指定している
+
+```bash
+docker run --rm --security-opt seccomp=config/seccomp/chromium.json --entrypoint sh <イメージ> \
+  -c '/usr/lib/chromium/chromium --headless --disable-gpu --dump-dom about:blank'
+```
+
 ## 注意
 
 - コンテナは root ではなく `rails` ユーザー（Dockerfile）で動かす。Chromium は root ではサンドボックスを使えない
