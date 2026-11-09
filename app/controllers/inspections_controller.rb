@@ -112,8 +112,8 @@ class InspectionsController < ApplicationController
       notice += "。#{result.warnings.join('。')}" if result.warnings.any?
       redirect_to inspection_path(@inspection), notice: notice
     else
-      redirect_to review_inspection_path(@inspection, image: params[:image], anchor: "complete"),
-                  alert: (result.warnings + result.errors).join("。")
+      back = params[:return_to] == "panel_review" ? inspection_panel_review_path(@inspection, anchor: "complete") : review_inspection_path(@inspection, image: params[:image], anchor: "complete")
+      redirect_to back, alert: (result.warnings + result.errors).join("。")
     end
   end
 
