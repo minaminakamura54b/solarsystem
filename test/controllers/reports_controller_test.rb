@@ -68,6 +68,13 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     FerrumPdf.singleton_class.remove_method(:original_render_pdf)
   end
 
+  test "確定した異常が 0 件なら、影響容量の欄は「対象の異常なし」" do
+    @anomaly.update_columns(review_status: "rejected", rejection_reason: "glare")
+    get preview_inspection_reports_path(@inspection, site_id: @site.id)
+    assert_match "対象の異常なし", response.body
+    assert_no_match "未算定 0 件", response.body
+  end
+
   test "所見が今のデータと合わないときは「所見は作成していません」と載せる" do
     get preview_inspection_reports_path(@inspection, site_id: @site.id)
     assert_response :success
