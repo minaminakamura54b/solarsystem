@@ -5,7 +5,7 @@
     <h2 class="page-title">📄 報告書</h2>
     <p class="text-sm text-gray-500 mt-1">
       報告書は版として残します。発行した版の内容は変わりません。点検の内容が変わったら、改訂版で出し直します（旧版も残ります）。
-      PDF の出力は準備中です（今は画面の内容をブラウザで印刷できます）。
+      発行すると、その版の PDF を作ります（顧客に渡すのは PDF です）。
     </p>
   </div>
   <div class="flex gap-2" style="white-space:nowrap;">
@@ -29,7 +29,18 @@
             <td style="white-space:nowrap;"><%= r.issued_at.in_time_zone(ImageQualityConfig.current.capture_time_zone).strftime("%Y/%m/%d %H:%M") %></td>
             <td><%= r.revision_reason || "—" %></td>
             <td class="text-xs"><%= safe_join(r.acknowledged_warnings, tag.br).presence || "—" %></td>
-            <td><%= link_to "表示", inspection_report_path(@inspection, r), target: "_blank", rel: "noopener" %></td>
+            <td style="white-space:nowrap;">
+              <%= link_to "表示", inspection_report_path(@inspection, r), target: "_blank", rel: "noopener" %>
+              <% if r.pdf.attached? %>
+                ／ <%= link_to "PDF", pdf_inspection_report_path(@inspection, r) %>
+              <% elsif r.pdf_error.present? %>
+                <br><span class="text-xs" style="color:#ef9f27;" title="<%= r.pdf_error %>">PDF を作れませんでした</span>
+                <%= button_to "作り直す", regenerate_pdf_inspection_report_path(@inspection, r), class: "btn btn-sm btn-secondary", form: { style: "display:inline;" } %>
+              <% else %>
+                <br><span class="text-xs text-gray-400">PDF を作成中</span>
+                <%= button_to "作り直す", regenerate_pdf_inspection_report_path(@inspection, r), class: "btn btn-sm btn-secondary", form: { style: "display:inline;" } %>
+              <% end %>
+            </td>
           </tr>
         <% end %>
         <% if @reports.empty? %><tr><td colspan="5" class="text-gray-400">まだ発行していません</td></tr><% end %>

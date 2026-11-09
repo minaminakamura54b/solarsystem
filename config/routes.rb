@@ -38,6 +38,10 @@ Rails.application.routes.draw do
     # 報告書の版（Phase 7）
     resources :reports, only: %i[index show create] do
       get :preview, on: :collection
+      member do
+        get :pdf
+        post :regenerate_pdf
+      end
     end
     # 要確認・失敗の画像を理由ごとにまとめて除外する（Phase 7）
     resource :bulk_exclusion, only: %i[show create]

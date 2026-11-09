@@ -56,6 +56,7 @@ class ReportIssueTest < ActiveSupport::TestCase
   end
 
   test "暫定の判定基準を使ったら、判定基準と警告と免責に載せる。使っていなければ載せない" do
+    RuleSet.active_set.update_columns(provisional: false) # 暫定でない版（依頼元と合意した版）を使った場合
     assert_not snapshot.dig("criteria", "provisional")
     assert_not snapshot["disclaimers"].any? { |l| l.include?("暫定") }
 

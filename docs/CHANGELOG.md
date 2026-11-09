@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-11-09 — 報告書の PDF（ferrum_pdf）と、初期値の版の暫定の印（Phase 7。ブランチ `phase7-pdf`）
+
+- gem `ferrum_pdf`（~> 3.2。MIT。依存の ferrum も MIT）を追加（ユーザー承認）。発行した版の固定コピーから、報告書の画面と同じテンプレートで HTML を作り、Chromium で A4 の PDF にして版に付ける（`ReportPdf`・`ReportPdfJob`）。ページ番号と版の入ったフッター
+- PDF の HTML には、切り出し画像を派生画像（`ReportImages`。原本を読み込んで切り出し・縮小した JPEG）として埋め込み、ネットワークから読むもの（画像の URL・外部のフォント・スクリプト）を入れない。JavaScript は動かさない
+- Chromium のサンドボックスは外さない（`--no-sandbox` を使わない。ユーザー指示）。Docker では Docker の既定の seccomp プロファイルに `clone`・`unshare` だけを足した `config/seccomp/chromium.json` で動かす（出どころ・ライセンス・足した理由は `config/seccomp/README.md`）
+- Dockerfile に `chromium`・`fonts-noto-cjk` と `BROWSER_PATH=/usr/lib/chromium/chromium`（Debian の起動スクリプトは CPU の sse3 を確かめて止まり、Mac の amd64 のエミュレーションでは起動できないため本体を指定）を追加
+- 確認: Mac（Google Chrome）と、本番と同じ Dockerfile のイメージ（linux/amd64、`rails` ユーザー、`chromium.json`）の両方で、報告書の PDF を作れた。既定の seccomp では「No usable sandbox!」で起動しないことも確認。PDF には Noto Sans CJK JP が埋め込まれ日本語は化けず、個人名は載っていない（屋号・入力した会社名・発電所名だけ）
+- 版の一覧に PDF のダウンロードと、作れなかった版の「作り直す」。`inspection_reports` に pdf_generated_at・pdf_error（可逆なマイグレーション）
+- 初期値の版（2026-09-initial）もシードで暫定にした（商用製品の公開基準を参考にした仮の値で、依頼元と合意していないため。ユーザー指示）。開発環境は `rule_sets:mark_provisional` で印を付けた
+- 報告書の異常一覧の列幅を固定（A4 に収める）、群の切り出しを構成パネルの範囲にした
+
 ## 2026-11-09 — 報告書の版と、報告書の画面（Phase 7。ブランチ `phase7-report`）
 
 - `inspection_reports` を追加（可逆なマイグレーション）。報告書を版として残す（版番号・発行日時・発行時の内容の固定コピー・内容の digest・改訂の理由・確認した警告）。発行した版は変えられず、削除できない。版のある点検は削除できない（判断した事項）

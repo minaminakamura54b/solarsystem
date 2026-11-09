@@ -116,7 +116,8 @@
 <% if s["items"].empty? %>
   <p>確定した熱異常はありませんでした。</p>
 <% else %>
-  <table>
+  <table class="items">
+    <colgroup><col style="width:4%"><col style="width:11%"><col style="width:11%"><col style="width:7%"><col style="width:5%"><col style="width:13%"><col style="width:9%"><col style="width:12%"><col style="width:9%"><col style="width:19%"></colgroup>
     <tr><th>#</th><th>パネル</th><th>種類</th><th>重大度</th><th>証拠</th><th>ΔT（算出方法）</th><th>判定に使った値</th><th>写った画像のうち異常が出た枚数</th><th>影響容量</th><th>推定損失</th></tr>
     <% s["items"].each_with_index do |i, n| %>
       <tr>

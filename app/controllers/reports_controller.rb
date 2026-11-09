@@ -1,5 +1,5 @@
 # 報告書（docs/IMPROVEMENT_PLAN.md Phase 7）。版の一覧と発行（index・create）、今の内容のプレビュー（preview）、
-# 発行した版（show）。報告書の内容は版の固定コピー（ReportSnapshotBuilder）だけから描く。PDF は ferrum_pdf の承認後に追加する
+# 発行した版（show）・その PDF（pdf・regenerate_pdf）。報告書の内容は版の固定コピー（ReportSnapshotBuilder）だけから描く
 class ReportsController < ApplicationController
   before_action :require_site
   before_action :find_inspection
@@ -28,9 +28,24 @@ class ReportsController < ApplicationController
       acknowledge_warnings: params[:acknowledge_warnings] == "1", revision_reason: params[:revision_reason],
       company_name: params[:company_name], qualification: params[:qualification]
     )
-    redirect_to inspection_reports_path(@inspection), notice: "報告書の#{report.title}を発行しました"
+    ReportPdfJob.perform_later(report.id)
+    redirect_to inspection_reports_path(@inspection), notice: "報告書の#{report.title}を発行しました（PDF を作ります）"
   rescue ReportIssue::Error => e
     redirect_to inspection_reports_path(@inspection), alert: e.message
+  end
+
+  def pdf
+    report = @inspection.inspection_reports.find(params[:id])
+    return redirect_to(inspection_reports_path(@inspection), alert: "#{report.title}の PDF はまだありません") unless report.pdf.attached?
+
+    redirect_to rails_blob_path(report.pdf, disposition: "attachment")
+  end
+
+  # PDF が作れなかった・まだ無い版の PDF を作り直す（版の内容は変えない）
+  def regenerate_pdf
+    report = @inspection.inspection_reports.find(params[:id])
+    ReportPdfJob.perform_later(report.id)
+    redirect_to inspection_reports_path(@inspection), notice: "#{report.title}の PDF を作り直します"
   end
 
   private

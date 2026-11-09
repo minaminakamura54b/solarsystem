@@ -17,6 +17,8 @@ unless RuleSet.exists?(version: initial_version)
   rule_set = RuleSet.new(
     version: initial_version,
     note: "初期値（暫定）。生ΔT の閾値は正規化ΔT と同じ値を仮に入れている。依頼元と合意して見直すこと",
+    # 商用製品の公開基準を参考にした仮の値で、依頼元と合意していないため暫定（2026-11-09 ユーザー指示）
+    provisional: true,
     detection_params: {
       "panel_mad_k" => 4, "panel_mad_floor_c" => 0.3, "min_region_offset_c" => 1.0,
       "baseline_mad_k" => 3, "baseline_mad_floor_c" => 0.5,

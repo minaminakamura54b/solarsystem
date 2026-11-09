@@ -13,15 +13,13 @@ module ReportsHelper
 
   def report_time(iso) = iso.present? ? Time.zone.parse(iso).in_time_zone(ImageQualityConfig.current.capture_time_zone).strftime("%Y/%m/%d %H:%M") : "—"
 
-  # 画像の bbox の周りを CSS の背景で切り出す（原本は変えない）。frame: true で枠を重ねる（RGB には描かない）
+  # 画像の bbox の周りを CSS の背景で切り出す（原本は変えない）。frame: true で枠を重ねる（RGB には描かない）。
+  # 切り出す範囲は PDF の派生画像と同じ（ReportImages.window）
   def report_crop(url, bbox, aspect:, width: 220, pad: 2.0, frame: true)
     return content_tag(:div, "画像なし", class: "crop empty", style: "width:#{width}px;height:#{width}px;") if url.nil? || bbox.nil?
 
     x1, y1, x2, y2 = bbox.values_at("x1", "y1", "x2", "y2").map(&:to_f)
-    w = ((x2 - x1) * (1 + pad)).clamp(0.08, 1.0)
-    h = (w * aspect).clamp(0.08, 1.0) # 正方形に近い範囲（aspect = 画像の 横 / 縦）
-    left = ((x1 + x2) / 2 - w / 2).clamp(0.0, 1.0 - w)
-    top = ((y1 + y2) / 2 - h / 2).clamp(0.0, 1.0 - h)
+    left, top, w, h = ReportImages.window(bbox, aspect:, pad:)
     height = (width * h / (w * aspect)).round
     pos_x = w >= 1 ? 0 : (left / (1 - w) * 100).round(3)
     pos_y = h >= 1 ? 0 : (top / (1 - h) * 100).round(3)
@@ -32,7 +30,14 @@ module ReportsHelper
     content_tag(:div, box, class: "crop", style:)
   end
 
+  # PDF のとき（@pdf_images）は、切り出した派生画像を埋め込む
+  def pdf_crop(data_uri, width)
+    data_uri ? image_tag(data_uri, width:, class: "crop", alt: "") : content_tag(:div, "画像なし", class: "crop empty", style: "width:#{width}px;height:#{width}px;")
+  end
+
   def thermal_crop(images, ref, **opts)
+    return pdf_crop(@pdf_images.thermal(ref, width: opts.fetch(:width, 220)), opts.fetch(:width, 220)) if @pdf_images
+
     image = images[ref&.dig("id")]
     return report_crop(nil, nil, aspect: 1, **opts) unless image&.displayable?
 
@@ -40,6 +45,11 @@ module ReportsHelper
   end
 
   def rgb_crop(images, ref, **opts)
+    if @pdf_images
+      uri = @pdf_images.rgb(ref, width: opts.fetch(:width, 220))
+      return uri && pdf_crop(uri, opts.fetch(:width, 220))
+    end
+
     image = images[ref&.dig("id")]
     return nil unless image&.rgb&.attached? && ref["rgb_bbox"]
 

@@ -113,14 +113,15 @@ class RuleSetTest < ActiveSupport::TestCase
     assert @initial.valid?, "block_row の無い版も有効なまま"
   end
 
-  test "暫定の 2 つの版はシードで暫定の印が付き、初期値には付かない。複製した版は暫定のまま" do
+  test "シードの版はすべて暫定の印が付く（初期値も依頼元と合意していない仮の値）。複製した版は暫定のまま" do
     assert RuleSet.find_by!(version: "2026-11-trend-provisional").provisional?
     assert RuleSet.find_by!(version: "2026-11-trend-row-provisional").provisional?
-    assert_not @initial.provisional?
+    assert @initial.provisional?
     assert RuleSet.find_by!(version: "2026-11-trend-provisional").duplicate(version: "copy").provisional
   end
 
   test "暫定の印は付けられるが、ほかの項目は変えない（作成後は編集できない）" do
+    @initial.update_columns(provisional: false)
     @initial.mark_provisional!
 
     assert @initial.reload.provisional?
