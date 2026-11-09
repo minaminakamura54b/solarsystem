@@ -38,9 +38,14 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_match "株式会社テスト", response.body
     assert_match ReportConfig.current.business_name, response.body
     assert_match "A01-1-03", response.body
-    assert_match "—（個別の画像で確認）", response.body, "パネルごとの候補を通していない異常"
+    assert_match "—（1 枚の画像で確認）", response.body, "パネルごとの候補を通していない異常"
+    assert_no_match(/2026-09-initial|位置合わせ不可|未正規化|段の効果/, response.body, "顧客向けに版名・アプリの用語を出さない")
     assert_match "点検の範囲と限界", response.body
     assert_match "人が確認し、異常ではないと判断した候補の件数", response.body
+    get internal_inspection_report_path(@inspection, report, site_id: @site.id)
+    assert_response :success
+    assert_match "作業記録（社内向け・顧客には渡さない）", response.body
+    assert_match "2026-09-initial", response.body, "版名は社内向けに残す"
   end
 
   test "発行すると PDF を作り、版の一覧からダウンロードできる。作れなかった版は作り直せる" do
@@ -66,6 +71,13 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
   ensure
     FerrumPdf.singleton_class.alias_method(:render_pdf, :original_render_pdf)
     FerrumPdf.singleton_class.remove_method(:original_render_pdf)
+  end
+
+  test "確定した異常が 0 件なら、影響容量の欄は「対象の異常なし」" do
+    @anomaly.update_columns(review_status: "rejected", rejection_reason: "glare")
+    get preview_inspection_reports_path(@inspection, site_id: @site.id)
+    assert_match "対象の異常なし", response.body
+    assert_no_match "未算定 0 件", response.body
   end
 
   test "所見が今のデータと合わないときは「所見は作成していません」と載せる" do

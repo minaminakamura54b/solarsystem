@@ -47,8 +47,41 @@ class ReportIssueTest < ActiveSupport::TestCase
     assert_equal({ "位置合わせ不可（登録した架台が写っていない）" => 1 }, coverage["unused_by_reason"])
     assert_equal 1, coverage["outside_layout_images"]
     assert_equal [ "A02 2 段目" ], coverage["insufficient_rows"].map { |r| r["label"] }
-    assert_equal 20, snapshot["map"]["uncovered_panels"].size
+    assert_equal [ "A02" ], snapshot["map"]["uncovered_blocks"], "まるごと写っていない架台は架台 1 つで描く"
+    assert_empty snapshot["map"]["uncovered_panels"]
     assert_equal [ [ "A01", 1, 3 ] ], snapshot["map"]["anomaly_panels"]
+  end
+
+  test "判定基準の表には、確定した異常が無くても候補の判定に使った版の閾値をすべて載せる" do
+    @inspection.anomalies.update_all(review_status: "rejected", rejection_reason: "glare", locked: true)
+
+    types = snapshot.dig("criteria", "rules").map { |r| r["anomaly_type"] }
+    assert_includes types, "hotspot"
+    assert_equal RuleSet::ANOMALY_TYPES.sort, (types & RuleSet::ANOMALY_TYPES).sort
+  end
+
+  test "判断の材料が足りない段は、理由ごとに架台の範囲でまとめる" do
+    @inspection.block_row_findings.destroy_all
+    blocks = register_blocks(@site, %w[A01 A02 A03 B01])
+    @inspection.reload
+    { "A01" => [ 1, 2 ], "A02" => [ 1, 2 ], "A03" => [ 1, 2 ], "B01" => [ 1 ] }.each do |label, rows|
+      rows.each { |r| @inspection.block_row_findings.create!(pv_block: blocks[label], block_row: r, status: "insufficient", views_count: 4 + r, insufficient_reason: "上側のみ") }
+    end
+
+    groups = snapshot.dig("coverage", "insufficient_row_groups")
+
+    assert_equal [ { "reason" => "上側のみ", "rows" => 7, "blocks" => "B01（1 段目）、A01〜A03（両段）", "views" => "5〜6" } ], groups
+  end
+
+  test "付録 A のメモは人が書いたメモだけ（まとめて除外の理由は理由の列に出す）" do
+    @i3.update_columns(exclusion_note: "まとめて除外: 要確認: 位置合わせ不可（登録した架台が写っていない）")
+    assert_nil snapshot.dig("coverage", "unused_images", 0, "note")
+
+    @i3.update_columns(exclusion_note: "まとめて除外: 要確認: 位置合わせ不可（登録した架台が写っていない）／撮り直さない")
+    assert_equal "撮り直さない", snapshot.dig("coverage", "unused_images", 0, "note")
+
+    @i3.update_columns(exclusion_note: "雲がかかった")
+    assert_equal "雲がかかった", snapshot.dig("coverage", "unused_images", 0, "note")
   end
 
   test "付録: 人が確認し、異常ではないと判断した候補の件数（重複として却下した観測は数えない）" do

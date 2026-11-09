@@ -14,7 +14,21 @@ class ReportsController < ApplicationController
   def preview
     @snapshot = ReportSnapshotBuilder.new(@inspection).build
     @preview = true
-    render :show, layout: "report"
+    render(params[:kind] == "internal" ? :internal : :show, layout: "report")
+  end
+
+  # 社内向けの作業記録（見直し R2。顧客には渡さない）
+  def internal
+    @report = @inspection.inspection_reports.find(params[:id])
+    @snapshot = @report.snapshot
+    render layout: "report"
+  end
+
+  def internal_pdf
+    report = @inspection.inspection_reports.find(params[:id])
+    return redirect_to(inspection_reports_path(@inspection), alert: "#{report.title}の作業記録の PDF はまだありません") unless report.internal_pdf.attached?
+
+    redirect_to rails_blob_path(report.internal_pdf, disposition: "attachment")
   end
 
   def show

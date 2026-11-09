@@ -42,6 +42,8 @@ Rails.application.routes.draw do
       get :preview, on: :collection
       member do
         get :pdf
+        get :internal
+        get :internal_pdf
         post :regenerate_pdf
       end
     end

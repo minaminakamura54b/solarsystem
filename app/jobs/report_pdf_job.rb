@@ -4,6 +4,9 @@ class ReportPdfJob < ApplicationJob
 
   def perform(report_id)
     report = InspectionReport.find_by(id: report_id)
-    ReportPdf.new(report).call if report
+    return unless report
+
+    ReportPdf.new(report, kind: :customer).call
+    ReportPdf.new(report, kind: :internal).call
   end
 end

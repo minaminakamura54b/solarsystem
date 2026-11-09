@@ -48,6 +48,18 @@ class ReportPdfTest < ActiveSupport::TestCase
     assert @report.pdf_generated_at
   end
 
+  test "社内向けの作業記録の PDF も版に付ける。発行のジョブは両方を作る" do
+    with_fake_renderer do |calls|
+      ReportPdfJob.perform_now(@report.id)
+      assert_equal 2, calls.size
+      assert_includes calls.last[:html], "作業記録（社内向け・顧客には渡さない）"
+    end
+    @report.reload
+    assert @report.pdf.attached?
+    assert @report.internal_pdf.attached?
+    assert_match(/\A作業記録（社内向け）_.*第1版\.pdf\z/, @report.internal_pdf.filename.to_s)
+  end
+
   test "作れなかったら版にエラーを残す（版の内容は変えない）" do
     snapshot = @report.snapshot
     with_fake_renderer(error: Ferrum::TimeoutError.new) { assert_not ReportPdf.new(@report).call }

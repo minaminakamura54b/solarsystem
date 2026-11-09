@@ -45,6 +45,8 @@ class ReportSnapshotBuilder
       "rejections" => rejections,
       "module" => module_spec,
       "versions" => versions,
+      "transmissions" => transmissions,
+      "has_losses" => items.any? { |i| i["estimated_loss_kw"] || i["annual_loss_kwh"] },
       "warnings" => warnings(items),
       "disclaimers" => disclaimers(items)
     }
@@ -72,6 +74,7 @@ class ReportSnapshotBuilder
       "wind_speed_m_s" => winds.any? ? [ winds.min.round(1), winds.max.round(1) ] : nil,
       "images" => { "total" => @images.size, "used" => @used.size, "excluded" => @images.size - @used.size },
       "quality" => @used.map { |i| i.quality_status || "unknown" }.tally,
+      "quality_reasons" => quality_reasons,
       "measurement" => measurement_lines,
       "camera_default_params" => camera_default_params?
     }
@@ -88,6 +91,14 @@ class ReportSnapshotBuilder
         [ text, list.size ]
       end
     end.to_h
+  end
+
+  # 品質チェックで注意・不合格になった項目（判定に使った画像のうち）
+  def quality_reasons
+    @used.flat_map { |i| Array(i.quality_report.to_h["checks"]).select { |c| %w[warning rejected].include?(c["result"]) } }
+         .group_by { |c| [ c["key"], c["result"] ] }
+         .map { |(key, result), list| { "key" => key, "result" => result, "message" => list.first["message"], "count" => list.size } }
+         .sort_by { |r| -r["count"] }
   end
 
   # 点検の対象範囲（見直し R1）。確定していなければ発電所全体
@@ -108,13 +119,23 @@ class ReportSnapshotBuilder
 
   # ── 判定基準（異常ごと・段ごとの rule_snapshot から） ───────────
 
+  # 判定に使った版の閾値。確定した異常が無くても、候補の判定（解析）に使った版の閾値をすべて載せる（2026-11-09 ユーザー指示）。
+  # 版は作成後に変わらないので、版の閾値はルールセットから取る（無ければ異常に残した閾値のコピー）
   def criteria
-    # 段は候補にならなかった段も同じ閾値で判定しているので、判定した段の閾値を載せる
-    snapshots = confirmed_anomalies.map(&:rule_snapshot) + confirmed_groups.map(&:rule_snapshot) + pending_anomalies.map(&:rule_snapshot) +
-                @inspection.block_row_findings.where(status: "evaluated").distinct.pluck(:rule_snapshot)
-    snapshots = snapshots.compact.uniq { |s| [ s["version"], s["anomaly_type"] ] }
-    versions = snapshots.map { |s| s["version"] }.compact.uniq.sort
-    rule_sets = RuleSet.where(version: versions).index_by(&:version)
+    versions = (@used.select(&:completed?).filter_map { |i| i.raw_analysis.to_h["rule_version"] } +
+                @inspection.anomalies.distinct.pluck(:rule_version) + @inspection.anomaly_groups.distinct.pluck(:rule_version) +
+                @inspection.anomalies.pluck(:rule_snapshot).filter_map { |snap| snap&.dig("version") } +
+                @inspection.block_row_findings.where(status: "evaluated").distinct.pluck(:rule_version)).compact.uniq.sort
+    rule_sets = RuleSet.where(version: versions).includes(:severity_rules).index_by(&:version)
+    rows_evaluated = @inspection.block_row_findings.where(status: "evaluated").exists?
+    snapshots = versions.flat_map do |v|
+      if rule_sets[v]
+        rule_sets[v].severity_rules.map(&:snapshot).reject { |s| s["anomaly_type"] == "block_row" && !rows_evaluated }
+      else
+        (@inspection.anomalies.where(rule_version: v).pluck(:rule_snapshot) + @inspection.anomaly_groups.where(rule_version: v).pluck(:rule_snapshot)).compact
+      end
+    end
+    snapshots = snapshots.uniq { |s| [ s["version"], s["anomaly_type"] ] }
     {
       "versions" => versions.map { |v| { "version" => v, "provisional" => rule_sets[v]&.provisional? || false, "baseline" => rule_sets[v]&.baseline_method_label } },
       "provisional" => versions.any? { |v| rule_sets[v]&.provisional? },
@@ -252,10 +273,54 @@ class ReportSnapshotBuilder
       "registered" => summary.registered, "covered" => summary.covered, "uncovered" => summary.uncovered,
       "layout_unlinked_images" => summary.layout_unlinked_images, "outside_layout_images" => summary.outside_layout_images,
       "unused_by_reason" => unused.map { |img| BulkImageExclusion.reason_label(img) }.tally,
-      "unused_images" => unused.map { |img| { "sequence" => img.sequence, "captured_at" => img.captured_at&.iso8601, "reason" => BulkImageExclusion.reason_label(img), "note" => img.exclusion_note } },
+      "unused_images" => unused.map { |img| { "sequence" => img.sequence, "captured_at" => img.captured_at&.iso8601, "reason" => BulkImageExclusion.reason_label(img), "reason_key" => unused_reason_key(img), "note" => human_note(img.exclusion_note) } },
+      "insufficient_row_groups" => insufficient_row_groups,
       "insufficient_rows" => @inspection.block_row_findings.insufficient.includes(:pv_block).sort_by { |r| [ r.pv_block.label, r.block_row ] }
                                      .map { |r| { "label" => r.label, "views" => r.views_count, "reason" => r.insufficient_reason } }
     }
+  end
+
+  def unused_reason_key(img)
+    reason = img.review_reason.presence || "unknown"
+    reason == "alignment_failed" ? "alignment_failed:#{img.alignment.to_h['review_reason']}" : reason
+  end
+
+  # まとめて除外のメモ（「まとめて除外: 理由／人のメモ」）から、人が書いたメモだけを取り出す（理由は別の列に出す）
+  def human_note(note)
+    return nil if note.blank?
+    return note unless note.start_with?("まとめて除外: ")
+
+    note.split("／", 2)[1].presence
+  end
+
+  # 判断の材料が足りない段を、理由ごとに架台の範囲でまとめる（例: 「L01〜L15（両段）」）
+  def insufficient_row_groups
+    rows = @inspection.block_row_findings.insufficient.includes(:pv_block).to_a
+    rows.group_by(&:insufficient_reason).map do |reason, list|
+      parts = list.group_by(&:pv_block).map do |block, block_rows|
+        which = block_rows.size >= block.rows ? "両段" : block_rows.map(&:block_row).sort.map { |r| "#{r} 段目" }.join("・")
+        [ block.label, which ]
+      end
+      { "reason" => reason, "rows" => list.size, "blocks" => compress_labels(parts),
+        "views" => list.map(&:views_count).minmax.uniq.join("〜") }
+    end.sort_by { |g| -g["rows"] }
+  end
+
+  # [["L01", "両段"], ["L02", "両段"], ...] → "L01〜L15（両段）、O01〜O03（1 段目）"。番号が続く同じ英字・同じ段だけをつなぐ
+  def compress_labels(parts)
+    keyed = parts.map { |label, which| m = label.match(/\A(\D*)(\d+)\z/); [ m ? m[1] : label, m ? m[2] : nil, which, label ] }
+    keyed.sort_by! { |prefix, num, which, label| [ which, prefix, num.to_i, label ] }
+    runs = []
+    keyed.each do |prefix, num, which, label|
+      last = runs.last
+      if last && num && last[:prefix] == prefix && last[:which] == which && last[:last_num] + 1 == num.to_i
+        last[:last] = label
+        last[:last_num] = num.to_i
+      else
+        runs << { prefix:, which:, first: label, last: label, last_num: num.to_i }
+      end
+    end
+    runs.map { |r| "#{r[:first] == r[:last] ? r[:first] : "#{r[:first]}〜#{r[:last]}"}（#{r[:which]}）" }.join("、")
   end
 
   def map
@@ -265,12 +330,17 @@ class ReportSnapshotBuilder
     by_id = blocks.index_by(&:id)
     coverage = InspectionCoverage.new(@inspection)
     keys = ->(ids) { Panel.where(id: ids).where.not(pv_block_id: nil).pluck(:pv_block_id, :block_row, :block_col).map { |b, r, c| [ by_id[b]&.label, r, c ] } }
+    in_scope = @inspection.scope_confirmed? ? Array(@inspection.scope_block_ids).to_set : blocks.map(&:id).to_set
+    uncovered = (coverage.registered_keys - coverage.covered_keys).group_by(&:first)
+    whole = uncovered.select { |b, list| list.size >= by_id[b].rows * by_id[b].cols }.keys.to_set
     {
-      "blocks" => blocks.map { |b| { "label" => b.label, "rows" => b.rows, "cols" => b.cols, "corners" => b.corners_local } },
+      "blocks" => blocks.map { |b| { "label" => b.label, "rows" => b.rows, "cols" => b.cols, "corners" => b.corners_local, "in_scope" => in_scope.include?(b.id) } },
+      # まるごと写っていない架台は架台 1 つで描く（図を見やすくし、PDF を小さくする）
+      "uncovered_blocks" => whole.map { |b| by_id[b].label }.sort,
       "anomaly_panels" => keys.(confirmed_anomalies.filter_map(&:panel_id)).uniq,
       "rows" => confirmed_rows.map { |r| [ r.pv_block.label, r.block_row ] },
       "insufficient_rows" => @inspection.block_row_findings.insufficient.includes(:pv_block).map { |r| [ r.pv_block.label, r.block_row ] },
-      "uncovered_panels" => (coverage.registered_keys - coverage.covered_keys).map { |b, r, c| [ by_id[b]&.label, r, c ] }.sort_by(&:to_s)
+      "uncovered_panels" => (coverage.registered_keys - coverage.covered_keys).reject { |b, _, _| whole.include?(b) }.map { |b, r, c| [ by_id[b]&.label, r, c ] }.sort_by(&:to_s)
     }
   end
 
@@ -305,6 +375,14 @@ class ReportSnapshotBuilder
     }
   end
 
+  # 外部のサービスに送った記録（社内向けの作業記録。送った入力の文そのものは載せない）
+  def transmissions
+    @inspection.external_transmissions.order(:sent_at, :id).map do |t|
+      { "sent_at" => t.sent_at.iso8601, "purpose" => t.purpose_label, "model" => t.model, "prompt_version" => t.prompt_version,
+        "status" => t.status_label, "input_tokens" => t.input_tokens, "output_tokens" => t.output_tokens, "key_fingerprint" => t.key_fingerprint }
+    end
+  end
+
   # ── 発行時の警告（確認したときだけ発行できる） ─────────────────
 
   def warnings(items)
@@ -336,9 +414,9 @@ class ReportSnapshotBuilder
       "IEC TS 62446-3 を参考にしていますが、準拠を保証するものではありません。",
       "パネルの特定は、撮影位置の記録と登録された配置図の重ね合わせによる推定です。配置図と現地が異なる場合、パネル番号がずれることがあります。",
       "判定は撮影時の条件（日射・風・時刻・撮影の角度）の影響を受けます。撮影条件の欄をあわせてご確認ください。",
-      "「点検の範囲と限界」に記載した範囲は解析できておらず、異常がないことを示すものではありません。",
-      "推定損失・年間損失は概算で、電気的な測定で確かめたものではありません。"
+      "「点検の範囲と限界」に記載した範囲は解析できておらず、異常がないことを示すものではありません。"
     ]
+    lines << "推定損失・年間損失は概算で、電気的な測定で確かめたものではありません。" if items.any? { |i| i["estimated_loss_kw"] || i["annual_loss_kwh"] }
     lines << "放射率など測定パラメータの一部は、カメラの既定値を使用しています（撮影条件の欄に記載）。" if camera_default_params?
     lines << "RGB 画像はおおよその位置です（位置合わせを調整するまで）。" if items.any? { |i| i.dig("image", "rgb") }
     lines << "判定基準は暫定の版で、今後見直す予定です。" if criteria["provisional"]

@@ -1,0 +1,99 @@
+<%# 社内向けの作業記録（見直し R2）。顧客向けの報告書には載せない詳細: 版名と閾値の表、画像ごとの技術的な理由、
+    撮影・解析の改善点、品質チェックの詳細、外部のサービスへの送信の記録、社内メモ。版ごとに残す %>
+<% s = @snapshot %>
+<% issue = s["issue"] || {} %>
+<% content_for :title, "作業記録（社内向け） - #{s['site_name']} #{s['inspection_date']}" %>
+<% cov = s["coverage"] %>
+
+<div class="no-print">
+  <%= link_to "← 報告書の版の一覧に戻る", inspection_reports_path(@inspection) %>
+  <% if @preview %><span class="muted">（今の内容のプレビューです。発行していません）</span><% end %>
+</div>
+
+<h1 style="font-size:16pt;">作業記録（社内向け・顧客には渡さない）</h1>
+<p><%= s["site_name"] %>・点検日 <%= s["inspection_date"] %>・<%= @preview ? "プレビュー（未発行）" : "#{@report.title}（発行 #{report_time(issue['issued_at'])}）" %></p>
+<% if issue["revision_reason"] %><p class="muted">改訂の理由: <%= issue["revision_reason"] %></p><% end %>
+
+<h2>1. 発行のときに確認した警告</h2>
+<% warnings = @report&.acknowledged_warnings || s["warnings"] %>
+<% if warnings.any? %><ul><% warnings.each do |w| %><li><%= w %></li><% end %></ul><% else %><p>なし</p><% end %>
+
+<h2>2. 撮影・解析の改善点</h2>
+<% improvements = Array(s.dig("summary", "internal_improvements")) %>
+<% if improvements.any? %>
+  <ul><% improvements.each do |line| %><li><%= line %></li><% end %></ul>
+  <p class="muted">総括文と同じ入力から Claude が作成（<%= s.dig("summary", "prompt_version") %>）</p>
+<% else %>
+  <p class="muted">なし（総括文のプロンプト v4 から作ります）</p>
+<% end %>
+<% if s["internal_note"] %><h3>社内メモ</h3><p><%= s["internal_note"] %></p><% end %>
+
+<h2>3. 判定基準</h2>
+<% cr = s["criteria"] %>
+<% cr["versions"].each do |v| %><p>版 <%= v["version"] %><%= "（暫定）" if v["provisional"] %>: 基準温度は<%= v["baseline"] || "—" %>から求めています。</p><% end %>
+<table>
+  <tr><th>版</th><th>種類</th><th>ΔT の算出方法</th><th>正規化ΔT 軽微 / 注意 / 重大（℃）</th><th>生ΔT 軽微 / 注意 / 重大（℃）</th></tr>
+  <% cr["rules"].each do |r| %>
+    <tr><td><%= r["version"] %></td><td><%= report_type(r["anomaly_type"]) %></td><td><%= r["measure"] == "row_effect" ? "段の効果（見え方の影響を除いた、段の温度の差）" : measure_label(r["measure"]) %></td>
+      <td><%= [ r["normalized_mild"], r["normalized_warning"], r["normalized_critical"] ].join(" / ") %></td><td><%= [ r["raw_mild"], r["raw_warning"], r["raw_critical"] ].join(" / ") %></td></tr>
+  <% end %>
+</table>
+<% if cr["basis_counts"].any? %><p class="muted">判定に使った値: <%= cr["basis_counts"].map { |k, n| "#{ReportsHelper::BASIS_LABELS.fetch(k, k)} #{n} 件" }.join("、") %></p><% end %>
+
+<h2>4. 点検の範囲（詳細）</h2>
+<table>
+  <tr><th>対象範囲</th><td><%= s.dig("scope", "confirmed") ? "確定（#{s.dig('scope', 'source') == 'proposal' ? '案のまま' : '人が選んだ'}）" : "未確定（発電所全体）" %>: <%= s.dig("scope", "description") %></td></tr>
+  <tr><th>写ったパネル</th><td><%= cov["registered"] %> 枚のうち <%= cov["covered"] %> 枚（写っていない <%= cov["uncovered"] %> 枚）</td></tr>
+  <% if cov["layout_unlinked_images"].to_i.positive? %><tr><th>手動のグリッドの画像</th><td><%= cov["layout_unlinked_images"] %> 枚（写ったパネルの数に含めていない）</td></tr><% end %>
+  <tr><th>配置図に無い所の画像</th><td><%= cov["outside_layout_images"] %> 枚</td></tr>
+</table>
+<% if cov["insufficient_rows"].any? %>
+  <h3>判断の材料が足りない段（<%= cov["insufficient_rows"].size %> 段）</h3>
+  <table>
+    <tr><th>理由</th><th>段の数</th><th>架台・段</th><th>写った画像</th></tr>
+    <% Array(cov["insufficient_row_groups"]).each do |g| %><tr><td><%= g["reason"] %></td><td><%= g["rows"] %> 段</td><td><%= g["blocks"] %></td><td><%= g["views"] %> 枚</td></tr><% end %>
+  </table>
+<% end %>
+
+<h2>5. 使わなかった画像（<%= cov["unused_images"].size %> 枚）</h2>
+<% if cov["unused_images"].empty? %>
+  <p>なし</p>
+<% else %>
+  <table>
+    <tr><th>画像</th><th>撮影時刻</th><th>理由（技術的）</th><th>メモ</th></tr>
+    <% cov["unused_images"].each do |u| %><tr><td><%= u["sequence"] %></td><td><%= report_time(u["captured_at"]) %></td><td><%= u["reason"] %></td><td><%= u["note"] %></td></tr><% end %>
+  </table>
+<% end %>
+
+<h2>6. 撮影条件（詳細）</h2>
+<% c = s["conditions"] %>
+<table>
+  <tr><th>機材</th><td><%= c["cameras"].map { |m, n| "#{m}（#{n} 枚）" }.join("、").presence || "—" %></td></tr>
+  <tr><th>日射量の種類</th><td><%= c["irradiance"] ? c["irradiance"]["types"].map { |t, n| "#{ReportsHelper::IRRADIANCE_LABELS.fetch(t, t)} #{n} 枚" }.join("、") : "記録なし（未正規化）" %></td></tr>
+  <tr><th>品質チェック</th><td><%= c["quality"].map { |k, n| "#{ReportsHelper::QUALITY_LABELS.fetch(k, k)} #{n} 枚" }.join("、") %>
+    <% Array(c["quality_reasons"]).each do |r| %><br><span class="muted"><%= r["result"] == "rejected" ? "不合格" : "注意" %>: <%= r["message"] %>（<%= r["count"] %> 枚）</span><% end %></td></tr>
+  <tr><th>測定パラメータ</th><td><%= safe_join(c["measurement"].map { |line, n| "#{line}（#{n} 枚）" }, tag.br) %></td></tr>
+</table>
+
+<h2>7. 外部のサービスへの送信の記録</h2>
+<% if Array(s["transmissions"]).empty? %>
+  <p>この点検のデータを外部のサービスに送ったことはありません。</p>
+<% else %>
+  <table>
+    <tr><th>日時</th><th>内容</th><th>モデル・プロンプト</th><th>結果</th><th>トークン（入力・出力）</th><th>キーの指紋</th></tr>
+    <% s["transmissions"].each do |t| %><tr><td><%= report_time(t["sent_at"]) %></td><td><%= t["purpose"] %></td><td><%= t["model"] %><br><span class="muted"><%= t["prompt_version"] %></span></td><td><%= t["status"] %></td><td><%= t["input_tokens"] ? "#{t['input_tokens']}・#{t['output_tokens']}" : "—" %></td><td><%= t["key_fingerprint"] || "—" %></td></tr><% end %>
+  </table>
+<% end %>
+
+<h2>8. 却下した候補（理由別）</h2>
+<p><%= s["rejections"]["total"] %> 件<% if s["rejections"]["total"].positive? %>（<%= s["rejections"]["by_reason"].map { |r, n| "#{r} #{n} 件" }.join("、") %>）<% end %></p>
+
+<h2>9. 設定・配置図の版</h2>
+<table>
+  <% v = s["versions"] %>
+  <tr><th>配置図</th><td>架台 <%= v.dig("layout", "blocks") %> 基・パネル <%= v.dig("layout", "panels") %> 枚（digest <%= v.dig("layout", "digest") %>）</td></tr>
+  <tr><th>位置合わせの設定</th><td><%= Array(v["layout_overlay"]).join("、").presence || "—" %></td></tr>
+  <tr><th>見え方の関数</th><td><%= v["view_model"] || "—" %></td></tr>
+  <tr><th>パネルごとの候補</th><td><%= Array(v["panel_candidates"]).join("、").presence || "—" %></td></tr>
+  <tr><th>総括文のプロンプト</th><td><%= v["summary_prompt"] || "—" %></td></tr>
+</table>

@@ -1,0 +1,19 @@
+<%# 配置図（北が上）。対象範囲の架台を濃く、範囲の外は輪郭だけ。まるごと写っていない架台は架台 1 つで塗る（見直し R2・問題点 11） %>
+<% m = snapshot["map"] %>
+<% if m %>
+  <% f = report_map_frame(m["blocks"]) %>
+  <% blocks = m["blocks"].index_by { |b| b["label"] } %>
+  <svg class="map" viewBox="0 0 <%= f[:width] %> <%= f[:height] %>" role="img" aria-label="配置図（北が上）">
+    <defs><pattern id="r-hatch" width="1.2" height="1.2" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.2" height="1.2" fill="#ffffff"/><line x1="0" y1="0" x2="0" y2="1.2" stroke="#6b7280" stroke-width="0.5"/></pattern></defs>
+    <% m["blocks"].each do |b| %>
+      <% in_scope = b["in_scope"] != false %>
+      <polygon points="<%= b["corners"].map { |e, n| f[:to].(e, n) }.join(" ") %>" fill="<%= in_scope ? '#ffffff' : 'none' %>" stroke="<%= in_scope ? '#374151' : '#d1d5db' %>" stroke-width="<%= in_scope ? 0.2 : 0.12 %>"/>
+    <% end %>
+    <% Array(m["uncovered_blocks"]).each do |label| %><% b = blocks[label] or next %><polygon points="<%= b["corners"].map { |e, n| f[:to].(e, n) }.join(" ") %>" fill="#9ca3af"/><% end %>
+    <% m["uncovered_panels"].each do |label, row, col| %><% b = blocks[label] or next %><polygon points="<%= report_cell(b, row, col).map { |e, n| f[:to].(e, n) }.join(" ") %>" fill="#9ca3af"/><% end %>
+    <% m["insufficient_rows"].each do |label, row| %><% b = blocks[label] or next %><polygon points="<%= report_cell(b, row).map { |e, n| f[:to].(e, n) }.join(" ") %>" fill="url(#r-hatch)" stroke="#6b7280" stroke-width="0.1"/><% end %>
+    <% m["rows"].each do |label, row| %><% b = blocks[label] or next %><polygon points="<%= report_cell(b, row).map { |e, n| f[:to].(e, n) }.join(" ") %>" fill="#f97316" fill-opacity="0.75"/><% end %>
+    <% m["anomaly_panels"].each do |label, row, col| %><% b = blocks[label] or next %><polygon points="<%= report_cell(b, row, col).map { |e, n| f[:to].(e, n) }.join(" ") %>" fill="#dc2626"/><% end %>
+  </svg>
+  <p class="muted">配置図（北が上）: 赤 = 確定した異常のパネル、橙 = 確定した架台の段、斜線 = 段全体の温度を比べられなかった段、灰 = 解析できた画像に写っていないパネル、白 = 解析できた範囲、薄い輪郭 = 今回の点検の対象外</p>
+<% end %>

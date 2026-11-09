@@ -58,6 +58,23 @@ module ReportsHelper
     report_crop(url_for(image.rgb), ref["rgb_bbox"], aspect:, pad: 4.0, frame: false, **opts)
   end
 
+  # 全体の様子のサーモ画像（R4）。PDF では縮小した派生画像を埋め込む
+  def overview_image(images, ref, width: 330)
+    return pdf_crop(@pdf_images.overview(ref, width:), width) if @pdf_images
+
+    image = images[ref&.dig("id")]
+    return pdf_crop(nil, width) unless image&.displayable?
+
+    image_tag(url_for(image.display_image), width:, class: "crop", alt: "")
+  end
+
+  # 顧客向けの判定の目安（R2）: 判定に使った版のうち新しいものの閾値（版名は出さない）。段の閾値は段を判定したときだけ
+  def customer_criteria_rows(snapshot)
+    rules = Array(snapshot.dig("criteria", "rules"))
+    version = rules.map { |r| r["version"] }.compact.max
+    rules.select { |r| r["version"] == version }
+  end
+
   # 配置図（北が上）の点を SVG の座標に
   def report_map_frame(blocks)
     points = blocks.flat_map { |b| b["corners"] }
