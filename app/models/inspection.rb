@@ -67,7 +67,8 @@ class Inspection < ApplicationRecord
   def in_progress?
     return pending? || analyzing? if legacy?
 
-    inspection_images.any?(&:quality_pending?) || inspection_images.any?(&:analyzing?)
+    # 画像が多い点検（1 回の飛行で約 1,900 枚）でも速いよう、画像を読み込まずに数える
+    inspection_images.where(quality_report: nil).where.not(analysis_status: "excluded").or(inspection_images.where(analysis_status: "analyzing")).exists?
   end
 
   # 画像のステータスから点検全体のステータスを集計する（docs/IMPROVEMENT_PLAN.md セクション2）。
@@ -108,7 +109,7 @@ class Inspection < ApplicationRecord
 
   # 品質チェックに合格し、グリッドの指定か解析を待っている画像の数
   def images_waiting_for_analyzer
-    inspection_images.count { |i| i.pending? && !i.quality_pending? }
+    inspection_images.where(analysis_status: "pending").where.not(quality_report: nil).count
   end
 
   # 未確定の異常の候補の件数（群の構成パネルは群を1件として数える。docs/IMPROVEMENT_PLAN.md 4.4）
@@ -133,7 +134,12 @@ class Inspection < ApplicationRecord
   end
 
   def image_status_counts
-    inspection_images.map(&:analysis_status).tally
+    inspection_images.reorder(nil).group(:analysis_status).count
+  end
+
+  # 品質チェック中の画像の数（画像を読み込まずに数える）
+  def images_quality_pending_count
+    inspection_images.where(quality_report: nil).where.not(analysis_status: "excluded").count
   end
 
   # フォームに表示するエラー。画像ごとのエラーは「画像 N（ファイル名）: 理由」にする
