@@ -45,6 +45,8 @@ class ReportSnapshotBuilder
       "rejections" => rejections,
       "module" => module_spec,
       "versions" => versions,
+      "transmissions" => transmissions,
+      "has_losses" => items.any? { |i| i["estimated_loss_kw"] || i["annual_loss_kwh"] },
       "warnings" => warnings(items),
       "disclaimers" => disclaimers(items)
     }
@@ -72,6 +74,7 @@ class ReportSnapshotBuilder
       "wind_speed_m_s" => winds.any? ? [ winds.min.round(1), winds.max.round(1) ] : nil,
       "images" => { "total" => @images.size, "used" => @used.size, "excluded" => @images.size - @used.size },
       "quality" => @used.map { |i| i.quality_status || "unknown" }.tally,
+      "quality_reasons" => quality_reasons,
       "measurement" => measurement_lines,
       "camera_default_params" => camera_default_params?
     }
@@ -88,6 +91,14 @@ class ReportSnapshotBuilder
         [ text, list.size ]
       end
     end.to_h
+  end
+
+  # 品質チェックで注意・不合格になった項目（判定に使った画像のうち）
+  def quality_reasons
+    @used.flat_map { |i| Array(i.quality_report.to_h["checks"]).select { |c| %w[warning rejected].include?(c["result"]) } }
+         .group_by { |c| [ c["key"], c["result"] ] }
+         .map { |(key, result), list| { "key" => key, "result" => result, "message" => list.first["message"], "count" => list.size } }
+         .sort_by { |r| -r["count"] }
   end
 
   # 点検の対象範囲（見直し R1）。確定していなければ発電所全体
@@ -262,11 +273,16 @@ class ReportSnapshotBuilder
       "registered" => summary.registered, "covered" => summary.covered, "uncovered" => summary.uncovered,
       "layout_unlinked_images" => summary.layout_unlinked_images, "outside_layout_images" => summary.outside_layout_images,
       "unused_by_reason" => unused.map { |img| BulkImageExclusion.reason_label(img) }.tally,
-      "unused_images" => unused.map { |img| { "sequence" => img.sequence, "captured_at" => img.captured_at&.iso8601, "reason" => BulkImageExclusion.reason_label(img), "note" => human_note(img.exclusion_note) } },
+      "unused_images" => unused.map { |img| { "sequence" => img.sequence, "captured_at" => img.captured_at&.iso8601, "reason" => BulkImageExclusion.reason_label(img), "reason_key" => unused_reason_key(img), "note" => human_note(img.exclusion_note) } },
       "insufficient_row_groups" => insufficient_row_groups,
       "insufficient_rows" => @inspection.block_row_findings.insufficient.includes(:pv_block).sort_by { |r| [ r.pv_block.label, r.block_row ] }
                                      .map { |r| { "label" => r.label, "views" => r.views_count, "reason" => r.insufficient_reason } }
     }
+  end
+
+  def unused_reason_key(img)
+    reason = img.review_reason.presence || "unknown"
+    reason == "alignment_failed" ? "alignment_failed:#{img.alignment.to_h['review_reason']}" : reason
   end
 
   # まとめて除外のメモ（「まとめて除外: 理由／人のメモ」）から、人が書いたメモだけを取り出す（理由は別の列に出す）
@@ -314,12 +330,17 @@ class ReportSnapshotBuilder
     by_id = blocks.index_by(&:id)
     coverage = InspectionCoverage.new(@inspection)
     keys = ->(ids) { Panel.where(id: ids).where.not(pv_block_id: nil).pluck(:pv_block_id, :block_row, :block_col).map { |b, r, c| [ by_id[b]&.label, r, c ] } }
+    in_scope = @inspection.scope_confirmed? ? Array(@inspection.scope_block_ids).to_set : blocks.map(&:id).to_set
+    uncovered = (coverage.registered_keys - coverage.covered_keys).group_by(&:first)
+    whole = uncovered.select { |b, list| list.size >= by_id[b].rows * by_id[b].cols }.keys.to_set
     {
-      "blocks" => blocks.map { |b| { "label" => b.label, "rows" => b.rows, "cols" => b.cols, "corners" => b.corners_local } },
+      "blocks" => blocks.map { |b| { "label" => b.label, "rows" => b.rows, "cols" => b.cols, "corners" => b.corners_local, "in_scope" => in_scope.include?(b.id) } },
+      # まるごと写っていない架台は架台 1 つで描く（図を見やすくし、PDF を小さくする）
+      "uncovered_blocks" => whole.map { |b| by_id[b].label }.sort,
       "anomaly_panels" => keys.(confirmed_anomalies.filter_map(&:panel_id)).uniq,
       "rows" => confirmed_rows.map { |r| [ r.pv_block.label, r.block_row ] },
       "insufficient_rows" => @inspection.block_row_findings.insufficient.includes(:pv_block).map { |r| [ r.pv_block.label, r.block_row ] },
-      "uncovered_panels" => (coverage.registered_keys - coverage.covered_keys).map { |b, r, c| [ by_id[b]&.label, r, c ] }.sort_by(&:to_s)
+      "uncovered_panels" => (coverage.registered_keys - coverage.covered_keys).reject { |b, _, _| whole.include?(b) }.map { |b, r, c| [ by_id[b]&.label, r, c ] }.sort_by(&:to_s)
     }
   end
 
@@ -354,6 +375,14 @@ class ReportSnapshotBuilder
     }
   end
 
+  # 外部のサービスに送った記録（社内向けの作業記録。送った入力の文そのものは載せない）
+  def transmissions
+    @inspection.external_transmissions.order(:sent_at, :id).map do |t|
+      { "sent_at" => t.sent_at.iso8601, "purpose" => t.purpose_label, "model" => t.model, "prompt_version" => t.prompt_version,
+        "status" => t.status_label, "input_tokens" => t.input_tokens, "output_tokens" => t.output_tokens, "key_fingerprint" => t.key_fingerprint }
+    end
+  end
+
   # ── 発行時の警告（確認したときだけ発行できる） ─────────────────
 
   def warnings(items)
@@ -385,9 +414,9 @@ class ReportSnapshotBuilder
       "IEC TS 62446-3 を参考にしていますが、準拠を保証するものではありません。",
       "パネルの特定は、撮影位置の記録と登録された配置図の重ね合わせによる推定です。配置図と現地が異なる場合、パネル番号がずれることがあります。",
       "判定は撮影時の条件（日射・風・時刻・撮影の角度）の影響を受けます。撮影条件の欄をあわせてご確認ください。",
-      "「点検の範囲と限界」に記載した範囲は解析できておらず、異常がないことを示すものではありません。",
-      "推定損失・年間損失は概算で、電気的な測定で確かめたものではありません。"
+      "「点検の範囲と限界」に記載した範囲は解析できておらず、異常がないことを示すものではありません。"
     ]
+    lines << "推定損失・年間損失は概算で、電気的な測定で確かめたものではありません。" if items.any? { |i| i["estimated_loss_kw"] || i["annual_loss_kwh"] }
     lines << "放射率など測定パラメータの一部は、カメラの既定値を使用しています（撮影条件の欄に記載）。" if camera_default_params?
     lines << "RGB 画像はおおよその位置です（位置合わせを調整するまで）。" if items.any? { |i| i.dig("image", "rgb") }
     lines << "判定基準は暫定の版で、今後見直す予定です。" if criteria["provisional"]

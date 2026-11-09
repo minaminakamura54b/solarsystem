@@ -47,7 +47,8 @@ class ReportIssueTest < ActiveSupport::TestCase
     assert_equal({ "位置合わせ不可（登録した架台が写っていない）" => 1 }, coverage["unused_by_reason"])
     assert_equal 1, coverage["outside_layout_images"]
     assert_equal [ "A02 2 段目" ], coverage["insufficient_rows"].map { |r| r["label"] }
-    assert_equal 20, snapshot["map"]["uncovered_panels"].size
+    assert_equal [ "A02" ], snapshot["map"]["uncovered_blocks"], "まるごと写っていない架台は架台 1 つで描く"
+    assert_empty snapshot["map"]["uncovered_panels"]
     assert_equal [ [ "A01", 1, 3 ] ], snapshot["map"]["anomaly_panels"]
   end
 

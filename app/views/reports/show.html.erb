@@ -1,8 +1,12 @@
+<%# 顧客向けの報告書（見直し R2）。点検の結果・発電所に対して行うべき対応・範囲と限界を平易な言葉で。
+    社内向けの詳細（版名・画像ごとの技術的な理由・撮影の改善点など）は internal.html.erb %>
 <% s = @snapshot %>
 <% issue = s["issue"] || {} %>
 <% content_for :title, "熱異常スクリーニング報告書 - #{s['site_name']} #{s['inspection_date']}" %>
-<% image_ids = s["items"].flat_map { |i| [ i.dig("image", "id") ] + Array(i["others"]).map { |o| o["image_id"] } }.compact.uniq %>
+<% image_ids = s["items"].flat_map { |i| [ i.dig("image", "id") ] + Array(i["others"]).map { |o| o["image_id"] } }.compact.uniq + Array(s["overview_images"]).map { |o| o["id"] } %>
 <% images = InspectionImage.where(id: image_ids).includes(thermal_attachment: :blob, preview_attachment: :blob, rgb_attachment: :blob).index_by(&:id) %>
+<% cov = s["coverage"] %>
+<% unanalyzed = cov["uncovered"].to_i.positive? || cov["unused_images"].any? || cov["outside_layout_images"].to_i.positive? || cov["insufficient_rows"].any? %>
 
 <div class="no-print">
   <%= link_to "← 報告書の版の一覧に戻る", inspection_reports_path(@inspection) %>
@@ -25,175 +29,163 @@
   <% end %>
   <% if issue["revision_reason"] %><p class="muted">改訂の理由: <%= issue["revision_reason"] %></p><% end %>
   <% if s.dig("criteria", "provisional") %>
-    <p class="notice">暫定の判定基準（<%= s["criteria"]["versions"].select { |v| v["provisional"] }.map { |v| v["version"] }.join("、") %>）を使用しています。閾値は見直す予定で、同じ画像でも判定が変わることがあります。</p>
+    <p class="notice">暫定の判定基準を使用しています。判定の目安は今後見直す予定で、同じ画像でも判定が変わることがあります。</p>
   <% end %>
 </section>
 
-<%# ── 総括 ── %>
+<%# ── 1. 総括 ── %>
 <h2>1. 総括</h2>
 <% if %w[current manual].include?(s.dig("summary", "state")) %>
   <p><%= s["summary"]["text"] %></p>
-  <% if s["claude_used"] %><p class="muted">所見・総括文は、確定した数値から生成 AI（Claude）が作成した文章です（異常かどうか・重大度の判定には使っていません）。</p><% end %>
+  <% if s["claude_used"] %><p class="muted">総括と所見の文章は、確定した数値から生成 AI（Claude）が作成しました（異常かどうか・重大度の判定には使っていません）。</p><% end %>
 <% else %>
-  <p class="muted">総括文は作成していません。</p>
+  <p class="muted">総括は作成していません。</p>
 <% end %>
 <table>
-  <tr><th>点検全体の重要度</th><td><%= { "normal" => "正常（確定した異常なし）" }.fetch(s["severity"].to_s) { report_severity(s["severity"]) } %></td></tr>
-  <tr><th>確定した異常</th><td><%= s["counts"]["total"] %> 件（隣接パネル群・架台の段は 1 件と数える）
-    <% if s["counts"]["total"].positive? %><br><span class="muted">重大度別: <%= s["counts"]["by_severity"].map { |k, n| "#{report_severity(k)} #{n} 件" }.join("、") %> ／ 種類別: <%= s["counts"]["by_type"].map { |k, n| "#{report_type(k)} #{n} 件" }.join("、") %></span><% end %></td></tr>
-  <tr><th>影響容量の合計</th><td>
+  <tr><th>点検全体の結果</th><td><%= { "normal" => "確定した熱異常はありませんでした" }.fetch(s["severity"].to_s) { "重大度「#{report_severity(s['severity'])}」の異常があります" } %></td></tr>
+  <tr><th>確定した異常</th><td><%= s["counts"]["total"] %> 件
+    <% if s["counts"]["total"].positive? %><br><span class="muted">重大度別: <%= s["counts"]["by_severity"].map { |k, n| "#{report_severity(k)} #{n} 件" }.join("、") %> ／ 種類別: <%= s["counts"]["by_type"].map { |k, n| "#{ReportWording.anomaly_type(k)} #{n} 件" }.join("、") %></span><% end %></td></tr>
+  <tr><th>異常のあるパネルの容量</th><td>
     <% if s["counts"]["total"].zero? %>
       対象の異常なし
     <% elsif s.dig("impact", "affected_dc_kw") %>
-      <%= report_kw(s["impact"]["affected_dc_kw"]) %>（パネル <%= s["impact"]["panels"] %> 枚分。同じパネルは 1 枚と数える<%= "。うちパネルを特定していない #{s['impact']['unidentified_panels']} 枚は重複を確かめられない" if s["impact"]["unidentified_panels"].to_i.positive? %>）
+      <%= report_kw(s["impact"]["affected_dc_kw"]) %>（パネル <%= s["impact"]["panels"] %> 枚分）
     <% else %>
-      算定できません（<%= s.dig("impact", "reason") %>。未算定 <%= s.dig("impact", "uncalculated_items") %> 件）
+      算定できません（<%= s.dig("impact", "reason") %>）
     <% end %>
   </td></tr>
+  <% if unanalyzed %><tr><th>解析できなかった範囲</th><td>あります（「4. 点検の範囲と限界」）。その範囲は、異常がないことを示すものではありません。</td></tr><% end %>
 </table>
-<% if s.dig("summary", "state") == "current" && s["summary"]["priority_actions"].any? %>
-  <h3>優先して行う対応</h3>
+<% if s.dig("summary", "state") == "current" && Array(s.dig("summary", "priority_actions")).any? %>
+  <h3>発電所に対して行う対応</h3>
   <ol><% s["summary"]["priority_actions"].each do |a| %><li><%= a %></li><% end %></ol>
 <% end %>
 
-<%# ── 撮影条件 ── %>
-<% c = s["conditions"] %>
-<h2>2. 撮影条件</h2>
-<table>
-  <tr><th>機材</th><td><%= c["cameras"].map { |m, n| "#{m}（#{n} 枚）" }.join("、").presence || "—" %></td></tr>
-  <tr><th>撮影時刻</th><td><%= report_time(c["captured_from"]) %> 〜 <%= report_time(c["captured_to"]) %></td></tr>
-  <tr><th>日射量</th><td><%= c["irradiance"] ? "#{c['irradiance']['min']}〜#{c['irradiance']['max']} W/m²（#{c['irradiance']['types'].map { |t, n| "#{ReportsHelper::IRRADIANCE_LABELS.fetch(t, t)} #{n} 枚" }.join('、')}）" : "記録なし（ΔT は日射条件で変わります）" %></td></tr>
-  <tr><th>気温・風速</th><td><%= c["air_temp_c"] ? "#{c['air_temp_c'].join('〜')}℃" : "気温 記録なし" %> ／ <%= c["wind_speed_m_s"] ? "#{c['wind_speed_m_s'].join('〜')} m/s" : "風速 記録なし" %></td></tr>
-  <tr><th>画像</th><td>全 <%= c["images"]["total"] %> 枚（判定に使った <%= c["images"]["used"] %> 枚・除外した <%= c["images"]["excluded"] %> 枚）</td></tr>
-  <tr><th>品質チェック</th><td><%= c["quality"].map { |k, n| "#{ReportsHelper::QUALITY_LABELS.fetch(k, k)} #{n} 枚" }.join("、") %></td></tr>
-  <tr><th>測定パラメータ</th><td><%= safe_join(c["measurement"].map { |line, n| "#{line}（#{n} 枚）" }, tag.br) %></td></tr>
-  <% if s["report_remarks"] %><tr><th>備考</th><td><%= s["report_remarks"] %></td></tr><% end %>
-</table>
-
-<%# ── 判定基準 ── %>
-<% cr = s["criteria"] %>
-<h2>3. 判定基準</h2>
-<% if cr["provisional"] %><p class="notice">暫定の判定基準を使用しています。閾値は見直す予定で、同じ画像でも判定が変わることがあります。</p><% end %>
-<p>異常かどうかと重大度は、放射温度のデータと次の閾値（ルール）で判定し、人が確認しました。
-  <% cr["versions"].each do |v| %><br>版 <%= v["version"] %><%= "（暫定）" if v["provisional"] %>: 基準温度は<%= v["baseline"] || "—" %>から求めています。<% end %>
-</p>
-<table>
-  <tr><th>版</th><th>種類</th><th>ΔT の算出方法</th><th>正規化ΔT 軽微 / 注意 / 重大（℃）</th><th>生ΔT 軽微 / 注意 / 重大（℃）</th></tr>
-  <% cr["rules"].each do |r| %>
-    <tr><td><%= r["version"] %></td><td><%= report_type(r["anomaly_type"]) %></td><td><%= r["measure"] == "row_effect" ? "段の効果（見え方の影響を除いた、段の温度の差）" : measure_label(r["measure"]) %></td>
-      <td><%= [ r["normalized_mild"], r["normalized_warning"], r["normalized_critical"] ].join(" / ") %></td><td><%= [ r["raw_mild"], r["raw_warning"], r["raw_critical"] ].join(" / ") %></td></tr>
-  <% end %>
-</table>
-<% if cr["basis_counts"].any? %><p class="muted">判定に使った値: <%= cr["basis_counts"].map { |k, n| "#{ReportsHelper::BASIS_LABELS.fetch(k, k)} #{n} 件" }.join("、") %></p><% end %>
-
-<%# ── 点検の範囲と限界 ── %>
-<% cov = s["coverage"] %>
-<h2>4. 点検の範囲と限界</h2>
-<p><strong>解析できなかった範囲は、異常がないことを示すものではありません。</strong></p>
-<table>
-  <tr><th>写ったパネル</th><td><%= cov["registered"].positive? ? "登録したパネル #{cov['registered']} 枚のうち、解析できた画像に写ったパネル #{cov['covered']} 枚（写っていない #{cov['uncovered']} 枚）" : "配置図（架台とパネル）が登録されていないため、写ったパネルの数は出していません" %></td></tr>
-  <% if cov["layout_unlinked_images"].positive? %><tr><th>手動のグリッドの画像</th><td><%= cov["layout_unlinked_images"] %> 枚（どのパネルが写ったかを位置で決められないため、写ったパネルの数に含めていません）</td></tr><% end %>
-  <tr><th>使わなかった画像</th><td><%= cov["unused_by_reason"].any? ? cov["unused_by_reason"].map { |r, n| "#{r} #{n} 枚" }.join("、") : "なし" %><% if cov["unused_by_reason"].any? %><br><span class="muted">一覧は付録 A</span><% end %></td></tr>
-  <% if cov["outside_layout_images"].positive? %><tr><th>配置図に無い所</th><td>配置図に登録されていない所に写った画像 <%= cov["outside_layout_images"] %> 枚。配置図に無い所は点検の対象外です。</td></tr><% end %>
-  <tr><th>判断の材料が足りない段</th><td><%= cov["insufficient_rows"].size %> 段<%= "（下の表）" if cov["insufficient_rows"].any? %></td></tr>
-</table>
-<% if (m = s["map"]) %>
-  <% f = report_map_frame(m["blocks"]) %>
-  <% blocks = m["blocks"].index_by { |b| b["label"] } %>
-  <svg class="map" viewBox="0 0 <%= f[:width] %> <%= f[:height] %>" role="img" aria-label="配置図（北が上）">
-    <defs><pattern id="r-hatch" width="1.2" height="1.2" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.2" height="1.2" fill="#ffffff"/><line x1="0" y1="0" x2="0" y2="1.2" stroke="#9ca3af" stroke-width="0.5"/></pattern></defs>
-    <% m["blocks"].each do |b| %><polygon points="<%= b["corners"].map { |e, n| f[:to].(e, n) }.join(" ") %>" fill="#ffffff" stroke="#6b7280" stroke-width="0.15"/><% end %>
-    <% m["uncovered_panels"].each do |label, row, col| %><% b = blocks[label] or next %><polygon points="<%= report_cell(b, row, col).map { |e, n| f[:to].(e, n) }.join(" ") %>" fill="#9ca3af"/><% end %>
-    <% m["insufficient_rows"].each do |label, row| %><% b = blocks[label] or next %><polygon points="<%= report_cell(b, row).map { |e, n| f[:to].(e, n) }.join(" ") %>" fill="url(#r-hatch)" stroke="#9ca3af" stroke-width="0.1"/><% end %>
-    <% m["rows"].each do |label, row| %><% b = blocks[label] or next %><polygon points="<%= report_cell(b, row).map { |e, n| f[:to].(e, n) }.join(" ") %>" fill="#f97316" fill-opacity="0.7"/><% end %>
-    <% m["anomaly_panels"].each do |label, row, col| %><% b = blocks[label] or next %><polygon points="<%= report_cell(b, row, col).map { |e, n| f[:to].(e, n) }.join(" ") %>" fill="#dc2626"/><% end %>
-  </svg>
-  <p class="muted">配置図（北が上）: 赤 = 確定した異常のパネル、橙 = 確定した架台の段、斜線 = 判断の材料が足りない段、灰 = 解析できた画像に写っていないパネル</p>
-<% end %>
-<% if cov["insufficient_rows"].any? %>
-  <h3>判断の材料が足りない段</h3>
-  <table>
-    <tr><th>理由</th><th>段の数</th><th>架台・段</th><th>写った画像</th></tr>
-    <% Array(cov["insufficient_row_groups"]).each do |g| %><tr><td><%= g["reason"] %></td><td><%= g["rows"] %> 段</td><td><%= g["blocks"] %></td><td><%= g["views"] %> 枚</td></tr><% end %>
-  </table>
+<%# ── 2. 発電所の様子 ── %>
+<% if Array(s["overview_images"]).any? %>
+  <h2>2. 発電所の様子（サーモ画像）</h2>
+  <div class="crops">
+    <% s["overview_images"].each do |o| %>
+      <div><%= overview_image(images, o) %><p class="muted"><%= report_time(o["captured_at"]) %><%= "・架台 #{o['blocks']}" if o["blocks"].present? %></p></div>
+    <% end %>
+  </div>
 <% end %>
 
-<%# ── 異常一覧 ── %>
-<h2>5. 異常一覧（確定したもの）</h2>
+<%# ── 3. 異常 ── %>
+<h2>3. 確定した異常</h2>
 <% if s["items"].empty? %>
   <p>確定した熱異常はありませんでした。</p>
 <% else %>
   <table class="items">
-    <colgroup><col style="width:4%"><col style="width:11%"><col style="width:11%"><col style="width:7%"><col style="width:5%"><col style="width:13%"><col style="width:9%"><col style="width:12%"><col style="width:9%"><col style="width:19%"></colgroup>
-    <tr><th>#</th><th>パネル</th><th>種類</th><th>重大度</th><th>証拠</th><th>ΔT（算出方法）</th><th>判定に使った値</th><th>写った画像のうち異常が出た枚数</th><th>影響容量</th><th>推定損失</th></tr>
+    <colgroup><col style="width:4%"><col style="width:12%"><col style="width:20%"><col style="width:8%"><col style="width:22%"><col style="width:14%"><col style="width:20%"></colgroup>
+    <tr><th>#</th><th>パネル</th><th>異常の種類</th><th>重大度</th><th>周りとの温度差</th><th>確認</th><th>写った画像のうち異常が出た枚数</th></tr>
     <% s["items"].each_with_index do |i, n| %>
       <tr>
         <td><%= n + 1 %></td>
-        <td><%= i["panel"] || (i["kind"] == "group" ? "#{i['panel_count']} 枚の群" : "未特定") %></td>
-        <td><%= report_type(i["type"]) %></td>
+        <td><%= i["panel"] || (i["kind"] == "group" ? "#{i['panel_count']} 枚の並び" : "特定できず") %></td>
+        <td><%= ReportWording.anomaly_type(i["type"]) %></td>
         <td><%= report_severity(i["severity"]) %></td>
-        <td><%= i["evidence_level"] || "—" %></td>
-        <td><%= i["delta_t"] ? "#{format('%+.1f', i['delta_t'])}℃" : "—" %><br><span class="muted"><%= i["measure"] == "row_effect" ? "段の効果" : measure_label(i["measure"]) %><%= "・正規化 #{i['normalized_delta_t']}℃" if i["normalized_delta_t"] %></span></td>
-        <td><%= ReportsHelper::BASIS_LABELS[i["threshold_basis"]] || "—" %></td>
-        <td><%= i["kind"] == "anomaly" ? (i["visible"] ? "#{i['visible']} 枚中 #{i['observed']} 枚" : "—（個別の画像で確認）") : (i["kind"] == "block_row" ? "#{i['visible']} 枚（上側 #{i['upper_views']}・下側 #{i['lower_views']}）" : "—") %></td>
-        <td><%= report_kw(i["affected_dc_kw"]) %></td>
-        <td><%= i["estimated_loss_kw"] ? report_kw(i["estimated_loss_kw"]) : "—" %><br><span class="muted"><%= i["loss_basis"] %></span>
-          <% if i["annual_loss_kwh"] %><br><span class="muted">年間 約 <%= i["annual_loss_kwh"] %> kWh<%= "・約 #{i['annual_loss_yen']} 円" if i["annual_loss_yen"] %>（概算）</span><% end %></td>
+        <td><%= i["delta_t"] ? "#{format('%+.1f', i['delta_t'])}℃" : "—" %><br><span class="muted"><%= ReportWording.measure(i["measure"]) %></span></td>
+        <td><%= i["kind"] == "anomaly" ? ReportWording.evidence(i["evidence_level"]) : "サーモ画像で確認" %></td>
+        <td><%= i["kind"] == "anomaly" ? (i["visible"] ? "#{i['visible']} 枚中 #{i['observed']} 枚" : "—（1 枚の画像で確認）") : (i["kind"] == "block_row" ? "#{i['visible']} 枚" : "—") %></td>
       </tr>
     <% end %>
   </table>
 
-  <h2>6. 異常ごとの詳細</h2>
+  <h3>異常ごとの詳細</h3>
   <% s["items"].each_with_index do |i, n| %>
     <div class="detail">
-      <h3>#<%= n + 1 %> <%= i["panel"] || "パネル未特定" %>・<%= report_type(i["type"]) %>・<%= report_severity(i["severity"]) %></h3>
+      <h3>#<%= n + 1 %> <%= i["panel"] || "パネル特定できず" %>・<%= ReportWording.anomaly_type(i["type"]) %>・<%= report_severity(i["severity"]) %></h3>
       <% if i["image"] %>
         <div class="crops">
-          <div><%= thermal_crop(images, i["image"]) %><p class="muted">サーモ（画像 <%= i["image"]["sequence"] %>）</p></div>
-          <% if (rgb = rgb_crop(images, i["image"])) %><div><%= rgb %><p class="muted">RGB（おおよその位置）</p></div><% end %>
+          <div><%= thermal_crop(images, i["image"]) %><p class="muted">サーモ画像</p></div>
+          <% if (rgb = rgb_crop(images, i["image"])) %><div><%= rgb %><p class="muted">可視画像（おおよその位置）</p></div><% end %>
         </div>
       <% end %>
       <% if i["others"].any? %>
-        <p class="muted">異常が出たほかの画像（<%= i["others"].size %> 枚）</p>
-        <div class="others">
-          <% i["others"].each do |o| %><div><%= thermal_crop(images, { "id" => o["image_id"], "bbox" => o["bbox"] }, width: 90) %><p class="muted">画像 <%= o["sequence"] %><%= "・ΔT #{o['delta_t']}℃" if o["delta_t"] %></p></div><% end %>
-        </div>
+        <p class="muted">同じ異常が写ったほかの画像（<%= i["others"].size %> 枚）</p>
+        <div class="others"><% i["others"].each do |o| %><div><%= thermal_crop(images, { "id" => o["image_id"], "bbox" => o["bbox"] }, width: 90) %></div><% end %></div>
       <% end %>
       <% if i["kind"] == "block_row" %>
-        <p>架台の段全体の温度上昇です（見え方の影響を除いた段の効果 <%= format("%+.1f", i["delta_t"].to_f) %>℃、写った画像 <%= i["visible"] %> 枚の中央値）。</p>
+        <p>架台の段全体が、周りより <%= format("%.1f", i["delta_t"].to_f) %>℃ 高く見えています（撮影の角度による見かけの違いを除いた値）。</p>
       <% else %>
         <p><strong>所見:</strong> <%= i["explanation"] %></p>
         <% if i["explanation_state"] == "current" %>
-          <% if i["causes"].present? %><p><strong>原因の候補:</strong> <%= Array(i["causes"]).join("、") %></p><% end %>
+          <% if i["causes"].present? %><p><strong>考えられる原因:</strong> <%= Array(i["causes"]).join("、") %></p><% end %>
           <% if i["recommended_action"].present? %><p><strong>推奨する対応:</strong> <%= i["recommended_action"] %></p><% end %>
-          <% if i["additional_checks"].present? %><p><strong>推奨する追加検査:</strong> <%= Array(i["additional_checks"]).join("、") %></p><% end %>
         <% end %>
+      <% end %>
+      <% if i["affected_dc_kw"] || i["estimated_loss_kw"] %>
+        <p class="muted">異常のあるパネルの容量: <%= report_kw(i["affected_dc_kw"]) %><%= "・推定の出力低下 #{report_kw(i['estimated_loss_kw'])}（概算）" if i["estimated_loss_kw"] %></p>
       <% end %>
     </div>
   <% end %>
 <% end %>
 
 <% if s["candidates"].any? %>
-  <h2>7. 候補（未確定。重要度に含めていません）</h2>
+  <h3>確認中の候補（重要度に含めていません）</h3>
   <table>
-    <tr><th>パネル</th><th>種類</th><th>重大度（ルール）</th><th>画像</th><th>写った画像のうち異常が出た枚数</th><th>ΔT</th></tr>
-    <% s["candidates"].each do |cand| %><tr><td><%= cand["panel"] || "未特定" %></td><td><%= report_type(cand["type"]) %></td><td><%= report_severity(cand["severity"]) %></td><td><%= cand["sequence"] || "—" %></td><td><%= cand["visible"] ? "#{cand['visible']} 枚中 #{cand['observed']} 枚" : "—" %></td><td><%= cand["delta_t"] ? "#{format('%+.1f', cand['delta_t'])}℃" : "—" %></td></tr><% end %>
+    <tr><th>パネル</th><th>異常の種類</th><th>重大度（目安）</th><th>写った画像のうち異常が出た枚数</th></tr>
+    <% s["candidates"].each do |cand| %><tr><td><%= cand["panel"] || "特定できず" %></td><td><%= ReportWording.anomaly_type(cand["type"]) %></td><td><%= report_severity(cand["severity"]) %></td><td><%= cand["visible"] ? "#{cand['visible']} 枚中 #{cand['observed']} 枚" : "—" %></td></tr><% end %>
   </table>
 <% end %>
+
+<%# ── 4. 点検の範囲と限界 ── %>
+<h2>4. 点検の範囲と限界</h2>
+<p><strong>解析できなかった範囲は、異常がないことを示すものではありません。</strong></p>
+<table>
+  <tr><th>点検した範囲</th><td><%= s.dig("scope", "description") || "—" %></td></tr>
+  <tr><th>解析できたパネル</th><td><%= cov["registered"].positive? ? "対象のパネル #{cov['registered']} 枚のうち #{cov['covered']} 枚（解析できなかったパネル #{cov['uncovered']} 枚）" : "配置図が登録されていないため、パネルの枚数では数えていません" %></td></tr>
+  <tr><th>解析に使わなかった画像</th><td>
+    <% groups = cov["unused_images"].group_by { |u| ReportWording.unused_reason(u["reason_key"] || u["reason"]) } %>
+    <%= groups.any? ? groups.map { |label, list| "#{label}: #{list.size} 枚" }.join("、") : "なし" %>
+  </td></tr>
+  <% if cov["outside_layout_images"].to_i.positive? %><tr><th>配置図に無い所</th><td>配置図に登録されていない所が写った画像が <%= cov["outside_layout_images"] %> 枚ありました。配置図に無い所は点検の対象外です。</td></tr><% end %>
+</table>
+<% if Array(cov["insufficient_row_groups"]).any? %>
+  <h3>段全体の温度を比べられなかった範囲</h3>
+  <table>
+    <tr><th>架台・段</th><th>理由</th></tr>
+    <% cov["insufficient_row_groups"].each do |g| %><tr><td><%= g["blocks"] %></td><td><%= ReportWording.insufficient_row_reason(g["reason"]) %></td></tr><% end %>
+  </table>
+  <p class="muted">これらの段も、パネルごとの温度の比較（ホットスポットなど）は行っています。</p>
+<% end %>
+<%= render "reports/map", snapshot: s %>
+
+<%# ── 5. 撮影条件 ── %>
+<% c = s["conditions"] %>
+<h2>5. 撮影条件</h2>
+<table>
+  <tr><th>機材</th><td><%= c["cameras"].keys.join("、").presence || "—" %></td></tr>
+  <tr><th>撮影時刻</th><td><%= report_time(c["captured_from"]) %> 〜 <%= report_time(c["captured_to"]) %></td></tr>
+  <tr><th>日射量</th><td><%= c["irradiance"] ? "#{c['irradiance']['min']}〜#{c['irradiance']['max']} W/m²" : "記録なし（日射量での補正はしていません）" %></td></tr>
+  <tr><th>気温・風速</th><td><%= c["air_temp_c"] ? "#{c['air_temp_c'].join('〜')}℃" : "気温 記録なし" %> ／ <%= c["wind_speed_m_s"] ? "#{c['wind_speed_m_s'].join('〜')} m/s" : "風速 記録なし" %></td></tr>
+  <tr><th>画像</th><td>撮影 <%= c["images"]["total"] %> 枚（解析に使った <%= c["images"]["used"] %> 枚）</td></tr>
+  <% reasons = Array(c["quality_reasons"]) %>
+  <tr><th>撮影データの確認</th><td><%= reasons.any? ? reasons.map { |r| "#{ReportWording.quality(r['key'])}（#{r['count']} 枚）" }.join("、") : "問題はありませんでした" %></td></tr>
+  <tr><th>測定の設定</th><td><%= c["camera_default_params"] ? "放射率などの一部は、カメラの既定値を使用" : "点検ごとに設定した値を使用" %></td></tr>
+  <% if s["report_remarks"] %><tr><th>備考</th><td><%= s["report_remarks"] %></td></tr><% end %>
+</table>
+
+<%# ── 6. 判定の基準 ── %>
+<h2>6. 判定の基準（温度差の目安）</h2>
+<% if s.dig("criteria", "provisional") %><p class="notice">暫定の判定基準を使用しています。</p><% end %>
+<p>異常かどうかと重大度は、周りの正常なパネルとの温度差を次の目安と比べて判定し、人が確認しました。</p>
+<table>
+  <tr><th>異常の種類</th><th>軽微</th><th>注意</th><th>重大</th></tr>
+  <% customer_criteria_rows(s).each do |r| %>
+    <tr><td><%= ReportWording.anomaly_type(r["anomaly_type"]) %></td><td><%= r["raw_mild"] %>℃ 以上</td><td><%= r["raw_warning"] %>℃ 以上</td><td><%= r["raw_critical"] %>℃ 以上</td></tr>
+  <% end %>
+</table>
 
 <h2>免責</h2>
 <ul><% s["disclaimers"].each do |line| %><li><%= line %></li><% end %></ul>
 
-<h2>付録 A. 使わなかった画像</h2>
-<% if s["coverage"]["unused_images"].empty? %>
-  <p>なし</p>
-<% else %>
-  <table>
-    <tr><th>画像</th><th>撮影時刻</th><th>理由</th><th>メモ</th></tr>
-    <% s["coverage"]["unused_images"].each do |u| %><tr><td><%= u["sequence"] %></td><td><%= report_time(u["captured_at"]) %></td><td><%= u["reason"] %></td><td><%= u["note"] %></td></tr><% end %>
-  </table>
-<% end %>
-
-<h2>付録 B. 人が確認し、異常ではないと判断した候補の件数</h2>
+<h2>付録 A. 人が確認し、異常ではないと判断した候補の件数</h2>
 <p><%= s["rejections"]["total"] %> 件<% if s["rejections"]["total"].positive? %>（<%= s["rejections"]["by_reason"].map { |r, n| "#{r} #{n} 件" }.join("、") %>）<% end %></p>
-<p class="muted">同じ異常をほかの画像で重複として扱ったものは数えていません。</p>
+<p class="muted">同じ異常を複数の画像で確認したものは 1 件と数えています。</p>
+
+<h2>付録 B. 用語の説明</h2>
+<table>
+  <% ReportWording::GLOSSARY.each do |term, text| %><tr><th><%= term %></th><td><%= text %></td></tr><% end %>
+</table>

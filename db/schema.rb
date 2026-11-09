@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_09_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_09_170000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -303,6 +303,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_160000) do
     t.datetime "updated_at", null: false
     t.datetime "pdf_generated_at"
     t.text "pdf_error"
+    t.datetime "internal_pdf_generated_at"
+    t.text "internal_pdf_error"
     t.index ["inspection_id", "version_number"], name: "index_inspection_reports_on_inspection_id_and_version_number", unique: true
     t.index ["inspection_id"], name: "index_inspection_reports_on_inspection_id"
   end

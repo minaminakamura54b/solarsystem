@@ -33,6 +33,17 @@ class ReportImages
     crop(image.rgb, ref["rgb_bbox"], width:, pad: 4.0, frame: false, nearest: false)
   end
 
+  # 全体の様子（R4）: 画像全体を縮小する
+  def overview(ref, width:)
+    image = @images[ref&.dig("id")]
+    return nil unless image&.displayable?
+
+    source = load(image.display_image)
+    out = source.resize(width.to_f / source.width, kernel: :lanczos3)
+    out = out.extract_band(0, n: 3) if out.bands > 3
+    "data:image/jpeg;base64,#{Base64.strict_encode64(out.jpegsave_buffer(Q: 82, strip: true))}"
+  end
+
   private
 
   def crop(attachment, bbox, width:, pad:, frame:, nearest:)
