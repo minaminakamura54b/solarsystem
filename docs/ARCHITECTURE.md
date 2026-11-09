@@ -44,6 +44,7 @@ Rails 8.1（Puma）
 | `/sites/:id/panel_layout` | `panel_layouts` | 実配置の登録（`new` → `preview`（確認画面）→ `create`）、雛形の CSV（`template`）、割り当て直しが必要な異常の一覧（`show`） |
 | `/inspections` | `inspections` | 点検の一覧・詳細・新規（複数画像）・削除。詳細は JSON でステータス（`in_progress` を含む）も返す |
 | `/inspections/:id/images/:id` | `inspection_images` | RGB の手動添付・差し替え・削除、画像の除外・除外の取り消し、グリッド入力画面（`grid`）・グリッドの保存（`grids`）・再解析（`reanalyze`） |
+| `/inspections/:id/reports` | `reports` | 報告書の版の一覧と発行（`create`。警告の確認・改訂の理由・会社名と資格の種別）、今の内容のプレビュー（`preview`）、発行した版（`show`。印刷向けのレイアウト `report`）。PDF は ferrum_pdf の承認後 |
 | `/inspections/:id/bulk_exclusion` | `bulk_exclusions` | 要確認・失敗の画像を理由ごとにまとめて除外（`show` の一覧 → `?reason=` で確認（除外すると写っていないまま残るパネルの数）→ `create`）。点検の範囲は `InspectionCoverage` |
 | `/inspections/:id/grid_templates` | `grid_templates` | グリッドテンプレートの保存・一括適用（`apply`） |
 | `/inspections/:id/rejudge` | `inspections#rejudge` | 未確定の異常・群を現在の判定基準で判定し直す |
@@ -81,7 +82,8 @@ RuleSet ──< SeverityRule（閾値。Anomaly / AnomalyGroup が判定時の�
 | `Inspection` | conducted_at、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed`）、severity（completed のときだけ必須。それ以外は NULL =「判定なし」）、error_message、weather_note、review_reason、reviewed_at、総括文（summary_text・summary_priority_actions・summary_additional_checks・summary_prompt_version・summary_input_digest・summary_generated_at・summary_error）、測定パラメータ（emissivity・reflected_temperature_c・object_distance_m。任意）、report_pdf（Phase 7）。旧方式の項目: legacy_anomalies（**旧 anomalies**。読み取り専用）、anomaly_count、result、report、image（画像1枚） |
 | `InspectionImage` | thermal（R-JPEG 原本。変換・縮小しない）、rgb（任意）、sequence、thermal_filename、メタデータ（captured_at、camera_model、width / height、GPS、altitude_m、gimbal_pitch / gimbal_yaw、metadata JSON）、is_radiometric（**メタデータによる仮判定**。NULL = 判定できない）、気象データ（irradiance_w_m2 / irradiance_type / wind / 気温 / 湿度）、quality_report、analysis_status（`pending` / `analyzing` / `completed` / `needs_review` / `failed` / `excluded`）、review_reason、exclusion_note、measurement_params（解析エンジンに渡した測定パラメータと出どころ）、panel_grids・grid_proposal・raw_analysis・analyzer_version（Phase 3〜4） |
 | `WeatherReading` | observed_at、irradiance_w_m2（入力したら irradiance_type = `poa` / `ghi` / `unknown` 必須）、wind_speed_m_s、air_temp_c、humidity、cloud_cover_okta（雲量 0〜8。記録のみで画像には割り当てない。雲量だけの記録では品質チェックをやり直さない） |
-| `RuleSet` | version（一意）、active（全体で1つ。部分ユニークインデックス）、note、detection_params（JSON。必須キーあり）。**作成後は active 以外変更不可、削除不可** |
+| `RuleSet` | version（一意）、active（全体で1つ。部分ユニークインデックス）、note、detection_params（JSON。必須キーあり）、provisional（暫定の版。印は付けるだけで外さない）。**作成後は active・provisional の印以外変更不可、削除不可** |
+| `InspectionReport` | 報告書の版（Phase 7）。version_number（点検内で一意）、issued_at、snapshot（発行時の内容の固定コピー。報告書はこれだけから描く）、content_digest（発行後の変更の検知）、revision_reason（第 2 版から必須）、acknowledged_warnings。**発行後は変更不可、削除不可**。版のある点検は削除できない |
 | `SeverityRule` | anomaly_type（6種類すべて必須）、measure、normalized_mild / warning / critical、raw_mild / warning / critical（各系列で mild < warning < critical）。**作成後は読み取り専用** |
 | `Anomaly` / `AnomalyGroup` / `GridTemplate` | 項目は IMPROVEMENT_PLAN 4.2〜4.4 のとおり。所見（Claude）: cause_candidates・explanation（= reasoning）・additional_checks・recommended_action・report_text・prompt_version・explanation_input_digest・explained_at・explanation_error（群にも同じ列）。パネルの紐付けの履歴: panel_assignment_history（配置の置き換えで外れた元のパネル番号など）・panel_reassignment_required（割り当て直しが必要） |
 | `Alert` | title 必須、severity は `info` / `warning` / `critical`、read_at |

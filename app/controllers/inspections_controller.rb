@@ -134,8 +134,12 @@ class InspectionsController < ApplicationController
   end
 
   def destroy
-    @inspection.destroy
-    redirect_to inspections_path, notice: "点検記録を削除しました"
+    if @inspection.destroy
+      redirect_to inspections_path, notice: "点検記録を削除しました"
+    else
+      # 報告書を発行した点検は削除しない（発行した版は顧客に渡した内容の記録のため）
+      redirect_to inspection_path(@inspection), alert: "報告書を発行した点検は削除できません"
+    end
   end
 
   private

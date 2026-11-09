@@ -1,0 +1,6 @@
+# 報告書（docs/IMPROVEMENT_PLAN.md Phase 7）の設定。
+# 屋号はアプリ全体で 1 つ（2026-11-03 ユーザー指示）。報告書に個人名は載せない（会社名・屋号のみ）
+shared:
+  business_name: "リブレメア"
+  # 異常ごとの詳細に並べる「異常が出たほかの画像」の上限（Phase 7 の決定事項 2026-11-09）
+  max_other_observations: 6

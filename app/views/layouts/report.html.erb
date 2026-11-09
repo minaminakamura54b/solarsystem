@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <title><%= content_for(:title) || "報告書" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta charset="utf-8">
+    <%# 報告書（PDF にもする）。外部のフォント・スクリプトは使わない。日本語フォントは PDF を作る環境に入れる %>
+    <style>
+      @page { size: A4; margin: 14mm 12mm; }
+      :root { --ink: #1f2937; --muted: #6b7280; --line: #d1d5db; --warn: #b45309; --bg: #ffffff; }
+      body { background: var(--bg); color: var(--ink); margin: 0; font-family: "Noto Sans CJK JP", "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif; font-size: 10.5pt; line-height: 1.6; }
+      .page { max-width: 186mm; margin: 0 auto; padding: 16px; }
+      h1 { font-size: 20pt; margin: 0 0 8px; }
+      h2 { font-size: 13pt; border-bottom: 2px solid var(--ink); padding-bottom: 2px; margin: 22px 0 8px; break-after: avoid; }
+      h3 { font-size: 11pt; margin: 14px 0 6px; break-after: avoid; }
+      table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 6px 0; }
+      th, td { border: 1px solid var(--line); padding: 3px 5px; text-align: left; vertical-align: top; }
+      th { background: #f3f4f6; white-space: nowrap; }
+      tr { break-inside: avoid; }
+      .muted { color: var(--muted); font-size: 9pt; }
+      .notice { border: 2px solid var(--warn); color: var(--warn); padding: 6px 10px; margin: 8px 0; font-weight: 700; }
+      .cover { min-height: 60vh; display: flex; flex-direction: column; justify-content: center; break-after: page; }
+      .detail { border: 1px solid var(--line); padding: 8px; margin: 8px 0; break-inside: avoid; }
+      .crops { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+      .crop { border: 1px solid var(--line); background-color: #111; }
+      .crop.empty { display: flex; align-items: center; justify-content: center; color: var(--muted); background: #f9fafb; font-size: 9pt; }
+      .crop-frame { position: absolute; border: 2px solid #ffffff; box-shadow: 0 0 0 1px #000; }
+      .others { display: flex; gap: 6px; flex-wrap: wrap; }
+      .map { width: 100%; max-height: 120mm; background: #f9fafb; border: 1px solid var(--line); }
+      .no-print { margin: 8px 0; }
+      @media print { .no-print { display: none; } .page { padding: 0; } }
+    </style>
+  </head>
+  <body>
+    <div class="page"><%= yield %></div>
+  </body>
+</html>

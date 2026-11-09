@@ -53,10 +53,16 @@
           <%= link_to "パネルごとの候補を確認する（未判断 #{@inspection.panel_candidates.pending.count} 件）", inspection_panel_review_path(@inspection), class: "btn btn-primary" %>
         <% end %>
         <%= link_to "異常候補をレビューする（未確定 #{@inspection.candidate_count} 件）", review_inspection_path(@inspection), class: @inspection.panel_candidates.exists? ? "btn btn-secondary" : "btn btn-primary" %>
+        <% if @inspection.completed? || @inspection.inspection_reports.exists? %>
+          <%= link_to "報告書（#{@inspection.inspection_reports.count} 版発行）", inspection_reports_path(@inspection), class: "btn btn-secondary" %>
+        <% end %>
         <% if @inspection.completed? %>
           <span class="text-xs text-gray-400 ml-2">レビュー完了: <%= @inspection.reviewed_at.strftime("%Y/%m/%d %H:%M") %></span>
         <% end %>
       </div>
+      <% if @inspection.inspection_reports.exists? && (issue = ReportIssue.new(@inspection)).changed_since_latest? %>
+        <p class="text-xs mt-2" id="report-changed" style="color:#ef9f27;"><%= issue.latest.title %>の発行後に変更があります（<%= link_to "報告書", inspection_reports_path(@inspection) %>で改訂版を発行できます）</p>
+      <% end %>
     <% end %>
     <% if @inspection.candidate_count.positive? %>
       <div class="mt-3 flex items-center gap-3">
