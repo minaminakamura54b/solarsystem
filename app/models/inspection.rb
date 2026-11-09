@@ -7,6 +7,7 @@ class Inspection < ApplicationRecord
   has_many :block_map_proposals, dependent: :destroy
   has_many :panel_candidates, dependent: :destroy
   has_many :block_row_findings, dependent: :destroy
+  has_many :inspection_reports, dependent: :restrict_with_error # 発行した報告書の版がある点検は削除しない
   has_many :weather_readings, -> { chronological }, dependent: :destroy
   has_many :grid_templates, dependent: :destroy
   has_many :anomaly_groups, dependent: :destroy

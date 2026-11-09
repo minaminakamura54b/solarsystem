@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_09_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_09_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -263,6 +263,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_100000) do
     t.index ["inspection_id"], name: "index_inspection_images_on_inspection_id"
   end
 
+  create_table "inspection_reports", force: :cascade do |t|
+    t.bigint "inspection_id", null: false
+    t.integer "version_number", null: false
+    t.datetime "issued_at", null: false
+    t.jsonb "snapshot", default: {}, null: false
+    t.string "content_digest", null: false
+    t.text "revision_reason"
+    t.jsonb "acknowledged_warnings", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["inspection_id", "version_number"], name: "index_inspection_reports_on_inspection_id_and_version_number", unique: true
+    t.index ["inspection_id"], name: "index_inspection_reports_on_inspection_id"
+  end
+
   create_table "inspections", force: :cascade do |t|
     t.bigint "site_id", null: false
     t.datetime "conducted_at", null: false
@@ -479,6 +493,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_100000) do
   add_foreign_key "block_row_findings", "rule_sets"
   add_foreign_key "grid_templates", "inspections"
   add_foreign_key "inspection_images", "inspections"
+  add_foreign_key "inspection_reports", "inspections"
   add_foreign_key "inspections", "sites"
   add_foreign_key "panel_candidates", "anomalies", column: "representative_anomaly_id", on_delete: :nullify
   add_foreign_key "panel_candidates", "inspections"

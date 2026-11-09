@@ -1,0 +1,65 @@
+<% content_for :title, "報告書 - #{@inspection.conducted_at&.strftime('%Y/%m/%d')}" %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">📄 報告書</h2>
+    <p class="text-sm text-gray-500 mt-1">
+      報告書は版として残します。発行した版の内容は変わりません。点検の内容が変わったら、改訂版で出し直します（旧版も残ります）。
+      PDF の出力は準備中です（今は画面の内容をブラウザで印刷できます）。
+    </p>
+  </div>
+  <div class="flex gap-2" style="white-space:nowrap;">
+    <%= link_to "今の内容をプレビュー", preview_inspection_reports_path(@inspection), class: "btn btn-secondary", target: "_blank", rel: "noopener" %>
+    <%= link_to "点検に戻る", inspection_path(@inspection), class: "btn btn-secondary" %>
+  </div>
+</div>
+
+<div class="p-6 space-y-4">
+  <% if @issue.changed_since_latest? %>
+    <p class="card p-3 text-sm" id="changed" style="color:#ef9f27;"><%= @reports.first.title %>の発行後に変更があります。必要なら改訂版を発行してください。</p>
+  <% end %>
+
+  <div class="card p-0">
+    <table class="table text-sm" id="versions">
+      <thead><tr><th>版</th><th>発行日時</th><th>改訂の理由</th><th>発行時に確認した警告</th><th></th></tr></thead>
+      <tbody>
+        <% @reports.each do |r| %>
+          <tr>
+            <td><%= r.title %></td>
+            <td style="white-space:nowrap;"><%= r.issued_at.in_time_zone(ImageQualityConfig.current.capture_time_zone).strftime("%Y/%m/%d %H:%M") %></td>
+            <td><%= r.revision_reason || "—" %></td>
+            <td class="text-xs"><%= safe_join(r.acknowledged_warnings, tag.br).presence || "—" %></td>
+            <td><%= link_to "表示", inspection_report_path(@inspection, r), target: "_blank", rel: "noopener" %></td>
+          </tr>
+        <% end %>
+        <% if @reports.empty? %><tr><td colspan="5" class="text-gray-400">まだ発行していません</td></tr><% end %>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card p-4 text-sm" id="issue">
+    <p class="form-label">報告書を発行する<%= "（#{@reports.size + 1} 版目）" %></p>
+    <% if @blockers.any? %>
+      <% @blockers.each do |b| %><p style="color:#ef9f27;"><%= b %></p><% end %>
+    <% else %>
+      <%= form_with url: inspection_reports_path(@inspection), class: "space-y-2" do %>
+        <% if @warnings.any? %>
+          <div id="warnings">
+            <p style="color:#ef9f27;">次の点を確認してください。</p>
+            <ul class="list-disc ml-5"><% @warnings.each do |w| %><li><%= w %></li><% end %></ul>
+            <label><%= check_box_tag :acknowledge_warnings, "1", false %> 上の点を確認したうえで発行する</label>
+          </div>
+        <% end %>
+        <% if @reports.any? %>
+          <div><label class="form-label">改訂の理由（必須）</label><%= text_field_tag :revision_reason, nil, class: "form-input", required: true %></div>
+        <% end %>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div><label class="form-label">会社名（任意）</label><%= text_field_tag :company_name, nil, class: "form-input" %></div>
+          <div><label class="form-label">資格の種別（任意）</label><%= text_field_tag :qualification, nil, class: "form-input" %></div>
+        </div>
+        <p class="text-xs text-gray-400">報告書に個人名は載せません（氏名の欄はありません）。表紙の作成者は屋号「<%= ReportConfig.current.business_name %>」です。</p>
+        <%= submit_tag "発行する", class: "btn btn-primary", data: { turbo_confirm: "報告書を発行します。発行した版は変えられません。よろしいですか？" } %>
+      <% end %>
+    <% end %>
+  </div>
+</div>

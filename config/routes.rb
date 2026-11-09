@@ -35,6 +35,10 @@ Rails.application.routes.draw do
         post :reject
       end
     end
+    # 報告書の版（Phase 7）
+    resources :reports, only: %i[index show create] do
+      get :preview, on: :collection
+    end
     # 要確認・失敗の画像を理由ごとにまとめて除外する（Phase 7）
     resource :bulk_exclusion, only: %i[show create]
     # 架台・段の候補（案 X 改）
