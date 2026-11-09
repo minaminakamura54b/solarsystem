@@ -37,6 +37,8 @@ Rails.application.routes.draw do
     end
     # 点検の対象範囲（見直し R1）
     resource :scope, only: %i[show update destroy], controller: "inspection_scopes"
+    # 報告書の「発電所の様子」のサーモ画像（見直し R4）
+    resource :report_overview, only: %i[show update destroy]
     # 報告書の版（Phase 7）
     resources :reports, only: %i[index show create] do
       get :preview, on: :collection

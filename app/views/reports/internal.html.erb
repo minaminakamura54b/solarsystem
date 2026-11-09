@@ -46,6 +46,7 @@
   <tr><th>写ったパネル</th><td><%= cov["registered"] %> 枚のうち <%= cov["covered"] %> 枚（写っていない <%= cov["uncovered"] %> 枚）</td></tr>
   <% if cov["layout_unlinked_images"].to_i.positive? %><tr><th>手動のグリッドの画像</th><td><%= cov["layout_unlinked_images"] %> 枚（写ったパネルの数に含めていない）</td></tr><% end %>
   <tr><th>配置図に無い所の画像</th><td><%= cov["outside_layout_images"] %> 枚</td></tr>
+  <tr><th>発電所の様子の画像</th><td><%= Array(s["overview_images"]).map { |o| "画像 #{o['sequence']}" }.join("、").presence || "なし" %>（<%= s["overview_source"] == "manual" ? "人が選んだ" : "自動の提案" %>）</td></tr>
 </table>
 <% if cov["insufficient_rows"].any? %>
   <h3>判断の材料が足りない段（<%= cov["insufficient_rows"].size %> 段）</h3>

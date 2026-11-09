@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_09_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_09_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -344,6 +344,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_180000) do
     t.datetime "scope_confirmed_at"
     t.text "report_remarks"
     t.jsonb "summary_internal_improvements"
+    t.jsonb "report_overview_image_ids"
     t.index ["analysis_status"], name: "index_inspections_on_analysis_status"
     t.index ["conducted_at"], name: "index_inspections_on_conducted_at"
     t.index ["severity"], name: "index_inspections_on_severity"

@@ -1,0 +1,68 @@
+<% content_for :title, "発電所の様子の画像 - #{@inspection.conducted_at&.strftime('%Y/%m/%d')}" %>
+<% tz = ImageQualityConfig.current.capture_time_zone %>
+
+<div class="page-header">
+  <div>
+    <h2 class="page-title">発電所の様子（サーモ画像）</h2>
+    <p class="text-sm text-gray-500 mt-1">
+      顧客向けの報告書に載せる、発電所全体の様子が分かるサーモ画像です（最大 <%= @overview.limit %> 枚）。
+      自動の提案は、品質チェックに問題のない画像から、撮影位置が対象範囲に散らばるように選んでいます（同じくらいなら写っている架台の多い画像）。
+      候補は解析できた・異常の無い画像<%= "で、点検の対象範囲の架台が写ったもの" if @inspection.scope_confirmed? %>です。判定には関係しません。
+    </p>
+  </div>
+  <div class="flex gap-2" style="white-space:nowrap;">
+    <%= link_to "報告書に戻る", inspection_reports_path(@inspection), class: "btn btn-secondary" %>
+  </div>
+</div>
+
+<div class="p-6 space-y-4">
+  <div class="card p-4 text-sm" id="selected">
+    <div class="flex justify-between items-center">
+      <p class="form-label">報告書に載せる画像（<%= @selected.size %> / <%= @overview.limit %> 枚・<%= @overview.manual? ? "人が選んだ画像" : "自動の提案" %>）</p>
+      <% if @overview.manual? %>
+        <%= button_to "自動の提案に戻す", inspection_report_overview_path(@inspection), method: :delete, class: "btn btn-sm btn-secondary" %>
+      <% end %>
+    </div>
+    <% if @selected.empty? %><p class="text-xs text-gray-400 mt-2">選んだ画像はありません。報告書にはこの節を載せません。</p><% end %>
+    <div class="flex gap-3 flex-wrap mt-2">
+      <% @selected.each do |c| %>
+        <div class="text-xs text-gray-500" style="width:200px;">
+          <%= image_tag url_for(c.image.display_image), width: 200, alt: "" %>
+          <p>画像 <%= c.image.sequence %>・<%= c.image.captured_at&.in_time_zone(tz)&.strftime("%H:%M:%S") %><%= "・架台 #{c.blocks}" if c.blocks.present? %></p>
+          <%= button_to "外す", inspection_report_overview_path(@inspection), method: :patch, params: { remove: c.id, block: @block, page: @page }, class: "btn btn-sm btn-secondary" %>
+        </div>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="card p-4 text-sm" id="candidates">
+    <%= form_with url: inspection_report_overview_path(@inspection), method: :get, class: "flex gap-2 items-center" do %>
+      <p class="form-label" style="margin:0;">候補（<%= @total %> 枚）</p>
+      <%= text_field_tag :block, @block, class: "form-input", placeholder: "架台で絞り込む（例：L03）", style: "max-width:14rem;" %>
+      <%= submit_tag "絞り込む", class: "btn btn-sm btn-secondary", name: nil %>
+    <% end %>
+    <% full = @selected.size >= @overview.limit %>
+    <% if full %><p class="text-xs mt-2" style="color:#ef9f27;">すでに <%= @overview.limit %> 枚選んでいます。差し替えるときは、先に上の画像を外してください。</p><% end %>
+    <div class="flex gap-3 flex-wrap mt-2">
+      <% chosen_ids = @selected.map(&:id) %>
+      <% @candidates.each do |c| %>
+        <div class="text-xs text-gray-500" style="width:160px;">
+          <%= image_tag url_for(c.image.display_image), width: 160, alt: "", loading: "lazy" %>
+          <p>画像 <%= c.image.sequence %>・<%= c.image.captured_at&.in_time_zone(tz)&.strftime("%H:%M:%S") %><%= "・架台 #{c.blocks}" if c.blocks.present? %><%= "・品質: 注意" unless c.quality_ok %></p>
+          <% if chosen_ids.include?(c.id) %>
+            <span class="text-xs">選択中</span>
+          <% else %>
+            <%= button_to "載せる", inspection_report_overview_path(@inspection), method: :patch, params: { add: c.id, block: @block, page: @page }, class: "btn btn-sm btn-secondary", disabled: full %>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+    <% if @pages > 1 %>
+      <p class="mt-2">
+        <% (1..@pages).each do |n| %>
+          <%= n == @page ? tag.strong(n) : link_to(n, inspection_report_overview_path(@inspection, block: @block, page: n)) %>
+        <% end %>
+      </p>
+    <% end %>
+  </div>
+</div>

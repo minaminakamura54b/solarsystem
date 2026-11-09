@@ -42,6 +42,8 @@ class ReportSnapshotBuilder
       "candidates" => candidates,
       "coverage" => coverage,
       "map" => map,
+      "overview_images" => overview.entries,
+      "overview_source" => overview.manual? ? "manual" : "proposal",
       "rejections" => rejections,
       "module" => module_spec,
       "versions" => versions,
@@ -100,6 +102,8 @@ class ReportSnapshotBuilder
          .map { |(key, result), list| { "key" => key, "result" => result, "message" => list.first["message"], "count" => list.size } }
          .sort_by { |r| -r["count"] }
   end
+
+  def overview = @overview ||= ReportOverview.new(@inspection, config: @config)
 
   # 点検の対象範囲（見直し R1）。確定していなければ発電所全体
   def scope_entry
