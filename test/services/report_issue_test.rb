@@ -52,6 +52,24 @@ class ReportIssueTest < ActiveSupport::TestCase
     assert_equal [ [ "A01", 1, 3 ] ], snapshot["map"]["anomaly_panels"]
   end
 
+  test "隣り合う複数のパネルの発熱（群）は、構成パネルを範囲で示し、配置図でも塗る（判定は変えない）" do
+    members = (4..7).map { |col| anomaly_at(@i1, 0, 2, col, type: "module_wide", review_status: "confirmed", locked: true) }
+    group = @i1.anomaly_groups.create!(inspection: @inspection, group_type: "panel_row_group", panel_count: 4, panel_indices: [ 13, 14, 15, 16 ],
+                                       severity: "warning", delta_t: 3.0, measure: "panel_mean", review_status: "confirmed", locked: true)
+    members.each { |a| a.update_columns(anomaly_group_id: group.id) }
+
+    item = snapshot["items"].find { |i| i["kind"] == "group" }
+    assert_equal "A01-2-04〜A01-2-07（4 枚）", item["panel"]
+    assert_equal "warning", item["severity"]
+    assert_equal [ [ "A01", 1, 3 ], [ "A01", 2, 4 ], [ "A01", 2, 5 ], [ "A01", 2, 6 ], [ "A01", 2, 7 ] ], snapshot["map"]["anomaly_panels"].sort
+
+    members[1].update_columns(panel_id: nil)
+    assert_equal "A01-2-04、A01-2-06〜A01-2-07（4 枚。うち 1 枚はパネルを特定できず）", snapshot["items"].find { |i| i["kind"] == "group" }["panel"]
+
+    group.update_columns(review_status: "pending", locked: false)
+    assert_equal "A01-2-04、A01-2-06〜A01-2-07（4 枚。うち 1 枚はパネルを特定できず）", snapshot["candidates"].find { |c| c["kind"] == "group" }["panel"]
+  end
+
   test "判定基準の表には、確定した異常が無くても候補の判定に使った版の閾値をすべて載せる" do
     @inspection.anomalies.update_all(review_status: "rejected", rejection_reason: "glare", locked: true)
 

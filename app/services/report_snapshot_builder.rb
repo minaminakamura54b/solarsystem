@@ -203,11 +203,32 @@ class ReportSnapshotBuilder
 
   def group_entry(g)
     {
-      "id" => g.id, "type" => g.group_type, "severity" => g.severity, "evidence_level" => nil, "panel" => nil,
+      "id" => g.id, "type" => g.group_type, "severity" => g.severity, "evidence_level" => nil, "panel" => group_panels(g),
       "delta_t" => g.delta_t&.to_f&.round(2), "measure" => g.measure, "normalized_delta_t" => g.normalized_delta_t&.to_f&.round(2),
       "threshold_basis" => g.threshold_basis, "observed" => nil, "visible" => nil,
       "image" => image_ref(g.inspection_image, union_bbox(g.anomalies.map(&:effective_bbox))), "others" => [], **explanation_fields(g)
     }
+  end
+
+  # 隣り合う複数のパネルの発熱（群）のパネルを範囲で示す（例「B02-2-02〜B02-2-05（4 枚）」。2026-11-10 ユーザー承認）。
+  # 構成パネルの割り当て（位置情報か人の指定）をそのまま使い、表示だけを変える。割り当てが無ければ nil
+  def group_panels(group)
+    panels = group.anomalies.filter_map(&:panel).uniq
+    return nil if panels.empty?
+
+    runs = []
+    panels.sort_by { |p| [ p.pv_block_id.to_i, p.block_row.to_i, p.block_col.to_i, p.number.to_s ] }.each do |p|
+      last = runs.last
+      if last && p.pv_block_id && last[:block] == p.pv_block_id && last[:row] == p.block_row && last[:col] + 1 == p.block_col.to_i
+        last[:to] = p.number
+        last[:col] = p.block_col.to_i
+      else
+        runs << { block: p.pv_block_id, row: p.block_row, col: p.block_col.to_i, from: p.number, to: p.number }
+      end
+    end
+    text = runs.map { |r| r[:from] == r[:to] ? r[:from] : "#{r[:from]}〜#{r[:to]}" }.join("、")
+    missing = group.panel_count.to_i - panels.size
+    "#{text}（#{group.panel_count} 枚#{"。うち #{missing} 枚はパネルを特定できず" if missing.positive?}）"
   end
 
   def row_entry(r)
@@ -264,7 +285,7 @@ class ReportSnapshotBuilder
         "sequence" => top.inspection_image.sequence, "delta_t" => top.delta_t&.to_f&.round(2),
         "observed" => cand&.observed_count, "visible" => cand&.visible_count }
     end +
-      @inspection.anomaly_groups.where(review_status: "pending").map { |g| { "kind" => "group", "type" => g.group_type, "severity" => g.severity, "panel" => "#{g.panel_count} 枚", "sequence" => g.inspection_image.sequence, "delta_t" => g.delta_t&.to_f&.round(2) } } +
+      @inspection.anomaly_groups.where(review_status: "pending").includes(anomalies: :panel).map { |g| { "kind" => "group", "type" => g.group_type, "severity" => g.severity, "panel" => group_panels(g) || "#{g.panel_count} 枚", "sequence" => g.inspection_image.sequence, "delta_t" => g.delta_t&.to_f&.round(2) } } +
       @inspection.block_row_findings.candidates.where(review_status: "pending").includes(:pv_block).map { |r| { "kind" => "block_row", "type" => "block_row", "severity" => r.severity, "panel" => r.label, "sequence" => nil, "delta_t" => r.effect_c&.to_f&.round(2) } }
   end
 
@@ -341,7 +362,8 @@ class ReportSnapshotBuilder
       "blocks" => blocks.map { |b| { "label" => b.label, "rows" => b.rows, "cols" => b.cols, "corners" => b.corners_local, "in_scope" => in_scope.include?(b.id) } },
       # まるごと写っていない架台は架台 1 つで描く（図を見やすくし、PDF を小さくする）
       "uncovered_blocks" => whole.map { |b| by_id[b].label }.sort,
-      "anomaly_panels" => keys.(confirmed_anomalies.filter_map(&:panel_id)).uniq,
+      # 群（隣り合う複数のパネルの発熱）は構成パネルを塗る
+      "anomaly_panels" => keys.(confirmed_anomalies.filter_map(&:panel_id) + confirmed_groups.flat_map { |g| g.anomalies.filter_map(&:panel_id) }).uniq,
       "rows" => confirmed_rows.map { |r| [ r.pv_block.label, r.block_row ] },
       "insufficient_rows" => @inspection.block_row_findings.insufficient.includes(:pv_block).map { |r| [ r.pv_block.label, r.block_row ] },
       "uncovered_panels" => (coverage.registered_keys - coverage.covered_keys).reject { |b, _, _| whole.include?(b) }.map { |b, r, c| [ by_id[b]&.label, r, c ] }.sort_by(&:to_s)
@@ -434,7 +456,7 @@ class ReportSnapshotBuilder
   end
 
   def confirmed_groups
-    @confirmed_groups ||= @inspection.anomaly_groups.where(review_status: InspectionReview::CONFIRMED).includes(:anomalies, inspection_image: { rgb_attachment: :blob }).to_a
+    @confirmed_groups ||= @inspection.anomaly_groups.where(review_status: InspectionReview::CONFIRMED).includes(anomalies: :panel, inspection_image: { rgb_attachment: :blob }).to_a
   end
 
   def confirmed_rows
